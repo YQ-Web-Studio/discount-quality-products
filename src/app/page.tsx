@@ -1,65 +1,76 @@
-import Image from "next/image";
+import { getProducts, Product } from "@/lib/wordpress";
+import ProductCard from "@/components/ProductCard";
+import { ShoppingBag } from "lucide-react";
 
-export default function Home() {
+export default async function Home() {
+  let products: Product[] = [];
+  let error = null;
+
+  try {
+    const response = await getProducts(12);
+    products = response.products;
+  } catch (e: any) {
+    console.error("Home Page Fetch Error:", e);
+    error = e.message;
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-zinc-50">
+      <header className="sticky top-0 z-50 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <ShoppingBag className="h-6 w-6 text-zinc-900" />
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">
+              Discount Store
+            </h1>
+          </div>
+          <nav className="hidden space-x-8 md:flex">
+            <a href="/" className="text-sm font-medium text-zinc-900">Products</a>
+            <a href="#" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">Categories</a>
+            <a href="#" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">Deals</a>
+          </nav>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-12">
+        <div className="flex flex-col gap-4 mb-8">
+          <h2 className="text-3xl font-extrabold tracking-tight text-zinc-900">
+            Featured Products
+          </h2>
+          <p className="max-w-2xl text-lg text-zinc-600">
+            Browse our latest selection of high-quality products at discounted prices.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+        {error ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+            <h3 className="text-lg font-semibold text-red-800">Connection Error</h3>
+            <p className="mt-2 text-red-700">
+              {error}. Please ensure the WordPress backend is running at http://discount-products-backend.local.
+            </p>
+          </div>
+        ) : products.length > 0 ? (
+          <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-x-8">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-200">
+            <p className="text-lg font-medium text-zinc-600">
+              No products found in the catalog.
+            </p>
+          </div>
+        )}
       </main>
+
+      <footer className="mt-auto border-t border-zinc-200 py-12">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-sm text-zinc-500">
+            &copy; {new Date().getFullYear()} Discount Products Store. Built with Next.js & WooCommerce.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
