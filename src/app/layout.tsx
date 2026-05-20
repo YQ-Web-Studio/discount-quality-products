@@ -66,18 +66,20 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       suppressHydrationWarning
     >
-      <body className={`${geistSans.className} min-h-full flex flex-col overflow-x-hidden`} suppressHydrationWarning>
-        <StructuredData />
-        <AuthProvider>
-          <Header />
-          <main className="flex-1 relative z-[1]">{children}</main>
-          <Footer />
-          <GlobalSearch />
-          <MiniCart />
-        </AuthProvider>
+      <body className={`${geistSans.className} min-h-screen bg-background text-foreground`} suppressHydrationWarning>
+        <div className="relative flex min-h-screen flex-col overflow-x-hidden">
+          <StructuredData />
+          <AuthProvider>
+            <Header />
+            <main className="flex-1 relative z-[1]">{children}</main>
+            <Footer />
+            <GlobalSearch />
+            <MiniCart />
+          </AuthProvider>
+        </div>
       </body>
     </html>
   );

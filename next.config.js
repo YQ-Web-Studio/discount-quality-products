@@ -27,6 +27,13 @@ const nextConfig = {
         hostname: '*.bluehost.com',
         pathname: '/wp-content/uploads/**',
       },
+      // Bluehost Staging/Temporary Domain
+      {
+        protocol: 'https',
+        hostname: 'website-8a1b8589.ubo.iks.mybluehost.me',
+        port: '',
+        pathname: '/wp-content/uploads/**',
+      },
       // Wildcard for custom domain on Bluehost (add your real hostname here).
       // Example: { protocol: 'https', hostname: 'api.discountproducts.co.uk', pathname: '/wp-content/uploads/**' }
       // ── Cloudflare R2 Domain ──────────────────────────────────────────
