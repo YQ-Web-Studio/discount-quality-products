@@ -1,76 +1,126 @@
-import { getProducts, Product } from "@/lib/wordpress";
+import { getSmartFeaturedProducts, getLatestProducts, Product } from "@/lib/wordpress";
 import ProductCard from "@/components/ProductCard";
-import { ShoppingBag } from "lucide-react";
+import { HeroSection } from "@/components/HeroSection";
+import { BentoGrid } from "@/components/BentoGrid";
+import { MotionProductGrid } from "@/components/MotionProductGrid";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Discount Quality Products | Essentials & Rare Finds",
+  description:
+    "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more. Professional quality, competitive prices. Shipped worldwide from the UK.",
+  openGraph: {
+    title: "Discount Quality Products | Essentials & Rare Finds",
+    description:
+      "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more.",
+    images: [
+      {
+        url: "/images/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Discount Quality Products — 25,000+ Discounted Products",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/images/og-image.jpg"],
+  },
+  alternates: {
+    canonical: "https://discountqualityproducts.co.uk",
+  },
+};
 
 export default async function Home() {
   let products: Product[] = [];
+  let newArrivals: Product[] = [];
   let error = null;
 
   try {
-    const response = await getProducts(12);
-    products = response.products;
+    const [featuredRes, latestProducts] = await Promise.all([
+      getSmartFeaturedProducts(),
+      getLatestProducts(6)
+    ]);
+    products = featuredRes;
+    newArrivals = latestProducts;
   } catch (e: any) {
     console.error("Home Page Fetch Error:", e);
     error = e.message;
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="sticky top-0 z-50 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="h-6 w-6 text-zinc-900" />
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">
-              Discount Store
-            </h1>
-          </div>
-          <nav className="hidden space-x-8 md:flex">
-            <a href="/" className="text-sm font-medium text-zinc-900">Products</a>
-            <a href="#" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">Categories</a>
-            <a href="#" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">Deals</a>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white">
+      {/* Phase 2: Modern UI Components */}
+      <div className="relative z-40">
+        <HeroSection />
+      </div>
+      <div className="relative z-0">
+        <BentoGrid />
+      </div>
 
-      <main className="container mx-auto px-4 py-12">
-        <div className="flex flex-col gap-4 mb-8">
-          <h2 className="text-3xl font-extrabold tracking-tight text-zinc-900">
-            Featured Products
-          </h2>
-          <p className="max-w-2xl text-lg text-zinc-600">
-            Browse our latest selection of high-quality products at discounted prices.
-          </p>
+      {/* Featured Products Grid */}
+      <main id="products" className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 sm:px-8 pt-12 md:pt-16 pb-24 md:px-12 2xl:px-16 scroll-mt-32">
+        <div className="mb-12 flex flex-col items-start gap-4 sm:flex-row sm:items-end justify-between">
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
+              Featured Products
+            </h2>
+            <p className="max-w-2xl text-lg text-zinc-500">
+              Curated highlights from across our major departments.
+            </p>
+          </div>
+          <Link href="/shop" className="flex items-center gap-2 text-sm font-bold text-zinc-900 hover:underline">
+            View All Products <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
 
         {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-            <h3 className="text-lg font-semibold text-red-800">Connection Error</h3>
-            <p className="mt-2 text-red-700">
-              {error}. Please ensure the WordPress backend is running at http://discount-products-backend.local.
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center mb-24">
+            <h3 className="text-lg font-bold text-red-800">Connection Error</h3>
+            <p className="mt-2 text-red-600">
+              {error}. Please verify the WordPress backend is active.
             </p>
           </div>
         ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-x-8">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
+          <MotionProductGrid>
+            {products.slice(0, 5).map((product, idx) => (
+              <ProductCard key={`featured-${product.databaseId}`} product={product} priority={idx < 2} />
             ))}
-          </div>
+          </MotionProductGrid>
         ) : (
-          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-200">
-            <p className="text-lg font-medium text-zinc-600">
-              No products found in the catalog.
+          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-zinc-100 bg-zinc-50/30 mb-24">
+            <p className="text-lg font-medium text-zinc-500">
+              The product catalogue is currently being updated.
             </p>
           </div>
         )}
+
+        {/* New Arrivals Grid */}
+        <div className="mt-24 mb-12 flex flex-col items-start gap-4 sm:flex-row sm:items-end justify-between">
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
+              New Arrivals
+            </h2>
+            <p className="max-w-2xl text-lg text-zinc-500">
+              Fresh additions to our catalogue.
+            </p>
+          </div>
+          <Link href="/shop?orderby=date&order=desc" className="flex items-center gap-2 text-sm font-bold text-zinc-900 hover:underline">
+            View All New <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        {!error && newArrivals.length > 0 && (
+          <MotionProductGrid>
+            {newArrivals.slice(0, 5).map((product, idx) => (
+              <ProductCard key={`new-${product.databaseId}`} product={product} priority={idx < 2} />
+            ))}
+          </MotionProductGrid>
+        )}
       </main>
 
-      <footer className="mt-auto border-t border-zinc-200 py-12">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-zinc-500">
-            &copy; {new Date().getFullYear()} Discount Products Store. Built with Next.js & WooCommerce.
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

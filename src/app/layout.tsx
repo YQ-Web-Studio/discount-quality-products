@@ -12,9 +12,50 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { MiniCart } from "@/components/MiniCart";
+import { AuthProvider } from "@/context/AuthContext";
+import { StructuredData } from "@/components/seo/StructuredData";
+
 export const metadata: Metadata = {
-  title: "Discount Products Store | 25k SKUs Headless Storefront",
-  description: "High-performance headless storefront built with Next.js 15 and WooCommerce.",
+  metadataBase: new URL("https://discountqualityproducts.co.uk"),
+  title: {
+    template: "%s | Discount Quality Products",
+    default: "Discount Quality Products | Essentials & Rare Finds",
+  },
+  description:
+    "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more. Professional quality, competitive prices. Shipped worldwide from the UK.",
+  openGraph: {
+    title: "Discount Quality Products | Essentials & Rare Finds",
+    description:
+      "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more.",
+    url: "https://discountqualityproducts.co.uk",
+    siteName: "Discount Quality Products",
+    type: "website",
+    locale: "en_GB",
+    images: [
+      {
+        url: "/images/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Discount Quality Products — 25,000+ Discounted Products",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Discount Quality Products | Essentials & Rare Finds",
+    description:
+      "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more.",
+    images: ["/images/og-image.jpg"],
+  },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/images/og-image.jpg",
+  },
 };
 
 export default function RootLayout({
@@ -28,8 +69,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {children}
+      <body className={`${geistSans.className} min-h-full flex flex-col overflow-x-hidden`} suppressHydrationWarning>
+        <StructuredData />
+        <AuthProvider>
+          <Header />
+          <main className="flex-1 relative z-[1]">{children}</main>
+          <Footer />
+          <GlobalSearch />
+          <MiniCart />
+        </AuthProvider>
       </body>
     </html>
   );

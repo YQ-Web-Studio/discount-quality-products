@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python / Ingestion Tools
+/tools/ingestion/_MEI*
+/tools/ingestion/build/
+/tools/ingestion/dist/
+/tools/ingestion/__pycache__/

@@ -1,4 +1,28 @@
-const WP_GRAPHQL_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || 'http://discount-products-backend.local/graphql';
+import { unstable_cache } from "next/cache";
+import { navigationCategories } from "./navigationConfig";
+
+
+function getWordPressGraphqlUrl() {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_WORDPRESS_API_URL ||
+    "http://discount-products-backend.local";
+
+  const trimmedUrl = baseUrl.replace(/\/$/, "");
+
+  if (trimmedUrl.endsWith("/graphql")) {
+    return trimmedUrl;
+  }
+
+  return `${trimmedUrl}/graphql`;
+}
+
+const WP_GRAPHQL_URL = getWordPressGraphqlUrl();
+
+export interface ProductCategory {
+  name: string;
+  slug: string;
+  databaseId: number;
+}
 
 export interface Product {
   id: string;
@@ -6,12 +30,133 @@ export interface Product {
   name: string;
   slug: string;
   shortDescription?: string;
+  description?: string;
+  date?: string;
   image?: {
     sourceUrl: string;
     altText?: string;
   };
+  featuredImage?: {
+    node?: {
+      sourceUrl: string;
+      altText?: string;
+    };
+  };
   price?: string;
   regularPrice?: string;
+  salePrice?: string;
+  productCategories?: {
+    nodes: ProductCategory[];
+  };
+  stockStatus?: string;
+  galleryImages?: {
+    nodes: {
+      sourceUrl: string;
+      altText?: string;
+    }[];
+  };
+  attributes?: {
+    nodes: {
+      name: string;
+      options: string[];
+    }[];
+  };
+}
+
+/**
+ * Shared GraphQL fragment for product cards to ensure consistency across the catalogue.
+ * This includes the correct featuredImage structure as required by the shop logic.
+ */
+export const PRODUCT_CARD_FRAGMENT = `
+  fragment ProductCardFields on Product {
+    id
+    databaseId
+    name
+    slug
+    shortDescription
+    date
+    image {
+      sourceUrl
+      altText
+    }
+    featuredImage {
+      node {
+        sourceUrl
+        altText
+      }
+    }
+    productCategories {
+      nodes {
+        name
+        slug
+        databaseId
+      }
+    }
+    galleryImages(first: 1) {
+      nodes {
+        sourceUrl
+        altText
+      }
+    }
+    ... on SimpleProduct {
+      price
+      regularPrice
+      stockStatus
+      attributes {
+        nodes {
+          name
+          options
+        }
+      }
+    }
+    ... on VariableProduct {
+      price
+      regularPrice
+      attributes {
+        nodes {
+          name
+          options
+        }
+      }
+    }
+    ... on ExternalProduct {
+      price
+      regularPrice
+      externalUrl
+      buttonText
+    }
+    ... on GroupProduct {
+      price
+    }
+  }
+`;
+
+/**
+ * Synchronises product data by ensuring the primary image is correctly assigned.
+ * Favours featuredImage.node over the standard image field for maximum consistency.
+ */
+function mapProductData(product: Product): Product {
+  // Synchronise images by cascading: Featured -> Gallery -> Standard
+  const image = 
+    product.featuredImage?.node || 
+    product.galleryImages?.nodes?.[0] || 
+    product.image;
+
+  return {
+    ...product,
+    image,
+  };
+}
+
+export interface UnifiedSearchResult {
+  type: 'product' | 'category';
+  id: string;
+  name: string;
+  slug: string;
+  price?: string | null;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
+  parentName?: string | null;
 }
 
 export interface PageInfo {
@@ -24,9 +169,12 @@ export interface ProductsResponse {
   pageInfo: PageInfo;
 }
 
-async function wpFetch<T>(query: string, variables: Record<string, any> = {}): Promise<T> {
+async function wpFetch<T>(
+  query: string,
+  variables: Record<string, any> = {}
+): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
   try {
     const response = await fetch(WP_GRAPHQL_URL, {
@@ -44,93 +192,242 @@ async function wpFetch<T>(query: string, variables: Record<string, any> = {}): P
 
     clearTimeout(timeoutId);
 
+    const responseText = await response.text();
+    const contentType = response.headers.get("content-type") || "";
+    const looksLikeJson =
+      contentType.includes("application/json") ||
+      responseText.trim().startsWith("{") ||
+      responseText.trim().startsWith("[");
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(
+        `WordPress GraphQL request failed with status ${response.status}.`
+      );
     }
 
-    const json = await response.json();
+    if (!looksLikeJson) {
+      throw new Error(
+        "WordPress GraphQL returned HTML or another non-JSON response. Check that the backend GraphQL endpoint is correct and reachable."
+      );
+    }
+
+    const json = JSON.parse(responseText) as {
+      data?: T;
+      errors?: unknown;
+    };
 
     if (json.errors) {
-      console.error('GraphQL Errors:', json.errors);
+      console.error('GraphQL Errors Details:', JSON.stringify(json.errors, null, 2));
       throw new Error('GraphQL query failed');
+    }
+
+    if (!json.data) {
+      throw new Error("WordPress GraphQL response did not include any data.");
     }
 
     return json.data;
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      throw new Error('Connection timeout - Wordpress backend is taking too long to respond.');
+      throw new Error(
+        "Connection timeout - WordPress backend is taking too long to respond."
+      );
     }
     console.error('WordPress Fetch Error:', error);
     throw error;
   }
 }
 
-export async function getProducts(first: number = 12, after: string | null = null): Promise<ProductsResponse> {
+export async function getProducts(first: number = 12, after: string | null = null, categorySlug: string | null = null, searchTerm: string | null = null): Promise<ProductsResponse> {
   const query = `
-    query GetProducts($first: Int, $after: String) {
-      products(first: $first, after: $after, where: { status: "PUBLISH" }) {
+    ${PRODUCT_CARD_FRAGMENT}
+    query GetProducts($first: Int, $after: String${categorySlug ? ', $categoryIn: [String]' : ''}${searchTerm ? ', $search: String' : ''}) {
+      products(first: $first, after: $after, where: { status: "PUBLISH"${categorySlug ? ', categoryIn: $categoryIn' : ''}${searchTerm ? ', search: $search' : ''} }) {
         pageInfo {
           hasNextPage
           endCursor
         }
         nodes {
-          id
-          databaseId
-          name
-          slug
-          shortDescription
-          image {
-            sourceUrl
-            altText
-          }
-          ... on SimpleProduct {
-            price
-            regularPrice
-          }
-          ... on VariableProduct {
-            price
-            regularPrice
-          }
+          ...ProductCardFields
         }
       }
     }
   `;
 
-  const data = await wpFetch<{ products: { nodes: Product[]; pageInfo: PageInfo } }>(query, { first, after });
+  const variables: Record<string, any> = { first, after };
+  if (categorySlug) variables.categoryIn = [categorySlug];
+  if (searchTerm) variables.search = searchTerm;
+  console.log('[GraphQL] Variables:', variables);
+
+  const data = await wpFetch<{ products: { nodes: Product[]; pageInfo: PageInfo } }>(query, variables);
   
   return {
-    products: data.products.nodes,
+    products: data.products.nodes.map(mapProductData),
     pageInfo: data.products.pageInfo,
   };
 }
 
-export async function getProductBySlug(slug: string): Promise<Product | null> {
+export const getSmartFeaturedProducts = unstable_cache(
+  async (): Promise<Product[]> => {
+    // Step A: Query featured products
+    const queryFeatured = `
+      ${PRODUCT_CARD_FRAGMENT}
+      query GetFeaturedProducts {
+        products(first: 6, where: { featured: true, status: "PUBLISH", orderby: [{ field: DATE, order: DESC }] }) {
+          nodes {
+            ...ProductCardFields
+          }
+        }
+      }
+    `;
+
+    const dataFeatured = await wpFetch<{ products: { nodes: Product[] } }>(queryFeatured);
+    let featuredProducts = dataFeatured.products.nodes.map(mapProductData);
+
+    // Step B: Calculate deficit and fetch fallback if needed
+    // The homepage displays exactly 5 featured products, but we'll fetch up to 6 as a safety margin.
+    const deficit = 6 - featuredProducts.length;
+
+    if (featuredProducts.length === 0) {
+      // If none are featured, get the first subcategory slug for each of the 5 parent categories
+      const fallbackSlugs = navigationCategories
+        .map(cat => {
+          const sub = cat.subcategories[0];
+          return sub ? (sub.wcSlug || sub.slug) : null;
+        })
+        .filter((s): s is string => !!s);
+
+      // Build a single highly optimized aliased GraphQL query to get the latest product from each subcategory
+      let queryFallback = PRODUCT_CARD_FRAGMENT;
+      queryFallback += `\nquery GetFallbackCategoryProducts {`;
+      fallbackSlugs.forEach((slug, idx) => {
+        queryFallback += `\n  cat_${idx}: products(first: 1, where: { categoryIn: ["${slug}"], status: "PUBLISH", orderby: [{ field: DATE, order: DESC }] }) {\n    nodes {\n      ...ProductCardFields\n    }\n  }`;
+      });
+      queryFallback += `\n}`;
+
+      try {
+        const dataFallback = await wpFetch<Record<string, { nodes: Product[] }>>(queryFallback);
+        const fallbackProducts: Product[] = [];
+        
+        fallbackSlugs.forEach((_, idx) => {
+          const catData = dataFallback[`cat_${idx}`];
+          if (catData && catData.nodes && catData.nodes.length > 0) {
+            fallbackProducts.push(mapProductData(catData.nodes[0]));
+          }
+        });
+
+        featuredProducts = fallbackProducts;
+      } catch (error) {
+        console.error("Error fetching category-based fallback products:", error);
+      }
+
+      // If we still have a deficit (e.g. less than 5 products because a category had no products),
+      // fill the remaining slots with globally recent products.
+      const currentDeficit = 5 - featuredProducts.length;
+      if (currentDeficit > 0) {
+        const excludeIds = featuredProducts.map(p => p.id);
+        const hasExclusions = excludeIds.length > 0;
+
+        const queryGlobalFallback = `
+          ${PRODUCT_CARD_FRAGMENT}
+          query GetGlobalFallbackProducts($first: Int${hasExclusions ? ', $notIn: [ID]' : ''}) {
+            products(first: $first, where: { status: "PUBLISH"${hasExclusions ? ', notIn: $notIn' : ''}, orderby: [{ field: MENU_ORDER, order: ASC }] }) {
+              nodes {
+                ...ProductCardFields
+              }
+            }
+          }
+        `;
+
+        const variables: Record<string, any> = { first: currentDeficit };
+        if (hasExclusions) {
+          variables.notIn = excludeIds;
+        }
+
+        try {
+          const dataGlobalFallback = await wpFetch<{ products: { nodes: Product[] } }>(queryGlobalFallback, variables);
+          featuredProducts = [...featuredProducts, ...dataGlobalFallback.products.nodes.map(mapProductData)];
+        } catch (error) {
+          console.error("Error fetching global fallback products:", error);
+        }
+      }
+    } else if (deficit > 0) {
+      // If we have some featured products, fill the deficit with menu-ordered fallback products.
+      const excludeIds = featuredProducts.map(p => p.id);
+      const hasExclusions = excludeIds.length > 0;
+      
+      const queryFallback = `
+        ${PRODUCT_CARD_FRAGMENT}
+        query GetFallbackProducts($first: Int${hasExclusions ? ', $notIn: [ID]' : ''}) {
+          products(first: $first, where: { status: "PUBLISH"${hasExclusions ? ', notIn: $notIn' : ''}, orderby: [{ field: MENU_ORDER, order: ASC }] }) {
+            nodes {
+              ...ProductCardFields
+            }
+          }
+        }
+      `;
+
+      const variables: Record<string, any> = { first: deficit };
+      if (hasExclusions) {
+        variables.notIn = excludeIds;
+      }
+
+      try {
+        const dataFallback = await wpFetch<{ products: { nodes: Product[] } }>(queryFallback, variables);
+        featuredProducts = [...featuredProducts, ...dataFallback.products.nodes.map(mapProductData)];
+      } catch (error) {
+        console.error("Error fetching fallback products for deficit:", error);
+      }
+    }
+
+    return featuredProducts;
+  },
+  ['smart-featured-products'],
+  { revalidate: 3600 }
+);
+
+export async function getLatestProducts(first: number = 6): Promise<Product[]> {
   const query = `
-    query GetProductBySlug($slug: ID!) {
-      product(id: $slug, idType: SLUG) {
-        id
-        databaseId
-        name
-        slug
-        shortDescription
-        image {
-          sourceUrl
-          altText
-        }
-        ... on SimpleProduct {
-          price
-          regularPrice
-        }
-        ... on VariableProduct {
-          price
-          regularPrice
+    ${PRODUCT_CARD_FRAGMENT}
+    query GetLatestProducts($first: Int) {
+      products(first: $first, where: { status: "PUBLISH", orderby: [{ field: DATE, order: DESC }] }) {
+        nodes {
+          ...ProductCardFields
         }
       }
     }
   `;
 
-  const data = await wpFetch<{ product: Product }>(query, { slug });
-  return data.product || null;
+  const data = await wpFetch<{ products: { nodes: Product[] } }>(query, { first });
+  return data.products.nodes.map(mapProductData);
+}
+
+export async function getProductBySlug(slug: string): Promise<Product | null> {
+  const query = `
+    ${PRODUCT_CARD_FRAGMENT}
+    query GetProductBySlug($slug: ID!) {
+      product(id: $slug, idType: SLUG) {
+        ...ProductCardFields
+        description
+        allGalleryImages: galleryImages(first: 10) {
+          nodes {
+            sourceUrl
+            altText
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug });
+  if (!data.product) return null;
+
+  // Merge allGalleryImages back under the standard galleryImages key for the rest of the app.
+  const product = {
+    ...data.product,
+    galleryImages: data.product.allGalleryImages ?? data.product.galleryImages,
+  };
+
+  return mapProductData(product);
 }
 
 export async function getProductSlugs(first: number = 50): Promise<string[]> {
@@ -146,4 +443,99 @@ export async function getProductSlugs(first: number = 50): Promise<string[]> {
 
   const data = await wpFetch<{ products: { nodes: { slug: string }[] } }>(query, { first });
   return data.products.nodes.map((node) => node.slug);
+}
+
+export async function searchProducts(search: string, first: number = 10): Promise<UnifiedSearchResult[]> {
+  const query = `
+    ${PRODUCT_CARD_FRAGMENT}
+    query SearchUnified($search: String, $first: Int) {
+      products(first: $first, where: { search: $search, status: "PUBLISH" }) {
+        nodes {
+          ...ProductCardFields
+        }
+      }
+      productCategories(first: $first, where: { search: $search }) {
+        nodes {
+          id
+          name
+          slug
+          image {
+            sourceUrl
+            altText
+          }
+          parent {
+            node {
+              name
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  let data = await wpFetch<{
+    products: { nodes: any[] };
+    productCategories: { nodes: any[] };
+  }>(query, { search, first });
+
+  // Fuzzy Search Secondary Fallback
+  if ((!data.products?.nodes?.length) && (!data.productCategories?.nodes?.length)) {
+    const fallbackQuery = `
+      ${PRODUCT_CARD_FRAGMENT}
+      query SearchUnifiedFallback($search: String, $first: Int) {
+        products(first: $first, where: { tag: [$search], status: "PUBLISH" }) {
+          nodes {
+            ...ProductCardFields
+          }
+        }
+        productCategories(first: $first, where: { slug: [$search] }) {
+          nodes {
+            id
+            name
+            slug
+            image { sourceUrl altText }
+            parent { node { name } }
+          }
+        }
+      }
+    `;
+    const fallbackData = await wpFetch<any>(fallbackQuery, { search, first });
+    if (fallbackData) {
+      data = fallbackData;
+    }
+  }
+
+  const results: UnifiedSearchResult[] = [];
+
+  // Add categories first so they appear at the top
+  if (data.productCategories?.nodes) {
+    data.productCategories.nodes.forEach((cat) => {
+      results.push({
+        type: 'category',
+        id: cat.id,
+        name: cat.name,
+        parentName: cat.parent?.node?.name || null,
+        slug: cat.slug,
+        imageUrl: cat.image?.sourceUrl || null,
+        imageAlt: cat.image?.altText || null,
+      });
+    });
+  }
+
+    if (data.products?.nodes) {
+      data.products.nodes.forEach((prod) => {
+        const mappedProd = mapProductData(prod);
+        results.push({
+          type: 'product',
+          id: mappedProd.id,
+          name: mappedProd.name,
+          slug: mappedProd.slug,
+          price: mappedProd.price,
+          imageUrl: mappedProd.image?.sourceUrl || null,
+          imageAlt: mappedProd.image?.altText || null,
+        });
+      });
+    }
+
+  return results;
 }
