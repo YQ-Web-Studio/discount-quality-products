@@ -1,4 +1,10 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="120" fill="#18181b" />
-  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="200" fill="#ffffff" letter-spacing="-5">DQP</text>
+  <!-- Bag handle (zinc-400 equivalent) -->
+  <path d="M150 180 C150 70 200 40 256 40 C312 40 362 70 362 180" fill="none" stroke="#a1a1aa" stroke-width="40" stroke-linecap="round" />
+  
+  <!-- Green Box (primary color: #15803d) -->
+  <rect x="64" y="140" width="384" height="300" rx="80" fill="#15803d" />
+  
+  <!-- DQP text -->
+  <text x="50%" y="58%" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-style="italic" font-size="140" fill="#ffffff" letter-spacing="-5">DQP</text>
 </svg>
