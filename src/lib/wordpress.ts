@@ -49,6 +49,8 @@ export interface Product {
     nodes: ProductCategory[];
   };
   stockStatus?: string;
+  manageStock?: boolean;
+  stockQuantity?: number | null;
   galleryImages?: {
     nodes: {
       sourceUrl: string;
@@ -102,6 +104,8 @@ export const PRODUCT_CARD_FRAGMENT = `
       price
       regularPrice
       stockStatus
+      manageStock
+      stockQuantity
       attributes {
         nodes {
           name

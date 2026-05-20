@@ -20,7 +20,11 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, priority = false }: ProductCardProps) {
   const displayPrice = product.price || product.regularPrice || 'N/A';
-  const isOutOfStock = product.stockStatus === 'OUT_OF_STOCK' || product.stockStatus === 'outofstock';
+  const isOutOfStock = product.stockStatus === 'OUT_OF_STOCK' || product.stockStatus === 'outofstock' || (product.manageStock && product.stockQuantity === 0);
+  const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === String(product.databaseId))?.quantity || 0);
+  const maxAvailable = (product.manageStock && product.stockQuantity != null) ? product.stockQuantity : Infinity;
+  const isLimitReached = currentBasketQty >= maxAvailable;
+  
   const addItem = useBasket((s) => s.addItem);
   const openMiniCart = useMiniCart((s) => s.open);
   const { isWishlisted, isPending, toggleWishlist } = useWishlist();
@@ -40,7 +44,10 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
     e.preventDefault();
     e.stopPropagation();
 
-    if (isOutOfStock) {
+    if (isOutOfStock || isLimitReached) {
+      if (isLimitReached) {
+        window.alert('You have reached the maximum available limit for this item.');
+      }
       return;
     }
 
@@ -51,6 +58,8 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
       priceFormatted: displayPrice,
       image: product.image?.sourceUrl,
       slug: product.slug,
+      manageStock: product.manageStock,
+      stockQuantity: product.stockQuantity,
     };
 
     addItem(item, 1);
@@ -135,11 +144,13 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           <button
             type="button"
             onClick={handleQuickAdd}
-            disabled={isOutOfStock}
+            disabled={isOutOfStock || isLimitReached}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-[11px] font-bold uppercase tracking-widest text-zinc-900 shadow-xl ring-1 ring-zinc-200/50 backdrop-blur-sm transition-colors hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
           >
             {isOutOfStock ? (
               "Sold Out"
+            ) : isLimitReached ? (
+              "Limit Reached"
             ) : (
               <>
                 <ShoppingCart className="h-3.5 w-3.5" />

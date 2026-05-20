@@ -38,6 +38,8 @@ interface CheckoutLineItem {
   image?: string;
   priceFormatted?: string;
   slug?: string;
+  manageStock?: boolean;
+  stockQuantity?: number | null;
 }
 
 const checkoutSteps = ["details", "payment"] as const;
@@ -149,7 +151,8 @@ function OrderSummary({
                 <span className="text-xs font-semibold text-zinc-900 w-4 text-center">{item.quantity}</span>
                 <button
                   onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                  className="flex h-5 w-5 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:border-zinc-400 hover:text-zinc-700 transition-colors"
+                  disabled={item.manageStock && item.stockQuantity != null && item.quantity >= item.stockQuantity}
+                  className="flex h-5 w-5 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:border-zinc-400 hover:text-zinc-700 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Plus className="h-2.5 w-2.5" />
                 </button>

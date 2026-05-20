@@ -18,6 +18,8 @@ export interface BasketItem {
   image?: string;
   quantity: number;
   slug: string;
+  manageStock?: boolean;
+  stockQuantity?: number | null;
 }
 
 interface BasketState {
@@ -81,13 +83,21 @@ export const useBasket = create<BasketState>()(
       addItem: (item, quantity = 1) => {
         set((state) => {
           const existing = state.items.find((i) => i.id === item.id);
-          const newItems = existing
-            ? state.items.map((i) =>
-                i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i
-              )
-            : [...state.items, { ...item, quantity }];
-            
-          return { items: newItems };
+          const currentQty = existing ? existing.quantity : 0;
+          const newQty = currentQty + quantity;
+          
+          const maxQty = (item.manageStock && item.stockQuantity != null) ? item.stockQuantity : Infinity;
+          const finalQty = newQty > maxQty ? maxQty : newQty;
+
+          if (existing) {
+            return {
+              items: state.items.map((i) =>
+                i.id === item.id ? { ...i, quantity: finalQty, manageStock: item.manageStock, stockQuantity: item.stockQuantity } : i
+              ),
+            };
+          } else {
+            return { items: [...state.items, { ...item, quantity: finalQty }] };
+          }
         });
       },
 
@@ -100,9 +110,15 @@ export const useBasket = create<BasketState>()(
           get().removeItem(id);
           return;
         }
-        set((state) => ({
-          items: state.items.map((i) => (i.id === id ? { ...i, quantity } : i)),
-        }));
+        set((state) => {
+          const existing = state.items.find((i) => i.id === id);
+          if (existing && existing.manageStock && existing.stockQuantity != null && quantity > existing.stockQuantity) {
+            quantity = existing.stockQuantity;
+          }
+          return {
+            items: state.items.map((i) => (i.id === id ? { ...i, quantity } : i)),
+          };
+        });
       },
 
       clearBasket: () => set({ items: [] }),

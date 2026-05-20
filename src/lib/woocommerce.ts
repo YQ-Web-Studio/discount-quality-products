@@ -115,6 +115,8 @@ export interface WooProductRaw {
   images: WooImage[];
   attributes: WooAttribute[];
   stock_status: string;
+  manage_stock?: boolean;
+  stock_quantity?: number;
 }
 
 export interface MappedProduct {
@@ -134,6 +136,8 @@ export interface MappedProduct {
   attributes: WooAttribute[];
   condition?: string;
   stockStatus: string;
+  manageStock: boolean;
+  stockQuantity: number | null;
 }
 
 /**
@@ -173,6 +177,8 @@ export function mapProduct(raw: WooProductRaw): MappedProduct {
     attributes: raw.attributes || [],
     condition: conditionAttr?.options?.[0], // Assume first option is the condition
     stockStatus: raw.stock_status || "instock",
+    manageStock: raw.manage_stock ?? false,
+    stockQuantity: raw.stock_quantity ?? null,
   };
 }
 

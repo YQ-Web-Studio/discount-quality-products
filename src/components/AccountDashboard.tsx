@@ -409,6 +409,8 @@ export function AccountDashboard({
                             sourceUrl: product.image.sourceUrl,
                             altText: product.image.altText || product.name
                           } : null,
+                          manageStock: false,
+                          stockQuantity: null,
                         };
 
                         const isOutOfStock = mappedProduct.stockStatus === 'OUT_OF_STOCK' || mappedProduct.stockStatus === 'outofstock';

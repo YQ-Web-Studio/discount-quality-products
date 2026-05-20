@@ -13,6 +13,8 @@ interface AddToCartControlsProps {
   productImage?: string;
   productSlug: string;
   stockStatus?: string;
+  manageStock?: boolean;
+  stockQuantity?: number | null;
 }
 
 export function AddToCartControls({
@@ -22,9 +24,14 @@ export function AddToCartControls({
   productImage,
   productSlug,
   stockStatus,
+  manageStock,
+  stockQuantity,
 }: AddToCartControlsProps) {
-  const isOutOfStock = stockStatus === 'OUT_OF_STOCK' || stockStatus === 'outofstock';
+  const isOutOfStock = stockStatus === 'OUT_OF_STOCK' || stockStatus === 'outofstock' || (manageStock && stockQuantity === 0);
+  const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === productId)?.quantity || 0);
+  const maxAvailable = (manageStock && stockQuantity != null) ? stockQuantity : Infinity;
   const [quantity, setQuantity] = useState(1);
+  const isLimitReached = (quantity + currentBasketQty) >= maxAvailable;
   const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle');
   const [isBuyingNow, setIsBuyingNow] = useState(false);
   const addItem = useBasket((s) => s.addItem);
@@ -36,7 +43,9 @@ export function AddToCartControls({
   }
 
   function increment() {
-    setQuantity((q) => q + 1);
+    if (quantity + currentBasketQty < maxAvailable) {
+      setQuantity((q) => q + 1);
+    }
   }
 
   function handleAdd() {
@@ -50,7 +59,14 @@ export function AddToCartControls({
       priceFormatted: productPrice || 'POA',
       image: productImage,
       slug: productSlug,
+      manageStock,
+      stockQuantity,
     };
+
+    if (quantity + currentBasketQty > maxAvailable) {
+      window.alert('You have reached the maximum available limit for this item.');
+      return;
+    }
 
     // Optimistic update — instant Zustand state mutation
     addItem(item, quantity);
@@ -79,7 +95,15 @@ export function AddToCartControls({
         priceFormatted: productPrice || 'POA',
         image: productImage,
         slug: productSlug,
+        manageStock,
+        stockQuantity,
       };
+
+      if (quantity + currentBasketQty > maxAvailable) {
+        window.alert('You have reached the maximum available limit for this item.');
+        setIsBuyingNow(false);
+        return;
+      }
 
       // Bypass the global state completely
       // Immediate redirect to checkout with query params for direct flow
@@ -118,12 +142,19 @@ export function AddToCartControls({
           <button
             id="pdp-qty-increment"
             onClick={increment}
+            disabled={isLimitReached}
             aria-label="Increase quantity"
-            className="flex h-12 w-12 items-center justify-center rounded-r-xl text-zinc-600 transition-colors hover:bg-zinc-50"
+            className="flex h-12 w-12 items-center justify-center rounded-r-xl text-zinc-600 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus className="h-4 w-4" />
           </button>
         </div>
+        
+        {manageStock && stockQuantity != null && stockQuantity > 0 && isLimitReached && (
+          <p className="text-sm font-medium text-amber-600">
+            Only {stockQuantity} items remaining in stock
+          </p>
+        )}
 
         </div>
 
