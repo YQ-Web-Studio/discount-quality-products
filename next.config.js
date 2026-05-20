@@ -29,6 +29,13 @@ const nextConfig = {
       },
       // Wildcard for custom domain on Bluehost (add your real hostname here).
       // Example: { protocol: 'https', hostname: 'api.discountproducts.co.uk', pathname: '/wp-content/uploads/**' }
+      // ── Cloudflare R2 Domain ──────────────────────────────────────────
+      {
+        protocol: 'https',
+        hostname: 'pub-8d1174ef87b14259ae896366fb94672b.r2.dev',
+        port: '',
+        pathname: '/wp-content/uploads/**',
+      },
       // ── Unsplash (placeholder / editorial images) ─────────────────────
       {
         protocol: 'https',
