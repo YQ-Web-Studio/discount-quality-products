@@ -46,7 +46,12 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
 
     if (isOutOfStock || isLimitReached) {
       if (isLimitReached) {
-        window.alert('You have reached the maximum available limit for this item.');
+        const left = product.stockQuantity ?? 0;
+        window.alert(
+          currentBasketQty > 0
+            ? `You already have ${currentBasketQty} in your basket — only ${left} available in total.`
+            : `Only ${left} ${left === 1 ? 'item' : 'items'} left in stock!`
+        );
       }
       return;
     }

@@ -30,6 +30,7 @@ export function AddToCartControls({
   const isOutOfStock = stockStatus === 'OUT_OF_STOCK' || stockStatus === 'outofstock' || (manageStock && stockQuantity === 0);
   const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === productId)?.quantity || 0);
   const maxAvailable = (manageStock && stockQuantity != null) ? stockQuantity : Infinity;
+  const remainingStock = maxAvailable === Infinity ? Infinity : Math.max(0, maxAvailable - currentBasketQty);
   const [quantity, setQuantity] = useState(1);
   const isLimitReached = (quantity + currentBasketQty) >= maxAvailable;
   const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle');
@@ -64,7 +65,14 @@ export function AddToCartControls({
     };
 
     if (quantity + currentBasketQty > maxAvailable) {
-      window.alert('You have reached the maximum available limit for this item.');
+      const inBasket = currentBasketQty;
+      const left = stockQuantity ?? 0;
+      window.alert(
+        inBasket > 0
+          ? `You already have ${inBasket} in your basket — only ${left} available in total.`
+          : `Only ${left} ${left === 1 ? 'item' : 'items'} left in stock!`
+      );
+      setStatus('idle');
       return;
     }
 
@@ -100,7 +108,13 @@ export function AddToCartControls({
       };
 
       if (quantity + currentBasketQty > maxAvailable) {
-        window.alert('You have reached the maximum available limit for this item.');
+        const inBasket = currentBasketQty;
+        const left = stockQuantity ?? 0;
+        window.alert(
+          inBasket > 0
+            ? `You already have ${inBasket} in your basket — only ${left} available in total.`
+            : `Only ${left} ${left === 1 ? 'item' : 'items'} left in stock!`
+        );
         setIsBuyingNow(false);
         return;
       }
@@ -152,7 +166,10 @@ export function AddToCartControls({
         
         {manageStock && stockQuantity != null && stockQuantity > 0 && isLimitReached && (
           <p className="text-sm font-medium text-amber-600">
-            Only {stockQuantity} items remaining in stock
+            {currentBasketQty > 0
+              ? `You have ${currentBasketQty} in your basket — that's all that's available!`
+              : `Only ${stockQuantity} ${stockQuantity === 1 ? 'item' : 'items'} left in stock!`
+            }
           </p>
         )}
 
