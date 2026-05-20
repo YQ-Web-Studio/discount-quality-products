@@ -233,6 +233,8 @@ export default async function ProductPage(props: PageProps<'/products/[slug]'>) 
                 productImage={product.image?.sourceUrl}
                 productSlug={product.slug}
                 stockStatus={product.stockStatus}
+                manageStock={product.manageStock}
+                stockQuantity={product.stockQuantity}
               />
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-t border-zinc-100 pt-8">
