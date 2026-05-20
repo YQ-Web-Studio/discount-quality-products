@@ -39,7 +39,9 @@ export async function submitContactForm(formData: FormData) {
     return { status: "error", message: "Security verification failed. Please try again." };
   }
 
-  const SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "1x0000000000000000000000000000000AA";
+  const SECRET_KEY = process.env.NODE_ENV === 'development'
+    ? "1x0000000000000000000000000000000AA"
+    : (process.env.TURNSTILE_SECRET_KEY || "1x0000000000000000000000000000000AA");
   try {
     const cfResponse = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
