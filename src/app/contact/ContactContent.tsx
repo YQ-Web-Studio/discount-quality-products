@@ -38,6 +38,7 @@ export default function ContactContent() {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [turnstilePassed, setTurnstilePassed] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -221,6 +222,27 @@ export default function ContactContent() {
                       <Textarea id="message" name="message" required placeholder="How can we assist you today?" className="min-h-[100px] lg:min-h-[120px] resize-none rounded-xl bg-zinc-50/50 shadow-sm border-zinc-200 focus-visible:ring-primary focus-visible:border-primary text-sm p-4" />
                     </div>
 
+                    <div className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                      <input
+                        type="checkbox"
+                        id="contact-terms-agreement"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                        required
+                      />
+                      <label htmlFor="contact-terms-agreement" className="text-sm text-zinc-600 leading-snug">
+                        I have read and agree to the website{' '}
+                        <Link href="/terms" target="_blank" className="font-semibold text-primary hover:underline">
+                          Terms and Conditions
+                        </Link>{' '}
+                        and{' '}
+                        <Link href="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
+                          Privacy Policy
+                        </Link>.
+                      </label>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-2">
                       <div className="shrink-0 scale-90 origin-left">
                         <Turnstile 
@@ -235,7 +257,7 @@ export default function ContactContent() {
                       <div className="flex-1 w-full flex flex-col gap-3">
                         <Button 
                           type="submit" 
-                          disabled={loading || !turnstilePassed}
+                          disabled={loading || !turnstilePassed || !agreedToTerms}
                           className="group h-12 rounded-xl w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-base tracking-wide transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
                         >
                           {loading ? (

@@ -199,12 +199,14 @@ function StripePaymentForm({
   form,
   savedCards,
   clientSecret,
+  agreedToTerms,
   onSuccess,
 }: {
   total: number;
   form: any;
   savedCards: any[];
   clientSecret: string;
+  agreedToTerms: boolean;
   onSuccess: ({ paymentIntentId }?: {
     paymentIntentId?: string;
   }) => void;
@@ -380,7 +382,7 @@ function StripePaymentForm({
         {/* Pay Button */}
         <button
           onClick={selectedCardId === "new" ? handlePay : handlePayWithSavedCard}
-          disabled={processing || !stripe || (!elements && selectedCardId === "new")}
+          disabled={processing || !stripe || (!elements && selectedCardId === "new") || !agreedToTerms}
           className="relative w-full overflow-hidden rounded-lg bg-zinc-900 px-6 py-4 flex items-center justify-center gap-2 text-sm font-medium text-white transition-all hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed"
         >
           {processing ? (
@@ -521,6 +523,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [shipping, setShipping] = useState("standard");
   const [processing, setProcessing] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [clientSecret, setClientSecret] = useState("");
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState<CheckoutStep>("details");
@@ -820,8 +823,29 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                   </div>
 
                   <div className="p-4 sm:p-6">
+                    {/* ── Terms & Conditions Checkbox ── */}
+                    <div className="mb-8 flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                      <input
+                        type="checkbox"
+                        id="terms-agreement"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                      />
+                      <label htmlFor="terms-agreement" className="text-sm text-zinc-600">
+                        I have read and agree to the website{' '}
+                        <Link href="/terms" target="_blank" className="font-semibold text-primary hover:underline">
+                          Terms and Conditions
+                        </Link>{' '}
+                        and{' '}
+                        <Link href="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
+                          Privacy Policy
+                        </Link>.
+                      </label>
+                    </div>
+
                     {/* ── PayPal (Top) ── */}
-                    <div className="w-full mb-8 relative z-0">
+                    <div className="w-full mb-8 relative z-0" style={{ opacity: agreedToTerms ? 1 : 0.5, pointerEvents: agreedToTerms ? 'auto' : 'none' }}>
                       <PayPalButtons
                         style={{ 
                           layout: "vertical", 
@@ -830,7 +854,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           label: "pay",
                           height: 48 
                         }}
-                        disabled={processing}
+                        disabled={processing || !agreedToTerms}
                         forceReRender={[computedSubtotal, shipping, processing]}
                         createOrder={async () => {
                           if (!validateDetails()) {
@@ -921,6 +945,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                             form={form}
                             clientSecret={clientSecret}
                             savedCards={savedCards}
+                            agreedToTerms={agreedToTerms}
                             onSuccess={handleSuccess} 
                           />
                         </Elements>
