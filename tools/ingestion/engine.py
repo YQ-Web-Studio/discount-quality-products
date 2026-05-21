@@ -53,7 +53,7 @@ from dotenv import load_dotenv
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 import sys
 # Script location — used to resolve default relative paths.
@@ -98,7 +98,9 @@ META_KEY_MD5 = "_ingestion_md5"
 META_KEY_BATCH = "_import_batch"
 
 # Price multiplier: 10% UK discount.
-PRICE_MULTIPLIER = Decimal("0.9")
+# Currently disabled (set to 1.0) so the exact eBay price is uploaded.
+# Change back to 0.9 to re-enable the 10% discount.
+PRICE_MULTIPLIER = Decimal("1.0")
 TWO_PLACES = Decimal("0.01")
 
 # Number of recent log lines kept for the live dashboard feed.
@@ -106,6 +108,11 @@ STATUS_LOG_LIMIT = 5
 
 # Variations log filename (written next to the script).
 VARIATIONS_LOG = str(_SCRIPT_DIR / "variations_to_review.log")
+
+# Next.js storefront cache invalidation.
+# REVALIDATE_URL and REVALIDATE_SECRET are read dynamically at runtime (after
+# load_runtime_environment() has been called) inside bust_frontend_cache().
+# Set them in the .env.local beside the exe.
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +348,51 @@ class WooCommerceAPI:
             return res["id"]
         return None
 
+    def fetch_all_products(self):
+        """Fetch all existing products from WooCommerce to build a local cache."""
+        if self.dry_run:
+            return {}
+        
+        self.log.info("Fetching all existing products from WooCommerce...")
+        products_cache = {}
+        page = 1
+        while True:
+            url = f"/wp-json/wc/v3/products?per_page=100&page={page}&_fields=id,sku,name,regular_price,stock_quantity"
+            res = self._request("GET", url)
+            if not res or not isinstance(res, list):
+                break
+            
+            for p in res:
+                sku = p.get("sku")
+                if sku:
+                    products_cache[sku] = {
+                        "id": p.get("id"),
+                        "name": p.get("name"),
+                        "regular_price": p.get("regular_price"),
+                        "stock_quantity": p.get("stock_quantity")
+                    }
+            
+            self.log.info("  Fetched %d products so far...", len(products_cache))
+            if len(res) < 100:
+                break
+            page += 1
+            
+        self.log.info("Total existing products fetched: %d", len(products_cache))
+        return products_cache
+
+    def batch_operations(self, create_list, update_list):
+        """Send a batch of create and update operations."""
+        if self.dry_run:
+            self.log.info("  [DRY RUN] Batch operation: %d creates, %d updates.", len(create_list), len(update_list))
+            return True
+            
+        payload = {
+            "create": create_list,
+            "update": update_list
+        }
+        res = self._request("POST", "/wp-json/wc/v3/products/batch", json=payload)
+        return res is not None
+
     def update_product_meta(self, product_id, key, value):
         if self.dry_run:
             return
@@ -520,33 +572,7 @@ class AttributeRegistry:
         return None
 
 
-def pre_index_attributes(csv_path, registry, logger):
-    logger.info("=== Pre-indexing Attributes ===")
-    attribute_values = {}
-    
-    with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            for col, value in row.items():
-                if not col.startswith(IS_COLUMN_PREFIX):
-                    continue
-                val = value.strip() if value else ""
-                if not val:
-                    continue
-                attr_name = col[len(IS_COLUMN_PREFIX):].strip()
-                if attr_name not in attribute_values:
-                    attribute_values[attr_name] = set()
-                for term_name in split_attribute_values(val):
-                    attribute_values[attr_name].add(term_name)
-                
-    for attr_name, terms in attribute_values.items():
-        attr_id = registry.get_or_create_attribute(attr_name)
-        if not attr_id:
-            logger.warning("  Failed to register attribute '%s'", attr_name)
-            continue
-        for term_name in terms:
-            registry.get_or_create_term(attr_id, term_name)
-    logger.info("=== Finished Pre-indexing Attributes ===")
+
 
 
 # ---------------------------------------------------------------------------
@@ -594,9 +620,8 @@ def validate_headers(csv_path, logger):
         logger.info("  %-45s -> sku (primary)", COL_SKU)
     if has_item_num:
         logger.info("  %-45s -> sku (fallback as ITEM-{id})", COL_ITEM_NUM)
-    logger.info("  %-45s -> regular_price (x0.9 discount)", COL_PRICE)
+    logger.info("  %-45s -> regular_price (exact eBay price)", COL_PRICE)
     logger.info("  %-45s -> stock_quantity (primary)", COL_QTY)
-    logger.info("  %-45s -> stock cross-check (debug)", COL_QTY_LIST)
     logger.info("  %-45s -> product category", COL_CATEGORY)
     logger.info("  %-45s -> image paths", COL_PICTURES)
     logger.info("  %-45s -> description", COL_DESC)
@@ -650,20 +675,6 @@ def passes_stock_filter(row, logger, sku):
         logger.debug("  SKU '%s': Stock Total is 0 — skipping.", sku)
         return False
 
-    # Cross-check with Qty To List; log if it reports more stock.
-    raw_list = row.get(COL_QTY_LIST, "").strip()
-    if raw_list:
-        try:
-            qty_to_list = float(raw_list)
-            if qty_to_list > qty:
-                logger.debug(
-                    "  SKU '%s': Qty To List (%g) > Stock Total (%g) — "
-                    "using Stock Total as conservative figure.",
-                    sku, qty_to_list, qty
-                )
-        except ValueError:
-            pass
-
     return True
 
 
@@ -712,6 +723,8 @@ def extract_is_attributes(row, registry):
         
         attr_id = registry.get_or_create_attribute(attr_name)
         if attr_id:
+            for opt in options:
+                registry.get_or_create_term(attr_id, opt)
             attributes.append({
                 "id":        attr_id,
                 "name":      attr_name,
@@ -869,25 +882,14 @@ def resolve_image(image_path, wp, logger):
 # ---------------------------------------------------------------------------
 
 def transform_price(raw_price):
-    """Strip currency symbols, apply 10% UK discount, return 2dp string or None.
+    """Strip currency symbols and return the exact eBay price as a 2dp string, or None.
 
-    Precision contract
-    ------------------
-    All arithmetic uses Python's ``decimal.Decimal``, which avoids the binary
-    floating-point rounding errors of IEEE 754 floats.  The multiplier is the
-    exact rational ``Decimal("0.9")`` and the result is quantised to exactly
-    two decimal places with ``ROUND_HALF_UP`` (standard commercial rounding).
+    The PRICE_MULTIPLIER is currently set to 1.0 (no discount).
+    To re-enable the 10% UK discount, change PRICE_MULTIPLIER to Decimal("0.9").
 
-    Verified examples:
-      8.99  x 0.9 = 8.091   -> "8.09"  (ROUND_HALF_UP, correct)
-      1.005 x 0.9 = 0.9045  -> "0.90"  (a float would give 0.9044... wrong)
-      9.995 x 0.9 = 8.9955  -> "9.00"  (correct)
-
-    WARNING — double-discount risk
-    --------------------------------
-    This discount is baked into the WooCommerce ``regular_price`` at import
-    time.  Any downstream filter in functions.php that applies a further
-    percentage reduction MUST be removed before running a live import.
+    All arithmetic uses Python's ``decimal.Decimal`` to avoid binary floating-point
+    rounding errors. The result is quantised to exactly two decimal places with
+    ``ROUND_HALF_UP`` (standard commercial rounding).
     """
     if not raw_price:
         return None
@@ -935,52 +937,49 @@ def notify_progress(progress_callback, payload):
 
 def process_row(
     row, has_sku, has_item_num, images_dir,
-    wp, cat_cache, attr_registry, logger, dry_run, variations_log_fh, debug_counter
+    wp, cat_cache, attr_registry, logger, dry_run, variations_log_fh, debug_counter,
+    existing_products, skip_updates=False
 ):
     """
-    Process one CSV row. Returns 'imported', 'updated', 'skipped', or 'failed'.
+    Process one CSV row. Returns a tuple: (status_string, payload_dict).
     cat_cache    -- CategoryCache instance for resolving/creating WC categories.
     debug_counter -- mutable list [n] tracking dry-run validation lines printed.
+    existing_products -- local dict of SKU -> Product data
     """
     # --- SKU ---
     sku, is_fallback = resolve_sku(row, has_sku, has_item_num)
     if not sku:
         logger.warning("  Row has no SKU and no Item ID — skipping.")
-        return "failed"
+        return "failed", None
 
     # --- Variations gate ---
     if is_variation(row):
         logger.info("  SKU '%s': Use Variations=True — logged to variations file.", sku)
         variations_log_fh.write(sku + "\n")
         variations_log_fh.flush()
-        return "skipped"
+        return "skipped", None
 
     # --- Price filter (Fixed Price eBay must be > 0) ---
     if not passes_price_filter(row, logger, sku):
-        return "skipped"
+        return "skipped", None
 
     # --- Stock filter (Stock Total must be > 0) ---
     if not passes_stock_filter(row, logger, sku):
-        return "skipped"
+        return "skipped", None
 
     # --- Free postage filter ---
     if not passes_shipping_filter(row, logger, sku):
-        return "skipped"
+        return "skipped", None
 
     # --- Title ---
     name = row.get(COL_TITLE, "").strip() or f"Product {sku}"
 
-    # --- Existing product check ---
-    existing_id = wp.product_exists(sku)
-    if existing_id:
-        logger.info("  SKU '%s' already exists (ID %d) — updating in place.", sku, existing_id)
-
-    # --- Price (Python-calculated: Fixed Price eBay × 0.9, 10% UK discount) ---
+    # --- Price (Python-calculated: Fixed Price eBay × 1.0) ---
     raw_price = row.get(COL_PRICE, "").strip()
     price = transform_price(raw_price)
     if not price:
         logger.warning("  SKU '%s': could not transform price '%s' — skipping.", sku, raw_price)
-        return "failed"
+        return "failed", None
 
     # --- Stock quantity (primary: Stock Total) ---
     stock_qty = None
@@ -990,6 +989,23 @@ def process_row(
             stock_qty = int(Decimal(raw_qty))
         except (InvalidOperation, ValueError):
             stock_qty = None
+
+    # --- Fast Unchanged / Skip updates check ---
+    existing_product = existing_products.get(sku)
+    existing_id = existing_product["id"] if existing_product else None
+    
+    if existing_id:
+        if skip_updates:
+            logger.debug("  SKU '%s' already exists — skipping (Insert Only Mode).", sku)
+            return "skipped", None
+            
+        old_price = str(existing_product.get("regular_price") or "")
+        new_price = str(price)
+        old_stock = existing_product.get("stock_quantity")
+        
+        if (existing_product.get("name") == name and old_price == new_price and old_stock == stock_qty):
+            logger.debug("  SKU '%s' unchanged — skipping (Fast Path).", sku)
+            return "skipped", None
 
     # --- Category ---
     category_ids = []
@@ -1023,13 +1039,14 @@ def process_row(
 
     # --- Build WooCommerce payload ---
     fields = {
-        "name":           name,
-        "sku":            sku,
-        "type":           "simple",
-        "status":         "publish",
-        "regular_price":  price,
-        "manage_stock":   True,
-        "meta_data":      [{"key": META_KEY_BATCH, "value": IMPORT_BATCH}]
+        "name":               name,
+        "sku":                sku,
+        "type":               "simple",
+        "status":             "publish",
+        "catalog_visibility": "visible",
+        "regular_price":      price,
+        "manage_stock":       True,
+        "meta_data":          [{"key": META_KEY_BATCH, "value": IMPORT_BATCH}]
     }
     
     description = row.get(COL_DESC, "").strip()
@@ -1052,28 +1069,67 @@ def process_row(
         update_fields.pop("sku", None)
         update_fields.pop("type", None)
         update_fields.pop("status", None)
-
-        product_id = wp.update_product(existing_id, update_fields)
-        if not product_id:
-            logger.error("  [FAILED] Failed to update product: '%s' (SKU: %s)", name[:50], sku)
-            return "failed"
+        update_fields["id"] = existing_id
 
         logger.info(
-            "  [OK] Updated product ID %d: '%s' (SKU: %s%s) @ %s [batch: %s]",
-            product_id, name[:50], sku, fallback_note, price, IMPORT_BATCH
+            "  [QUEUE] Update product '%s' (SKU: %s%s) @ %s [batch: %s]",
+            name[:50], sku, fallback_note, price, IMPORT_BATCH
         )
-        return "updated"
-
-    product_id = wp.create_product(fields)
-    if not product_id:
-        logger.error("  [FAILED] Failed to create product: '%s' (SKU: %s)", name[:50], sku)
-        return "failed"
+        return "queued_update", update_fields
 
     logger.info(
-        "  [OK] Created product ID %d: '%s' (SKU: %s%s) @ %s [batch: %s]",
-        product_id, name[:50], sku, fallback_note, price, IMPORT_BATCH
+        "  [QUEUE] Create product '%s' (SKU: %s%s) @ %s [batch: %s]",
+        name[:50], sku, fallback_note, price, IMPORT_BATCH
     )
-    return "imported"
+    return "queued_create", fields
+
+
+# ---------------------------------------------------------------------------
+# Frontend Cache Invalidation
+# ---------------------------------------------------------------------------
+
+def bust_frontend_cache(logger):
+    """
+    POST to the Next.js /api/revalidate endpoint to flush the product cache.
+    This makes newly uploaded products appear on the storefront immediately
+    rather than waiting up to 1 hour for the cache to naturally expire.
+
+    Requires REVALIDATE_URL and REVALIDATE_SECRET to be set in the environment
+    (or .env.local beside the exe). These are read dynamically here so they
+    are guaranteed to be loaded after load_runtime_environment() has run.
+    """
+    revalidate_url    = os.environ.get("REVALIDATE_URL", "").rstrip("/")
+    revalidate_secret = os.environ.get("REVALIDATE_SECRET", "")
+
+    if not revalidate_url or not revalidate_secret:
+        logger.info(
+            "  [Cache] REVALIDATE_URL or REVALIDATE_SECRET not set — skipping cache invalidation."
+        )
+        return
+
+    endpoint = f"{revalidate_url}/api/revalidate"
+    try:
+        response = requests.post(
+            endpoint,
+            json={"tags": ["wc-products"]},
+            headers={
+                "x-revalidate-secret": revalidate_secret,
+                "Content-Type": "application/json",
+            },
+            timeout=15,
+        )
+        if response.status_code == 200:
+            logger.info(
+                "  [Cache] Frontend product cache invalidated successfully — new products are live!"
+            )
+        else:
+            logger.warning(
+                "  [Cache] Revalidate endpoint returned %d: %s",
+                response.status_code,
+                response.text[:200],
+            )
+    except Exception as exc:
+        logger.warning("  [Cache] Could not reach revalidate endpoint: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1155,7 +1211,7 @@ def run_ingestion(args):
     cat_cache = CategoryCache(wp, logger)
     attr_registry = AttributeRegistry(wp, logger)
 
-    pre_index_attributes(csv_path, attr_registry, logger)
+    existing_products = wp.fetch_all_products()
 
     # --- Stream and process ---
     counters = {"imported": 0, "updated": 0, "skipped": 0, "failed": 0}
@@ -1165,8 +1221,29 @@ def run_ingestion(args):
     processed_rows = 0
     stopped_by_limit = False
 
+    batch_creates = []
+    batch_updates = []
+    
+    def flush_batch():
+        nonlocal batch_creates, batch_updates
+        if not batch_creates and not batch_updates:
+            return
+        logger.info("Flushing batch: %d creates, %d updates...", len(batch_creates), len(batch_updates))
+        success = wp.batch_operations(batch_creates, batch_updates)
+        if success:
+            counters["imported"] += len(batch_creates)
+            counters["updated"] += len(batch_updates)
+        else:
+            logger.error("Batch flush failed!")
+            counters["failed"] += len(batch_creates) + len(batch_updates)
+            
+        batch_creates.clear()
+        batch_updates.clear()
+
     with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f, \
          open_variations_log() as variations_log_fh:
+
+        last_ui_update_time = 0.0
 
         reader = csv.DictReader(f)
         for i, row in enumerate(reader, start=1):
@@ -1174,32 +1251,128 @@ def run_ingestion(args):
             if args.debug_limit and i > args.debug_limit:
                 logger.info("DEBUG_LIMIT of %d reached. Exiting gracefully.", args.debug_limit)
                 break
+                
+            if getattr(args, "stop_event", None) and args.stop_event.is_set():
+                logger.info("Stop requested by user. Exiting gracefully. You can resume later by running again.")
+                break
+
             
-            sku_preview, _ = resolve_sku(row, has_sku, has_item_num)
+            sku, is_fallback = resolve_sku(row, has_sku, has_item_num)
+            if not sku:
+                counters["failed"] += 1
+                continue
+                
+            # Variations gate
+            if is_variation(row):
+                logger.info("  SKU '%s': Use Variations=True — logged to variations file.", sku)
+                variations_log_fh.write(sku + "\n")
+                variations_log_fh.flush()
+                counters["skipped"] += 1
+                continue
+                
+            # Check fast-path skip (Insert-only mode OR unchanged in Standard mode)
+            existing_product = existing_products.get(sku)
+            existing_id = existing_product["id"] if existing_product else None
+            
+            is_skipped = False
+            if existing_id:
+                skip_updates_active = getattr(args, "skip_updates", False)
+                if skip_updates_active:
+                    is_skipped = True
+                else:
+                    # Standard mode: check if price, stock, name are unchanged
+                    name = row.get(COL_TITLE, "").strip() or f"Product {sku}"
+                    raw_price = row.get(COL_PRICE, "").strip()
+                    price = transform_price(raw_price)
+                    
+                    raw_qty = row.get(COL_QTY, "").strip()
+                    stock_qty = None
+                    if raw_qty:
+                        try:
+                            stock_qty = int(Decimal(raw_qty))
+                        except (InvalidOperation, ValueError):
+                            stock_qty = None
+                            
+                    old_price = str(existing_product.get("regular_price") or "")
+                    new_price = str(price)
+                    old_stock = existing_product.get("stock_quantity")
+                    
+                    if (existing_product.get("name") == name and old_price == new_price and old_stock == stock_qty):
+                        is_skipped = True
+            
+            if is_skipped:
+                counters["skipped"] += 1
+                
+                # Periodically update the progress/UI so it doesn't freeze but remains extremely fast
+                current_time = time.time()
+                if i % 1000 == 0 or i == total_rows or (current_time - last_ui_update_time) > 1.0:
+                    last_ui_update_time = current_time
+                    pct = (i / total_rows * 100) if total_rows else 0
+                    
+                    progress_msg = f"[{i}/{total_rows}] {pct:.1f}% - Fast-skipping already uploaded products..."
+                    logger.info(progress_msg)
+                    recent_logs.append(progress_msg)
+                    
+                    elapsed = current_time - start_time
+                    progress_payload = {
+                        "status":      "running",
+                        "total":       total_rows,
+                        "processed":   i,
+                        "imported":    counters["imported"] + len(batch_creates),
+                        "updated":     counters["updated"] + len(batch_updates),
+                        "skipped":     counters["skipped"],
+                        "failed":      counters["failed"],
+                        "percent":     round(pct, 1),
+                        "recent_logs": list(recent_logs),
+                        "elapsed":     "{:02d}:{:02d}:{:02d}".format(
+                            int(elapsed) // 3600,
+                            (int(elapsed) % 3600) // 60,
+                            int(elapsed) % 60,
+                        ),
+                    }
+                    write_status(args.status_file, progress_payload)
+                    notify_progress(progress_callback, progress_payload)
+                continue
+
             pct = (i / total_rows * 100) if total_rows else 0
-            progress_msg = f"[{i}/{total_rows}] {pct:.1f}% - SKU: {sku_preview or '???'}"
+            progress_msg = f"[{i}/{total_rows}] {pct:.1f}% - Processing SKU: {sku}"
             logger.info(progress_msg)
             recent_logs.append(progress_msg)
 
             try:
-                result = process_row(
+                result, payload = process_row(
                     row, has_sku, has_item_num, images_dir,
                     wp, cat_cache, attr_registry, logger, args.dry_run, variations_log_fh, debug_counter,
+                    existing_products, skip_updates=getattr(args, "skip_updates", False)
                 )
-                counters[result] += 1
+                
+                if result == "queued_create":
+                    batch_creates.append(payload)
+                elif result == "queued_update":
+                    batch_updates.append(payload)
+                elif result == "skipped":
+                    counters["skipped"] += 1
+                elif result == "failed":
+                    counters["failed"] += 1
+                    
+                if len(batch_creates) + len(batch_updates) >= 100:
+                    flush_batch()
+                    
             except Exception as exc:
                 err_msg = f"  Unhandled error on row {i}: {exc}"
                 logger.error(err_msg)
                 recent_logs.append(err_msg)
                 counters["failed"] += 1
 
-            elapsed = time.time() - start_time
+            current_time = time.time()
+            last_ui_update_time = current_time
+            elapsed = current_time - start_time
             progress_payload = {
                 "status":      "running",
                 "total":       total_rows,
                 "processed":   i,
-                "imported":    counters["imported"],
-                "updated":     counters["updated"],
+                "imported":    counters["imported"] + len(batch_creates),
+                "updated":     counters["updated"] + len(batch_updates),
                 "skipped":     counters["skipped"],
                 "failed":      counters["failed"],
                 "percent":     round(pct, 1),
@@ -1213,7 +1386,7 @@ def run_ingestion(args):
             write_status(args.status_file, progress_payload)
             notify_progress(progress_callback, progress_payload)
 
-            successful_products = counters["imported"]
+            successful_products = counters["imported"] + len(batch_creates)
             if upload_limit and successful_products >= upload_limit:
                 logger.info(
                     "Upload limit of %d new product imports reached. Exiting gracefully.",
@@ -1221,6 +1394,9 @@ def run_ingestion(args):
                 )
                 stopped_by_limit = True
                 break
+                
+        # Flush any remaining items in the batch
+        flush_batch()
 
     # --- Summary ---
     elapsed = time.time() - start_time
@@ -1238,7 +1414,10 @@ def run_ingestion(args):
     logger.info("  [>] Rows scanned:  %s / %s", f"{processed_rows:,}", f"{total_rows:,}")
     if stopped_by_limit:
         logger.info("  [>] Stop reason:   upload limit reached")
+    elif getattr(args, "stop_event", None) and args.stop_event.is_set():
+        logger.info("  [>] Stop reason:   stopped by user")
     logger.info("  [*] Duration:      %02d:%02d:%02d", hours, minutes, seconds)
+
     logger.info("  [*] Batch tag:     %s", IMPORT_BATCH)
     logger.info("  [*] Variations:    %s", VARIATIONS_LOG)
     logger.info("=" * 60)
@@ -1264,6 +1443,10 @@ def run_ingestion(args):
             os.remove(args.pid_file)
         except OSError:
             pass
+
+    # --- Bust the frontend product cache so new products appear immediately ---
+    if counters["imported"] + counters["updated"] > 0:
+        bust_frontend_cache(logger)
 
 
 # ---------------------------------------------------------------------------
@@ -1304,6 +1487,7 @@ class IngestionGui:
         self.images_dir = tk.StringVar(value=DEFAULT_IMAGES_DIR if os.path.isdir(DEFAULT_IMAGES_DIR) else "")
         self.upload_limit = tk.StringVar(value="")
         self.status_text = tk.StringVar(value="Ready")
+        self.skip_updates = tk.BooleanVar(value=False)
 
         root.title("WooCommerce Ingestion Pipeline")
         root.minsize(760, 560)
@@ -1314,7 +1498,7 @@ class IngestionGui:
         frame = ttk.Frame(root, padding=18)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(6, weight=1)
+        frame.rowconfigure(7, weight=1)
 
         ttk.Label(frame, text="Supplier CSV").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         ttk.Entry(frame, textvariable=self.csv_path).grid(row=0, column=1, sticky="ew", pady=(0, 8))
@@ -1328,15 +1512,22 @@ class IngestionGui:
         ttk.Spinbox(frame, from_=0, to=100000, textvariable=self.upload_limit, width=12).grid(row=2, column=1, sticky="w", pady=(0, 14))
         ttk.Label(frame, text="Leave blank or 0 to process the full CSV").grid(row=2, column=2, sticky="e", pady=(0, 14))
 
-        self.run_button = ttk.Button(frame, text="Run Ingestion Pipeline", command=self.start_ingestion)
-        self.run_button.grid(row=3, column=0, columnspan=3, sticky="ew", ipady=8, pady=(0, 14))
+        self.skip_updates_cb = ttk.Checkbutton(frame, text="Skip updates (Only upload new products)", variable=self.skip_updates)
+        self.skip_updates_cb.grid(row=3, column=0, columnspan=3, sticky="w", pady=(0, 14))
 
-        ttk.Label(frame, textvariable=self.status_text).grid(row=4, column=0, columnspan=3, sticky="w")
+        self.run_button = ttk.Button(frame, text="Run Ingestion Pipeline", command=self.start_ingestion)
+        self.run_button.grid(row=4, column=0, columnspan=2, sticky="ew", ipady=8, pady=(0, 14))
+        
+        self.stop_button = ttk.Button(frame, text="Stop", command=self.stop_ingestion, state="disabled")
+        self.stop_button.grid(row=4, column=2, sticky="ew", ipady=8, padx=(10, 0), pady=(0, 14))
+
+        ttk.Label(frame, textvariable=self.status_text).grid(row=5, column=0, columnspan=3, sticky="w")
+
         self.progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
-        self.progress.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(6, 12))
+        self.progress.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(6, 12))
 
         self.log_text = scrolledtext.ScrolledText(frame, wrap=tk.WORD, height=18, state="disabled")
-        self.log_text.grid(row=6, column=0, columnspan=3, sticky="nsew")
+        self.log_text.grid(row=7, column=0, columnspan=3, sticky="nsew")
 
         root.after(100, self.drain_events)
 
@@ -1360,7 +1551,14 @@ class IngestionGui:
         if selected:
             self.images_dir.set(selected)
 
+    def stop_ingestion(self):
+        if self.running and self.worker:
+            self.stop_event.set()
+            self.status_text.set("Stopping gracefully (waiting for current batch to finish)...")
+            self.stop_button.configure(state="disabled")
+
     def start_ingestion(self):
+
         from tkinter import messagebox
 
         csv_path = self.csv_path.get().strip()
@@ -1390,15 +1588,19 @@ class IngestionGui:
         self.progress["value"] = 0
         self.status_text.set("Starting ingestion...")
         self.run_button.configure(state="disabled")
+        self.stop_button.configure(state="normal")
         self.running = True
+        self.stop_event = threading.Event()
 
         log_handler = TkQueueLogHandler(self.events)
+
         args = argparse.Namespace(
             csv=csv_path,
             images_dir=images_dir,
             debug_limit=0,
             dry_run=False,
             upload_limit=upload_limit,
+            skip_updates=self.skip_updates.get(),
             auto=True,
             log_file=None,
             status_file=None,
@@ -1406,8 +1608,10 @@ class IngestionGui:
             extra_handlers=[log_handler],
             console_log=False,
             progress_callback=self.enqueue_progress,
+            stop_event=self.stop_event,
         )
         self.worker = threading.Thread(target=self.run_worker, args=(args,), daemon=True)
+
         self.worker.start()
 
     def run_worker(self, args):
@@ -1474,6 +1678,7 @@ class IngestionGui:
     def finish_run(self, success, message):
         self.running = False
         self.run_button.configure(state="normal")
+        self.stop_button.configure(state="disabled")
         self.status_text.set(message)
 
     def on_close(self):
@@ -1534,6 +1739,10 @@ def main():
         "--upload-limit", type=int, default=0,
         metavar="N",
         help="Stop after N successful product creates/updates. Default: 0, process the full CSV.",
+    )
+    parser.add_argument(
+        "--skip-updates", action="store_true", default=False,
+        help="Skip updates for existing products (insert new products only).",
     )
     parser.add_argument(
         "--auto", action="store_true", default=False,

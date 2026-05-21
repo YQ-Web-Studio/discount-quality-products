@@ -328,7 +328,7 @@ function CategorySidebar({
                   checked={catChecked}
                   onChange={() => onToggleCategory(cat.id)}
                 />
-                <span className={cn("text-sm transition-colors", catChecked ? cn("font-semibold", cat.accentColor) : cn("font-medium text-zinc-600", cat.hoverText))}>
+                <span className={cn("text-sm font-semibold transition-colors", cat.accentColor)}>
                   {cat.label}
                 </span>
               </div>
@@ -472,23 +472,47 @@ export default function SearchHub({
       // Check if the toggled ID is a parent category
       const parentCat = initialCategories.find(c => c.id === id);
       
-      if (parentCat && parentCat.subcategories) {
-        // Determine if all subcategories are currently selected
-        const allChecked = parentCat.subcategories.every(sub => next.has(sub.id));
-        
-        if (allChecked) {
-          // If all are checked, uncheck everything in this branch
-          next.delete(id);
-          parentCat.subcategories.forEach(sub => next.delete(sub.id));
+      if (parentCat) {
+        // Toggling a parent category
+        const catChecked = parentCat.subcategories && parentCat.subcategories.length > 0
+          ? parentCat.subcategories.every(sub => prev.has(sub.id))
+          : prev.has(parentCat.id);
+
+        if (catChecked) {
+          // Deselect parent and all its subcategories
+          next.delete(parentCat.id);
+          parentCat.subcategories?.forEach(sub => next.delete(sub.id));
         } else {
-          // If not all are checked, check everything in this branch
-          next.add(id);
-          parentCat.subcategories.forEach(sub => next.add(sub.id));
+          // Select parent and all its subcategories
+          next.add(parentCat.id);
+          parentCat.subcategories?.forEach(sub => next.add(sub.id));
         }
       } else {
-        // Just a standard subcategory toggle
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
+        // Toggling a subcategory
+        if (next.has(id)) {
+          next.delete(id);
+          // If we deselect a subcategory, we should also make sure its parent is deselected
+          const parent = initialCategories.find(cat => cat.subcategories?.some(sub => sub.id === id));
+          if (parent) {
+            next.delete(parent.id);
+          }
+        } else {
+          next.add(id);
+          // If all subcategories of a parent are now selected, we can also add the parent ID
+          const parent = initialCategories.find(cat => cat.subcategories?.some(sub => sub.id === id));
+          if (parent && parent.subcategories) {
+            const allSubsSelected = parent.subcategories.every(sub => next.has(sub.id));
+            if (allSubsSelected) {
+              next.add(parent.id);
+            }
+          }
+        }
+      }
+
+      // If nothing is selected, clear filters
+      if (next.size === 0) {
+        setTimeout(() => updateUrl(new Set(), 1), 0);
+        return new Set();
       }
 
       // Check if every single interactable leaf node is now active
@@ -562,9 +586,10 @@ export default function SearchHub({
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     const params = new URLSearchParams(searchParams.toString());
     setPageParam(params, newPage);
-    router.push(buildShopUrl(params));
+    router.push(buildShopUrl(params), { scroll: false });
   }
 
   /* Page title */
@@ -727,7 +752,7 @@ export default function SearchHub({
           <div className="flex-1 flex flex-col py-8 pl-6 lg:pl-12">
             {products.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 mb-10 xl:gap-x-8">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8">
                   {products.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}

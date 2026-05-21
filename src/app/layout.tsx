@@ -70,7 +70,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className={`${geistSans.className} min-h-screen bg-background text-foreground`} suppressHydrationWarning>
-        <div className="relative flex min-h-screen flex-col overflow-x-hidden">
+        <div className="relative flex min-h-screen flex-col overflow-x-clip">
           <StructuredData />
           <AuthProvider>
             <Header />

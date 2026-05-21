@@ -389,14 +389,16 @@ function buildCategoryHierarchy(rawCategories: any[]): DynamicNavCategory[] {
     const children = navCat.subcategories.map((navSub) => {
       const match = rawCategories.find((c: any) => c.slug === (navSub.wcSlug || navSub.slug));
       return {
-        id: match ? match.id : navSub.id, // Fall back to frontend ID if missing so it still displays
+        id: match ? match.id : navSub.id + 1000000, // Fall back to high ID if missing to avoid collisions
         label: navSub.label, // Enforce the frontend specific label
         slug: navSub.slug,
       };
     });
 
+    const parentMatch = rawCategories.find((c: any) => c.slug === navCat.slug);
+
     return {
-      id: navCat.id,
+      id: parentMatch ? parentMatch.id : navCat.id + 1000000, // Avoid frontend ID colliding with backend IDs
       label: navCat.label,
       slug: navCat.slug,
       accentColor: navCat.accentColor,
