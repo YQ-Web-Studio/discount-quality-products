@@ -291,7 +291,7 @@ export const fetchWooCommerceProducts = async (params: any = {}) => {
   const cachedFn = unstable_cache(
     async (p) => fetchProductsInternal(p),
     ["wc-products", String(categoryId), String(page), String(perPage), String(searchQ), String(orderby), String(order), String(minPrice), String(maxPrice), paParamsString],
-    { revalidate: 3600 }
+    { revalidate: 3600, tags: ["wc-products"] }
   );
   return cachedFn(params);
 };
@@ -356,7 +356,7 @@ export const getProductBySlug = async (slug: string) => {
   const cachedFn = unstable_cache(
     async (s) => getProductBySlugInternal(s),
     [`wc-product-${slug}`],
-    { revalidate: 3600 }
+    { revalidate: 3600, tags: ["wc-products", `wc-product-${slug}`] }
   );
   return cachedFn(slug);
 };
