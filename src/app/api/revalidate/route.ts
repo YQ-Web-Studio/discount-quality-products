@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
     // No body or invalid JSON — use the default tag list
   }
 
+  // @ts-expect-error - Next.js 16 types incorrectly require a second profile argument
   tags.forEach((tag) => revalidateTag(tag));
 
   return NextResponse.json({
