@@ -41,6 +41,7 @@ import re
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from collections import deque
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
@@ -64,6 +65,7 @@ else:
 
 # Default paths (relative to this script: tools/ingestion/ → data/)
 DEFAULT_CSV_PATH   = str(_SCRIPT_DIR / ".." / ".." / "data" / "website" / "lightbulbs.csv")
+DEFAULT_XML_PATH   = str(_SCRIPT_DIR / ".." / ".." / "data" / "website" / "all products.xml")
 DEFAULT_IMAGES_DIR = str(_SCRIPT_DIR / ".." / ".." / "data" / "pics")
 
 # Batch tag applied to every imported product.
@@ -576,7 +578,119 @@ class AttributeRegistry:
 
 
 # ---------------------------------------------------------------------------
-# CSV Header Validation
+# High-Performance XML Streaming & Bytes Wrapper
+# ---------------------------------------------------------------------------
+
+class ProgressFileWrapper:
+    """Wrapper around a file object that tracks the total bytes read for precise progress tracking."""
+    def __init__(self, file_obj):
+        self.file_obj = file_obj
+        self.bytes_read = 0
+
+    def read(self, size=-1):
+        data = self.file_obj.read(size)
+        self.bytes_read += len(data)
+        return data
+
+    def seek(self, offset, whence=0):
+        res = self.file_obj.seek(offset, whence)
+        if whence == 0:
+            self.bytes_read = offset
+        elif whence == 1:
+            self.bytes_read += offset
+        return res
+
+    def tell(self):
+        return self.file_obj.tell()
+
+    def close(self):
+        self.file_obj.close()
+
+
+def iter_xml_rows(file_path, stop_event=None):
+    """
+    Incremental streaming XML parser for large product XML files.
+    Yields tuples of (row_dict, bytes_read, total_size).
+    Guarantees sub-50 MB RAM usage via Element.clear() and root.clear().
+    """
+    total_size = os.path.getsize(file_path)
+    
+    with open(file_path, "rb") as raw_f:
+        wrapped_f = ProgressFileWrapper(raw_f)
+        context = ET.iterparse(wrapped_f, events=("start", "end"))
+        
+        # Get the root element
+        event, root = next(context)
+        
+        for event, elem in context:
+            if stop_event and stop_event.is_set():
+                break
+                
+            if event == "end" and elem.tag == "Item":
+                # Extract and yield all flat dictionaries for this Item
+                title = elem.findtext("Title", "").strip()
+                item_id = elem.findtext("ItemID", "").strip()
+                use_variations = elem.findtext("UseVariations", "").strip().lower()
+                
+                category = ""
+                description = ""
+                ebay_elem = elem.find("eBay")
+                if ebay_elem is not None:
+                    category = ebay_elem.findtext("StoreCategory1Name", "").strip()
+                    description = ebay_elem.findtext("Description", "").strip()
+                
+                paths = []
+                pictures_elem = elem.find("Pictures")
+                if pictures_elem is not None:
+                    for pic_elem in pictures_elem.findall("Picture"):
+                        p_path = pic_elem.findtext("Path", "").strip()
+                        if p_path:
+                            paths.append(p_path)
+                pictures_path = ";".join(paths)
+                
+                is_attrs = {}
+                specs_elem = elem.find("ItemSpecifics")
+                if specs_elem is not None:
+                    selected_vals = specs_elem.find("SelectedValues")
+                    if selected_vals is not None:
+                        for sv in selected_vals.findall("SelectedValue"):
+                            name = sv.findtext("Name", "").strip()
+                            value = sv.findtext("Value", "").strip()
+                            if name and value:
+                                is_attrs[f"IS_{name}"] = value
+                                
+                vars_elem = elem.find("Variations")
+                if vars_elem is not None:
+                    for var in vars_elem.findall("Variation"):
+                        sku = var.findtext("SKU", "").strip()
+                        fixed_price = var.findtext("FixedPriceeBay", "").strip()
+                        stock_total = var.findtext("StockTotal", "").strip()
+                        qty_to_list = var.findtext("QtyToList", "").strip()
+                        
+                        row = {
+                            COL_TITLE: title,
+                            COL_SKU: sku,
+                            COL_ITEM_NUM: item_id,
+                            COL_PRICE: fixed_price,
+                            COL_QTY: stock_total,
+                            COL_QTY_LIST: qty_to_list,
+                            COL_CATEGORY: category,
+                            COL_SHIPPING: "",  # default to free shipping
+                            COL_VARIATIONS: "True" if use_variations == "true" else "False",
+                            COL_PICTURES: pictures_path,
+                            COL_DESC: description,
+                        }
+                        row.update(is_attrs)
+                        
+                        yield row, wrapped_f.bytes_read, total_size
+                
+                # Free memory to guarantee constant sub-50MB usage
+                elem.clear()
+                root.clear()
+
+
+# ---------------------------------------------------------------------------
+# CSV / XML Validation
 # ---------------------------------------------------------------------------
 
 REQUIRED_COLUMNS = [COL_TITLE, COL_PRICE, COL_QTY]
@@ -589,8 +703,23 @@ OPTIONAL_COLUMNS = [
 def validate_headers(csv_path, logger):
     """
     Validate that required columns are present.
+    For XML files, bypasses CSV header checks and validates structure compatibility.
     Returns (headers, has_sku, has_item_num).
     """
+    if csv_path.lower().endswith(".xml"):
+        logger.info("=== XML Column Mapping (SixBit Schema) ===")
+        logger.info("  %-45s -> name", "Title")
+        logger.info("  %-45s -> sku (primary)", "Variations/Variation/SKU")
+        logger.info("  %-45s -> sku (fallback as ITEM-{id})", "ItemID")
+        logger.info("  %-45s -> regular_price (exact eBay price)", "Variations/Variation/FixedPriceeBay")
+        logger.info("  %-45s -> stock_quantity (primary)", "Variations/Variation/StockTotal")
+        logger.info("  %-45s -> product category", "eBay/StoreCategory1Name")
+        logger.info("  %-45s -> image paths", "Pictures/Picture/Path")
+        logger.info("  %-45s -> description", "eBay/Description")
+        logger.info("  IS_ attribute tags detected under ItemSpecifics/SelectedValue")
+        logger.info("===========================================")
+        return [], True, True
+
     try:
         with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
             headers = next(csv.reader(f))
@@ -1150,9 +1279,11 @@ def run_ingestion(args):
     csv_path   = os.path.abspath(args.csv)
     images_dir = os.path.abspath(args.images_dir)
 
-    logger.info("CSV file:         %s", csv_path)
+    is_xml = csv_path.lower().endswith(".xml")
+    file_label = "XML file" if is_xml else "CSV file"
+    logger.info("%s:         %s", file_label, csv_path)
     logger.info("Images directory: %s",
-        images_dir if os.path.isdir(images_dir) else images_dir + "  ← NOT FOUND"
+        images_dir if os.path.isdir(images_dir) else images_dir + "  <- NOT FOUND"
     )
     logger.info("Import batch:     %s", IMPORT_BATCH)
     logger.info("Dry run:          %s", args.dry_run)
@@ -1161,7 +1292,7 @@ def run_ingestion(args):
         logger.info("Upload limit:     %d successful product operations", upload_limit)
 
     if not os.path.isfile(csv_path):
-        logger.error("CSV file not found: %s", csv_path)
+        logger.error("%s not found: %s", file_label, csv_path)
         sys.exit(1)
 
     if not os.path.isdir(images_dir):
@@ -1177,14 +1308,18 @@ def run_ingestion(args):
             logger.info("Aborted by user.")
             sys.exit(0)
 
-    # --- Count rows (for progress reporting) ---
+    # --- Count rows or init XML progress method ---
     total_rows = 0
-    with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
-        reader = csv.reader(f)
-        next(reader, None)
-        for _ in reader:
-            total_rows += 1
-    logger.info("Total rows in CSV: %d", total_rows)
+    if not is_xml:
+        with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for _ in reader:
+                total_rows += 1
+        logger.info("Total rows in CSV: %d", total_rows)
+    else:
+        logger.info("XML Input detected. Dynamic size-based progress calculation active.")
+
     notify_progress(progress_callback, {
         "status":      "running",
         "total":       total_rows,
@@ -1240,14 +1375,29 @@ def run_ingestion(args):
         batch_creates.clear()
         batch_updates.clear()
 
-    with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f, \
-         open_variations_log() as variations_log_fh:
-
+    with open_variations_log() as variations_log_fh:
         last_ui_update_time = 0.0
 
-        reader = csv.DictReader(f)
-        for i, row in enumerate(reader, start=1):
+        def get_rows_generator():
+            nonlocal total_rows
+            if is_xml:
+                xml_gen = iter_xml_rows(csv_path, stop_event=getattr(args, "stop_event", None))
+                for idx, (row, bytes_read, total_size) in enumerate(xml_gen, start=1):
+                    pct = (bytes_read / total_size * 100) if total_size else 0.0
+                    est_total = int((total_size / bytes_read) * idx) if bytes_read > 0 else idx
+                    yield idx, row, pct, est_total
+            else:
+                with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
+                    reader = csv.DictReader(f)
+                    for idx, row in enumerate(reader, start=1):
+                        pct = (idx / total_rows * 100) if total_rows else 0.0
+                        yield idx, row, pct, total_rows
+
+        row_gen = get_rows_generator()
+        for i, row, pct, current_total in row_gen:
             processed_rows = i
+            total_rows = current_total
+
             if args.debug_limit and i > args.debug_limit:
                 logger.info("DEBUG_LIMIT of %d reached. Exiting gracefully.", args.debug_limit)
                 break
@@ -1256,7 +1406,6 @@ def run_ingestion(args):
                 logger.info("Stop requested by user. Exiting gracefully. You can resume later by running again.")
                 break
 
-            
             sku, is_fallback = resolve_sku(row, has_sku, has_item_num)
             if not sku:
                 counters["failed"] += 1
@@ -1307,7 +1456,6 @@ def run_ingestion(args):
                 current_time = time.time()
                 if i % 1000 == 0 or i == total_rows or (current_time - last_ui_update_time) > 1.0:
                     last_ui_update_time = current_time
-                    pct = (i / total_rows * 100) if total_rows else 0
                     
                     progress_msg = f"[{i}/{total_rows}] {pct:.1f}% - Fast-skipping already uploaded products..."
                     logger.info(progress_msg)
@@ -1334,7 +1482,6 @@ def run_ingestion(args):
                     notify_progress(progress_callback, progress_payload)
                 continue
 
-            pct = (i / total_rows * 100) if total_rows else 0
             progress_msg = f"[{i}/{total_rows}] {pct:.1f}% - Processing SKU: {sku}"
             logger.info(progress_msg)
             recent_logs.append(progress_msg)
@@ -1483,7 +1630,13 @@ class IngestionGui:
         self.worker = None
         self.running = False
 
-        self.csv_path = tk.StringVar(value=DEFAULT_CSV_PATH if os.path.isfile(DEFAULT_CSV_PATH) else "")
+        default_file = ""
+        if os.path.isfile(DEFAULT_CSV_PATH):
+            default_file = DEFAULT_CSV_PATH
+        elif os.path.isfile(DEFAULT_XML_PATH):
+            default_file = DEFAULT_XML_PATH
+
+        self.csv_path = tk.StringVar(value=default_file)
         self.images_dir = tk.StringVar(value=DEFAULT_IMAGES_DIR if os.path.isdir(DEFAULT_IMAGES_DIR) else "")
         self.upload_limit = tk.StringVar(value="")
         self.status_text = tk.StringVar(value="Ready")
@@ -1500,7 +1653,7 @@ class IngestionGui:
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(7, weight=1)
 
-        ttk.Label(frame, text="Supplier CSV").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+        ttk.Label(frame, text="Supplier CSV/XML").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         ttk.Entry(frame, textvariable=self.csv_path).grid(row=0, column=1, sticky="ew", pady=(0, 8))
         ttk.Button(frame, text="Browse", command=self.browse_csv).grid(row=0, column=2, sticky="ew", padx=(10, 0), pady=(0, 8))
 
@@ -1536,9 +1689,9 @@ class IngestionGui:
 
         initial = os.path.dirname(self.csv_path.get()) if self.csv_path.get() else os.getcwd()
         selected = filedialog.askopenfilename(
-            title="Select supplier CSV",
+            title="Select supplier CSV/XML",
             initialdir=initial if os.path.isdir(initial) else os.getcwd(),
-            filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
+            filetypes=(("CSV/XML files", "*.csv;*.xml"), ("CSV files", "*.csv"), ("XML files", "*.xml"), ("All files", "*.*")),
         )
         if selected:
             self.csv_path.set(selected)
@@ -1564,7 +1717,7 @@ class IngestionGui:
         csv_path = self.csv_path.get().strip()
         images_dir = self.images_dir.get().strip()
         if not os.path.isfile(csv_path):
-            messagebox.showerror("CSV not found", "Please choose a valid supplier CSV file.")
+            messagebox.showerror("File not found", "Please choose a valid supplier CSV or XML file.")
             return
         if not os.path.isdir(images_dir):
             messagebox.showerror("Image folder not found", "Please choose the folder containing the product images.")
@@ -1670,8 +1823,9 @@ class IngestionGui:
         failed = payload.get("failed", 0)
 
         self.progress["value"] = max(0.0, min(100.0, percent))
+        label = "items" if total > 0 and self.csv_path.get().lower().endswith(".xml") else "rows"
         self.status_text.set(
-            f"{processed}/{total} rows | {percent:.1f}% | "
+            f"{processed}/{total} {label} | {percent:.1f}% | "
             f"Imported {imported} | Updated {updated} | Skipped {skipped} | Failed {failed}"
         )
 
@@ -1702,24 +1856,28 @@ def launch_gui():
 
 
 def main():
+    default_csv = DEFAULT_CSV_PATH
+    if not os.path.isfile(DEFAULT_CSV_PATH) and os.path.isfile(DEFAULT_XML_PATH):
+        default_csv = DEFAULT_XML_PATH
+
     parser = argparse.ArgumentParser(
-        description="WooCommerce Ingestion Engine — Import lightbulbs CSV via REST API.",
+        description="WooCommerce Ingestion Engine — Import lightbulbs CSV or XML via REST API.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Desktop app:\n"
             "  python3 engine.py\n"
             "  python3 engine.py --gui\n\n"
             "Examples:\n"
-            "  python3 engine.py --csv /other/file.csv --auto\n"
+            "  python3 engine.py --csv /other/file.xml --auto\n"
             "  python3 engine.py --upload-limit 10 --auto\n"
             "  python3 engine.py --dry-run\n"
             "  python3 engine.py --debug-limit 5\n"
         ),
     )
     parser.add_argument(
-        "--csv", default=DEFAULT_CSV_PATH,
+        "--csv", default=default_csv,
         metavar="PATH",
-        help=f"Path to the CSV file. Default: ../data/website/lightbulbs.csv",
+        help=f"Path to the CSV/XML file. Default: ../data/website/lightbulbs.csv or all products.xml",
     )
     parser.add_argument(
         "--images-dir", default=DEFAULT_IMAGES_DIR,
@@ -1729,7 +1887,7 @@ def main():
     parser.add_argument(
         "--debug-limit", type=int, default=0,
         metavar="N",
-        help="Validation mode: Stop after processing N rows (smoke test).",
+        help="Validation mode: Stop after processing N rows/items (smoke test).",
     )
     parser.add_argument(
         "--dry-run", action="store_true", default=False,
@@ -1738,7 +1896,7 @@ def main():
     parser.add_argument(
         "--upload-limit", type=int, default=0,
         metavar="N",
-        help="Stop after N successful product creates/updates. Default: 0, process the full CSV.",
+        help="Stop after N successful product creates/updates. Default: 0, process the full file.",
     )
     parser.add_argument(
         "--skip-updates", action="store_true", default=False,

@@ -1,49 +1,38 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // ── Concurrency Throttling ─────────────────────────────────────────
+  // Tells Next.js to compile pages sequentially.
+  // This prevents triggering Bluehost's concurrent rate-limiting firewalls.
+  experimental: {
+    workerThreads: false,
+    cpus: 1,
+  },
+
   images: {
-    unoptimized: process.env.NODE_ENV === 'development',
-    // Next.js Image Optimisation is enabled (no global unoptimized flag).
-    // Images are served as modern WebP/AVIF at the correct breakpoint size,
-    // preventing layout shift and reducing payload for the 25k catalogue.
-    qualities: [60, 75, 90],
-
-    // Breakpoint widths used when the browser picks a srcset candidate.
-    // Tuned for the product grid (cards render at ~300px) up to full-bleed hero.
-    deviceSizes: [375, 640, 750, 828, 1080, 1200, 1440, 1920],
-    imageSizes: [64, 128, 256, 384],
-
+    unoptimized: true,
     remotePatterns: [
-      // ── Local development (WP Local) ─────────────────────────────────
-      {
-        protocol: 'http',
-        hostname: 'discount-products-backend.local',
-        pathname: '/wp-content/uploads/**',
-      },
-      // ── Production: Bluehost WordPress backend ────────────────────────
-      // Replace <your-domain> with the actual Bluehost domain once deployed,
-      // e.g. hostname: 'store-backend.discountproducts.co.uk'
+      // ── New Active Live Subdomain ──────────────────────────────────
       {
         protocol: 'https',
-        hostname: '*.bluehost.com',
+        hostname: 'admin.discountproducts.co.uk',
         pathname: '/wp-content/uploads/**',
       },
-      // Bluehost Staging/Temporary Domain
-      {
-        protocol: 'https',
-        hostname: 'website-8a1b8589.ubo.iks.mybluehost.me',
-        port: '',
-        pathname: '/wp-content/uploads/**',
-      },
-      // Wildcard for custom domain on Bluehost (add your real hostname here).
-      // Example: { protocol: 'https', hostname: 'api.discountproducts.co.uk', pathname: '/wp-content/uploads/**' }
-      // ── Cloudflare R2 Domain ──────────────────────────────────────────
+      // ── Cloudflare R2 Storage ──────────────────────────────────────
       {
         protocol: 'https',
         hostname: 'pub-8d1174ef87b14259ae896366fb94672b.r2.dev',
-        port: '',
         pathname: '/wp-content/uploads/**',
       },
-      // ── Unsplash (placeholder / editorial images) ─────────────────────
+      // ── Local Development ──────────────────────────────────────────
+      {
+        protocol: 'http',
+        hostname: 'discount-products-backend.local',
+      },
+      {
+        protocol: 'https',
+        hostname: 'discount-products-backend.local',
+      },
+      // ── Placeholders ───────────────────────────────────────────────
       {
         protocol: 'https',
         hostname: 'images.unsplash.com',
