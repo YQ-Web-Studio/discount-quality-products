@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, useTransition } from "react";
 import type { MouseEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -382,6 +382,7 @@ export default function SearchHub({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   const [selectedCategories, setSelectedCategories] = useState<Set<number>>(
     initialCategory
@@ -460,7 +461,9 @@ export default function SearchHub({
       
       setPageParam(params, pageFallback);
 
-      router.push(buildShopUrl(params), { scroll: false });
+      startTransition(() => {
+        router.push(buildShopUrl(params), { scroll: false });
+      });
     },
     [router, searchParams, initialCategories]
   );
@@ -557,7 +560,9 @@ export default function SearchHub({
     params.delete("order");
     params.delete("sort");
     setPageParam(params, 1);
-    router.push(buildShopUrl(params), { scroll: false });
+    startTransition(() => {
+      router.push(buildShopUrl(params), { scroll: false });
+    });
   }, [router, searchParams]);
 
   const handleSortChange = useCallback((sort: string) => {
@@ -569,7 +574,9 @@ export default function SearchHub({
     if (woo.orderby) params.set("orderby", woo.orderby);
     if (woo.order)   params.set("order",   woo.order);
     setPageParam(params, 1);
-    router.push(buildShopUrl(params), { scroll: false });
+    startTransition(() => {
+      router.push(buildShopUrl(params), { scroll: false });
+    });
   }, [router, searchParams]);
 
   const handlePriceChange = useCallback((range: string) => {
@@ -581,7 +588,9 @@ export default function SearchHub({
     if (woo.min_price) params.set("min_price", woo.min_price);
     if (woo.max_price) params.set("max_price", woo.max_price);
     setPageParam(params, 1);
-    router.push(buildShopUrl(params), { scroll: false });
+    startTransition(() => {
+      router.push(buildShopUrl(params), { scroll: false });
+    });
   }, [router, searchParams]);
 
   const handlePageChange = (newPage: number) => {
@@ -589,7 +598,9 @@ export default function SearchHub({
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const params = new URLSearchParams(searchParams.toString());
     setPageParam(params, newPage);
-    router.push(buildShopUrl(params), { scroll: false });
+    startTransition(() => {
+      router.push(buildShopUrl(params), { scroll: false });
+    });
   }
 
   /* Page title */
@@ -749,7 +760,15 @@ export default function SearchHub({
           )}
 
           {/* Product grid */}
-          <div className="flex-1 flex flex-col py-8 pl-6 lg:pl-12">
+          <div className="flex-1 flex flex-col py-8 pl-6 lg:pl-12 relative min-h-[400px]">
+            {isPending && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-30 flex items-center justify-center transition-all duration-300">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
+                  <span className="text-sm font-semibold tracking-wide text-zinc-900 animate-pulse">Updating Catalogue...</span>
+                </div>
+              </div>
+            )}
             {products.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8">
