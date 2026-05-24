@@ -191,7 +191,7 @@ async function wpFetch<T>(
         variables,
       }),
       signal: controller.signal,
-      next: { revalidate: 3600 }, // Default revalidation for ISR
+      next: { revalidate: 3600, tags: ["wc-products"] }, // Default revalidation for ISR
     });
 
     clearTimeout(timeoutId);
