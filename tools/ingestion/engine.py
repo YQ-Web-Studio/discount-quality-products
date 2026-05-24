@@ -46,6 +46,10 @@ from collections import deque
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
+# Increase CSV field size limit — the eBay Description column contains large
+# HTML blobs that exceed Python's default 128 KB limit, causing _csv.Error.
+csv.field_size_limit(10 * 1024 * 1024)  # 10 MB
+
 import requests
 from dotenv import load_dotenv
 
@@ -493,13 +497,27 @@ class AttributeRegistry:
     def _fetch_all(self, endpoint):
         results = []
         page = 1
+        seen_ids = set()
         while True:
             sep = "&" if "?" in endpoint else "?"
             url = f"{endpoint}{sep}per_page=100&page={page}"
             res = self.wp._request("GET", url)
             if not res or not isinstance(res, list):
                 break
-            results.extend(res)
+                
+            added_new = False
+            for item in res:
+                item_id = item.get("id")
+                if item_id and item_id not in seen_ids:
+                    seen_ids.add(item_id)
+                    results.append(item)
+                    added_new = True
+                    
+            if not added_new:
+                # API ignored pagination and returned the exact same page,
+                # or returned an empty page. We are done.
+                break
+                
             if len(res) < 100:
                 break
             page += 1
@@ -508,17 +526,18 @@ class AttributeRegistry:
     def _load_existing_attributes(self):
         res = self._fetch_all("/wp-json/wc/v3/products/attributes")
         for attr in res:
-            self.attr_cache[attr["name"]] = attr["id"]
+            self.attr_cache[attr["name"].lower()] = attr["id"]
             self.term_cache[attr["id"]] = {}
 
     def get_or_create_attribute(self, name):
-        if name in self.attr_cache:
-            return self.attr_cache[name]
+        name_key = name.lower()
+        if name_key in self.attr_cache:
+            return self.attr_cache[name_key]
         
         if self.wp.dry_run:
             self.log.info("  [DRY RUN] [ATTRIBUTE OK] Created global attribute '%s'", name)
-            dummy_id = hash(name) % 100000 + 100000
-            self.attr_cache[name] = dummy_id
+            dummy_id = hash(name_key) % 100000 + 100000
+            self.attr_cache[name_key] = dummy_id
             self.term_cache[dummy_id] = {}
             return dummy_id
 
@@ -535,27 +554,28 @@ class AttributeRegistry:
         res = self.wp._request("POST", "/wp-json/wc/v3/products/attributes", json=payload)
         if res and "id" in res:
             attr_id = res["id"]
-            self.attr_cache[name] = attr_id
+            self.attr_cache[name_key] = attr_id
             self.term_cache[attr_id] = {}
             self.log.info("  [ATTRIBUTE OK] Created global attribute '%s' (ID %d)", name, attr_id)
             return attr_id
         return None
 
     def get_or_create_term(self, attr_id, term_name):
+        term_key = term_name.lower()
         if not self.term_cache.get(attr_id):
             self.term_cache[attr_id] = {}
             if not self.wp.dry_run:
                 res = self._fetch_all(f"/wp-json/wc/v3/products/attributes/{attr_id}/terms")
                 for term in res:
-                    self.term_cache[attr_id][term["name"]] = term["id"]
+                    self.term_cache[attr_id][term["name"].lower()] = term["id"]
         
-        if term_name in self.term_cache[attr_id]:
-            return self.term_cache[attr_id][term_name]
+        if term_key in self.term_cache[attr_id]:
+            return self.term_cache[attr_id][term_key]
             
         if self.wp.dry_run:
             self.log.info("  [DRY RUN] [ATTRIBUTE OK] Registered '%s' under attribute ID %d", term_name, attr_id)
-            dummy_id = hash(term_name) % 100000 + 100000
-            self.term_cache[attr_id][term_name] = dummy_id
+            dummy_id = hash(term_key) % 100000 + 100000
+            self.term_cache[attr_id][term_key] = dummy_id
             return dummy_id
 
         payload = {"name": term_name}
@@ -563,12 +583,12 @@ class AttributeRegistry:
         if res:
             if "id" in res:
                 term_id = res["id"]
-                self.term_cache[attr_id][term_name] = term_id
+                self.term_cache[attr_id][term_key] = term_id
                 self.log.info("  [ATTRIBUTE OK] Registered '%s' under attribute ID %d", term_name, attr_id)
                 return term_id
             elif res.get("code") == "term_exists" and "data" in res and "resource_id" in res["data"]:
                 term_id = res["data"]["resource_id"]
-                self.term_cache[attr_id][term_name] = term_id
+                self.term_cache[attr_id][term_key] = term_id
                 self.log.info("  [ATTRIBUTE OK] Recovered existing term '%s' (ID %d) under attribute ID %d", term_name, term_id, attr_id)
                 return term_id
         return None

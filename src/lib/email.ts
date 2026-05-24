@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 import * as React from 'react';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_to_pass_build");
 
 interface SendEmailParams {
   to: string | string[];

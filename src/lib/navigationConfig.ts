@@ -28,7 +28,7 @@ export const navigationCategories: NavCategory[] = [
     hoverOverlay: "group-hover:bg-emerald-600",
     subcategories: [
       { id: 11, label: "Light Bulbs", slug: "light-bulbs" },
-      { id: 12, label: "Fittings & Accessories", slug: "fittings-accessories", wcSlug: "accessories" },
+      { id: 12, label: "Electric Fittings & Accessories", slug: "fittings-accessories", wcSlug: "electric-fittings-accessories" },
     ],
   },
   {
@@ -51,8 +51,8 @@ export const navigationCategories: NavCategory[] = [
     hoverText: "hover:text-rose-600",
     hoverOverlay: "group-hover:bg-rose-600",
     subcategories: [
-      { id: 31, label: "Magazines & Books", slug: "magazines-books", wcSlug: "magazines" },
-      { id: 32, label: "Movies, Blu-Ray & DVDs", slug: "movies-dvds", wcSlug: "movies" },
+      { id: 31, label: "Magazines & Books", slug: "magazines-books", wcSlug: "magazines-books" },
+      { id: 32, label: "Movies, Blu-Ray, DVDs & VHS", slug: "movies-dvds", wcSlug: "movies-blu-ray-dvds-vhs" },
     ],
   },
   {
@@ -65,7 +65,7 @@ export const navigationCategories: NavCategory[] = [
     subcategories: [
       { id: 41, label: "Computer Hardware", slug: "hardware", wcSlug: "computer-hardware" },
       { id: 42, label: "CD-ROM Software", slug: "cd-rom", wcSlug: "cd-rom-software" },
-      { id: 43, label: "Vintage & Rare Software", slug: "vintage-software", wcSlug: "cd-rom-software-vintage-rare" },
+      { id: 43, label: "CD-ROM Software Vintage & Rare", slug: "vintage-software", wcSlug: "cd-rom-software-vintage-rare" },
     ],
   },
   {
@@ -77,7 +77,7 @@ export const navigationCategories: NavCategory[] = [
     hoverOverlay: "group-hover:bg-violet-600",
     subcategories: [
       { id: 51, label: "Miscellaneous", slug: "various", wcSlug: "miscellaneous" },
-      { id: 52, label: "Other", slug: "other", wcSlug: "uncategorised" },
+      { id: 52, label: "Other", slug: "other", wcSlug: "other" },
     ],
   },
 ];

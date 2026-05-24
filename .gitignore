@@ -45,3 +45,5 @@ next-env.d.ts
 /tools/ingestion/build/
 /tools/ingestion/dist/
 /tools/ingestion/__pycache__/
+
+.vercel

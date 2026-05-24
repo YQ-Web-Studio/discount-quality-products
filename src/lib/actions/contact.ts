@@ -4,7 +4,7 @@ import sanitizeHtml from "sanitize-html";
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_to_pass_build");
 
 // Simple in-memory rate limiter
 const rateLimiter = new Map<string, { count: number, resetTime: number }>();
