@@ -36,18 +36,23 @@ export const metadata: Metadata = {
 export default async function Home() {
   let products: Product[] = [];
   let newArrivals: Product[] = [];
-  let error = null;
+  let featuredError: string | null = null;
+  let newArrivalsError: string | null = null;
 
+  // 1. Fetch Featured Products Sequentially
   try {
-    const [featuredRes, latestProducts] = await Promise.all([
-      getSmartFeaturedProducts(),
-      getLatestProducts(6)
-    ]);
-    products = featuredRes;
-    newArrivals = latestProducts;
+    products = await getSmartFeaturedProducts();
   } catch (e: any) {
-    console.error("Home Page Fetch Error:", e);
-    error = e.message;
+    console.error("Home Page Featured Fetch Error:", e);
+    featuredError = e.message;
+  }
+
+  // 2. Fetch New Arrivals Sequentially (Bluehost gets breathing room)
+  try {
+    newArrivals = await getLatestProducts(6);
+  } catch (e: any) {
+    console.error("Home Page New Arrivals Fetch Error:", e);
+    newArrivalsError = e.message;
   }
 
   return (
@@ -76,11 +81,11 @@ export default async function Home() {
           </Link>
         </div>
 
-        {error ? (
+        {featuredError ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center mb-24">
-            <h3 className="text-lg font-bold text-red-800">Connection Error</h3>
-            <p className="mt-2 text-red-600">
-              {error}. Please verify the WordPress backend is active.
+            <h3 className="text-lg font-bold text-red-800">Featured Products Connection Error</h3>
+            <p className="mt-2 text-red-600 text-sm">
+              The database timed out loading this section. Refreshing the browser or clearing the cache should resolve this.
             </p>
           </div>
         ) : products.length > 0 ? (
@@ -112,15 +117,27 @@ export default async function Home() {
           </Link>
         </div>
 
-        {!error && newArrivals.length > 0 && (
+        {newArrivalsError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+            <h3 className="text-lg font-bold text-red-800">New Arrivals Connection Error</h3>
+            <p className="mt-2 text-red-600 text-sm">
+              The server was slow fetching fresh arrivals. Please check back shortly.
+            </p>
+          </div>
+        ) : newArrivals.length > 0 ? (
           <MotionProductGrid>
             {newArrivals.slice(0, 5).map((product, idx) => (
               <ProductCard key={`new-${product.databaseId}`} product={product} priority={idx < 2} />
             ))}
           </MotionProductGrid>
+        ) : (
+          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-zinc-100 bg-zinc-50/30">
+            <p className="text-lg font-medium text-zinc-500">
+              Fresh arrivals are loading soon.
+            </p>
+          </div>
         )}
       </main>
-
     </div>
   );
 }
