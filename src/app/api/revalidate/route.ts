@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let tags: string[] = ["wc-products"];
+  let tags: string[] = ["wc-products", "wc-categories"];
   try {
     const body = await req.json();
     if (Array.isArray(body?.tags) && body.tags.length > 0) {

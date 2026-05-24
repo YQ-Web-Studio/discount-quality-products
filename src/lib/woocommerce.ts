@@ -469,7 +469,7 @@ export const getCategories = async () => {
   const cachedFn = unstable_cache(
     async () => getCategoriesInternal(),
     ["wc-categories"],
-    { revalidate: 3600 }
+    { revalidate: 3600, tags: ["wc-categories"] }
   );
   return cachedFn();
 };
