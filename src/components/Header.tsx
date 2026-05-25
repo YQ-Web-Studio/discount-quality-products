@@ -64,8 +64,8 @@ export function Header() {
           
           {/* 1. Left: Logo */}
           <div className="flex flex-1 justify-start shrink-0">
-            <Link href="/" className="flex items-center gap-3 sm:gap-4 transition-all hover:opacity-90 group shrink-0 outline-none pt-2">
-              <div className="relative shrink-0 w-10 h-10 sm:w-12 sm:h-12 group-hover:scale-105 transition-transform duration-300">
+            <Link href="/" className="flex items-center gap-3 sm:gap-4 transition-all hover:opacity-90 group shrink-0 outline-none py-0.5">
+              <div className="relative shrink-0 w-12 h-12 sm:w-15 sm:h-15 group-hover:scale-105 transition-transform duration-300">
                 <img 
                   src="/icon.svg" 
                   alt="DQP Logo" 
