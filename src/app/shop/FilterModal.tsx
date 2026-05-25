@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X, SlidersHorizontal, Check, Search, RotateCcw } from "lucide-react";
+import { X, SlidersHorizontal, Check, Search, RotateCcw, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MappedProduct } from "@/lib/woocommerce";
 import { getCanonicalAttribute, slugifyTermValue, splitAttributeOptions } from "./filterAttributes";
@@ -43,6 +43,9 @@ export default function FilterModal({ products }: FilterModalProps) {
 
   // Local state for selections
   const [localSelections, setLocalSelections] = useState<Record<string, string[]>>(activeParams);
+
+  // Expanded accordion groups state
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Dynamically extract available attributes
   const availableAttributes = useMemo<AvailableAttribute[]>(() => {
@@ -117,6 +120,13 @@ export default function FilterModal({ products }: FilterModalProps) {
     });
   };
 
+  const toggleGroup = (slug: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [slug]: !prev[slug]
+    }));
+  };
+
   const handleClearAll = () => {
     setLocalSelections({});
   };
@@ -154,6 +164,16 @@ export default function FilterModal({ products }: FilterModalProps) {
       <button
         onClick={() => {
           setLocalSelections(activeParams);
+          
+          // Auto-expand categories that have active selections to improve initial user context
+          const initialExpanded: Record<string, boolean> = {};
+          availableAttributes.forEach(attr => {
+            if (activeParams[attr.slug]?.length > 0) {
+              initialExpanded[attr.slug] = true;
+            }
+          });
+          setExpandedGroups(initialExpanded);
+          
           setOpen(true);
         }}
         className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-semibold text-zinc-600 transition-all hover:border-zinc-400 hover:text-zinc-900 cursor-pointer"
@@ -199,7 +219,7 @@ export default function FilterModal({ products }: FilterModalProps) {
 
           {/* Clean, Scrollable Body */}
           <div className="flex-1 overflow-y-auto px-6 sm:px-10 py-8 sm:py-12 bg-white">
-            <div className="mx-auto max-w-[1440px] space-y-10 sm:space-y-12">
+            <div className="mx-auto max-w-[1440px] space-y-10">
               
               {/* Premium, Unified Specification Search Bar */}
               <div className="relative w-full max-w-md">
@@ -217,41 +237,64 @@ export default function FilterModal({ products }: FilterModalProps) {
                 <div className="text-center py-20">
                   <SlidersHorizontal className="h-10 w-10 text-zinc-300 mx-auto mb-4" />
                   <h3 className="text-sm font-bold text-zinc-800 uppercase tracking-widest">No matching options</h3>
-                  <p className="text-xs text-zinc-500 mt-1">Try refining your keyword query above.</p>
+                  <p className="text-xs text-zinc-500 mt-1">Try refining your query above.</p>
                 </div>
               ) : (
-                <div className="space-y-10 sm:space-y-12">
+                <div className="space-y-1">
                   {filteredAttributes.map((attr) => {
                     const selectedTerms = localSelections[attr.slug] || [];
+                    const isExpanded = expandedGroups[attr.slug] ?? false;
+                    const groupSelectionsCount = selectedTerms.length;
                     
                     return (
-                      <div key={attr.slug} className="animate-in fade-in duration-300">
-                        {/* Elegant group label */}
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 mb-5">
-                          {attr.label}
-                        </h3>
+                      <div key={attr.slug} className="border-b border-zinc-100 last:border-b-0">
+                        {/* Collapsible Header Button */}
+                        <button
+                          onClick={() => toggleGroup(attr.slug)}
+                          className="flex w-full items-center justify-between py-5 text-left transition-colors hover:text-primary outline-none group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-black uppercase tracking-[0.25em] text-zinc-800 group-hover:text-primary transition-colors">
+                              {attr.label}
+                            </span>
+                            {groupSelectionsCount > 0 && (
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary animate-in zoom-in-50 duration-200">
+                                {groupSelectionsCount}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <ChevronDown 
+                            className={cn(
+                              "h-4 w-4 text-zinc-400 group-hover:text-primary transition-all duration-300",
+                              isExpanded && "rotate-180 text-primary"
+                            )} 
+                          />
+                        </button>
                         
-                        {/* Clean wrapping chips for terms */}
-                        <div className="flex flex-wrap gap-2.5">
-                          {attr.terms.map((term) => {
-                            const isChecked = selectedTerms.includes(term.value);
-                            return (
-                              <button
-                                key={term.value}
-                                onClick={() => toggleTerm(attr.slug, term.value)}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold transition-all cursor-pointer border select-none active:scale-[0.98]",
-                                  isChecked 
-                                    ? "bg-primary border-primary text-white shadow-xs" 
-                                    : "bg-zinc-50 border-zinc-200 text-zinc-800 hover:border-zinc-400 hover:bg-zinc-100/50"
-                                )}
-                              >
-                                {isChecked && <Check className="h-3 w-3 shrink-0" />}
-                                {term.label}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {/* Expandable Pill chip Container */}
+                        {isExpanded && (
+                          <div className="flex flex-wrap gap-2.5 pb-6 pt-1 animate-in fade-in duration-300">
+                            {attr.terms.map((term) => {
+                              const isChecked = selectedTerms.includes(term.value);
+                              return (
+                                <button
+                                  key={term.value}
+                                  onClick={() => toggleTerm(attr.slug, term.value)}
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold transition-all cursor-pointer border select-none active:scale-[0.98]",
+                                    isChecked 
+                                      ? "bg-primary border-primary text-white shadow-xs" 
+                                      : "bg-zinc-50 border-zinc-200 text-zinc-800 hover:border-zinc-400 hover:bg-zinc-100/50"
+                                  )}
+                                >
+                                  {isChecked && <Check className="h-3 w-3 shrink-0" />}
+                                  {term.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
