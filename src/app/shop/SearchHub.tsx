@@ -686,14 +686,7 @@ export default function SearchHub({
             <ToolbarDropdown label="Price"     options={priceRanges}  value={selectedPrice}     onChange={handlePriceChange}     />
             <FilterModal products={filterProducts && filterProducts.length > 0 ? filterProducts : products} />
 
-            {activeFilterPills.map((pill) => (
-              <span key={pill.key} className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700">
-                {pill.label}
-                <button onClick={pill.onRemove} className="ml-0.5 text-zinc-400 hover:text-zinc-900 transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
+
 
             {(selectedCategories.size > 0 || selectedPrice || selectedSort) && (
               <button

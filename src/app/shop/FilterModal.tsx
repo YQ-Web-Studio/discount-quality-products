@@ -240,14 +240,14 @@ export default function FilterModal({ products }: FilterModalProps) {
                   <p className="text-xs text-zinc-500 mt-1">Try refining your query above.</p>
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-2 items-start">
                   {filteredAttributes.map((attr) => {
                     const selectedTerms = localSelections[attr.slug] || [];
-                    const isExpanded = expandedGroups[attr.slug] ?? false;
+                    const isExpanded = searchQuery ? true : (expandedGroups[attr.slug] ?? false);
                     const groupSelectionsCount = selectedTerms.length;
                     
                     return (
-                      <div key={attr.slug} className="border-b border-zinc-100 last:border-b-0">
+                      <div key={attr.slug} className="border-b border-zinc-100 last:border-b-0 md:last:border-b">
                         {/* Collapsible Header Button */}
                         <button
                           onClick={() => toggleGroup(attr.slug)}
