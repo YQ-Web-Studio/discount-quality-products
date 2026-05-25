@@ -344,12 +344,11 @@ export const getSmartFeaturedProducts = unstable_cache(
       const currentDeficit = 5 - featuredProducts.length;
       if (currentDeficit > 0) {
         const excludeIds = featuredProducts.map(p => p.id);
-        const hasExclusions = excludeIds.length > 0;
 
         const queryGlobalFallback = `
           ${PRODUCT_CARD_FRAGMENT}
-          query GetGlobalFallbackProducts($first: Int${hasExclusions ? ', $notIn: [ID]' : ''}) {
-            products(first: $first, where: { status: "PUBLISH"${hasExclusions ? ', notIn: $notIn' : ''}, orderby: [{ field: MENU_ORDER, order: ASC }] }) {
+          query GetGlobalFallbackProducts($first: Int) {
+            products(first: $first, where: { status: "PUBLISH", orderby: [{ field: MENU_ORDER, order: ASC }] }) {
               nodes {
                 ...ProductCardFields
               }
@@ -357,14 +356,16 @@ export const getSmartFeaturedProducts = unstable_cache(
           }
         `;
 
-        const variables: Record<string, any> = { first: currentDeficit };
-        if (hasExclusions) {
-          variables.notIn = excludeIds;
-        }
+        // Query slightly more to allow client-side filtering without exclusions in GraphQL
+        const variables: Record<string, any> = { first: currentDeficit + excludeIds.length };
 
         try {
           const dataGlobalFallback = await wpFetch<{ products: { nodes: Product[] } }>(queryGlobalFallback, variables);
-          featuredProducts = [...featuredProducts, ...dataGlobalFallback.products.nodes.map(mapProductData)];
+          const filtered = dataGlobalFallback.products.nodes
+            .map(mapProductData)
+            .filter(p => !excludeIds.includes(p.id))
+            .slice(0, currentDeficit);
+          featuredProducts = [...featuredProducts, ...filtered];
         } catch (error) {
           console.error("Error fetching global fallback products:", error);
         }
@@ -372,12 +373,11 @@ export const getSmartFeaturedProducts = unstable_cache(
     } else if (deficit > 0) {
       // If we have some featured products, fill the deficit with menu-ordered fallback products.
       const excludeIds = featuredProducts.map(p => p.id);
-      const hasExclusions = excludeIds.length > 0;
       
       const queryFallback = `
         ${PRODUCT_CARD_FRAGMENT}
-        query GetFallbackProducts($first: Int${hasExclusions ? ', $notIn: [ID]' : ''}) {
-          products(first: $first, where: { status: "PUBLISH"${hasExclusions ? ', notIn: $notIn' : ''}, orderby: [{ field: MENU_ORDER, order: ASC }] }) {
+        query GetFallbackProducts($first: Int) {
+          products(first: $first, where: { status: "PUBLISH", orderby: [{ field: MENU_ORDER, order: ASC }] }) {
             nodes {
               ...ProductCardFields
             }
@@ -385,14 +385,16 @@ export const getSmartFeaturedProducts = unstable_cache(
         }
       `;
 
-      const variables: Record<string, any> = { first: deficit };
-      if (hasExclusions) {
-        variables.notIn = excludeIds;
-      }
+      // Query slightly more to allow client-side filtering without exclusions in GraphQL
+      const variables: Record<string, any> = { first: deficit + excludeIds.length };
 
       try {
         const dataFallback = await wpFetch<{ products: { nodes: Product[] } }>(queryFallback, variables);
-        featuredProducts = [...featuredProducts, ...dataFallback.products.nodes.map(mapProductData)];
+        const filtered = dataFallback.products.nodes
+          .map(mapProductData)
+          .filter(p => !excludeIds.includes(p.id))
+          .slice(0, deficit);
+        featuredProducts = [...featuredProducts, ...filtered];
       } catch (error) {
         console.error("Error fetching fallback products for deficit:", error);
       }
@@ -429,21 +431,6 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
         description
         averageRating
         reviewCount
-        reviews(first: 10) {
-          nodes {
-            id
-            author {
-              node {
-                name
-              }
-            }
-            content
-            date
-            ... on WooCommerceReview {
-              rating
-            }
-          }
-        }
         allGalleryImages: galleryImages(first: 10) {
           nodes {
             sourceUrl
