@@ -156,12 +156,12 @@ export default function FilterModal({ products }: FilterModalProps) {
           setLocalSelections(activeParams);
           setOpen(true);
         }}
-        className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-5 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-widest text-zinc-900 transition-all hover:border-zinc-900 cursor-pointer shadow-xs active:scale-[0.98]"
+        className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-semibold text-zinc-600 transition-all hover:border-zinc-400 hover:text-zinc-900 cursor-pointer"
       >
-        <SlidersHorizontal className="h-4 w-4" />
-        Filter Products
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        Filters
         {totalSelections > 0 && (
-          <span className="ml-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-black text-white">
+          <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
             {totalSelections}
           </span>
         )}
@@ -177,26 +177,15 @@ export default function FilterModal({ products }: FilterModalProps) {
                 <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-zinc-900 flex items-center gap-3">
                   Filters
                   {totalSelections > 0 && (
-                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 tracking-normal normal-case">
+                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary tracking-normal normal-case">
                       {totalSelections} active
                     </span>
                   )}
                 </h2>
               </div>
 
-              {/* Specification Search & Close Button */}
+              {/* Close Button */}
               <div className="flex items-center gap-4">
-                <div className="relative w-44 sm:w-64 hidden sm:block">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                  <input
-                    type="text"
-                    placeholder="Search parameters..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-full border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-xs font-semibold outline-none transition-all focus:border-zinc-900 focus:bg-white"
-                  />
-                </div>
-                
                 <button 
                   onClick={() => setOpen(false)} 
                   className="rounded-full p-2.5 bg-zinc-100 text-zinc-900 hover:bg-zinc-200 transition-colors cursor-pointer"
@@ -212,15 +201,15 @@ export default function FilterModal({ products }: FilterModalProps) {
           <div className="flex-1 overflow-y-auto px-6 sm:px-10 py-8 sm:py-12 bg-white">
             <div className="mx-auto max-w-[1440px] space-y-10 sm:space-y-12">
               
-              {/* Search bar inside container for smaller screens */}
-              <div className="relative w-full sm:hidden">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+              {/* Premium, Unified Specification Search Bar */}
+              <div className="relative w-full max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <input
                   type="text"
-                  placeholder="Search parameters..."
+                  placeholder="Search specifications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-full border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-xs font-semibold outline-none transition-all focus:border-zinc-900 focus:bg-white"
+                  className="w-full rounded-full border border-zinc-200 bg-zinc-50 py-3 pl-10 pr-4 text-xs font-bold uppercase tracking-wider text-zinc-800 outline-none transition-all focus:border-primary focus:bg-white"
                 />
               </div>
 
@@ -253,7 +242,7 @@ export default function FilterModal({ products }: FilterModalProps) {
                                 className={cn(
                                   "inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold transition-all cursor-pointer border select-none active:scale-[0.98]",
                                   isChecked 
-                                    ? "bg-zinc-900 border-zinc-900 text-white shadow-xs" 
+                                    ? "bg-primary border-primary text-white shadow-xs" 
                                     : "bg-zinc-50 border-zinc-200 text-zinc-800 hover:border-zinc-400 hover:bg-zinc-100/50"
                                 )}
                               >
@@ -291,7 +280,7 @@ export default function FilterModal({ products }: FilterModalProps) {
                 </button>
                 <button
                   onClick={handleApply}
-                  className="rounded-full bg-zinc-900 px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-sm hover:bg-zinc-800 transition-all active:scale-[0.98] cursor-pointer"
+                  className="rounded-full bg-primary px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-sm hover:bg-primary/95 transition-all active:scale-[0.98] cursor-pointer"
                 >
                   Apply Filters {totalSelections > 0 && `(${totalSelections})`}
                 </button>
