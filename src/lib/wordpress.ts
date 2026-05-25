@@ -63,6 +63,21 @@ export interface Product {
       options: string[];
     }[];
   };
+  averageRating?: number;
+  reviewCount?: number;
+  reviews?: {
+    nodes: {
+      id: string;
+      author?: {
+        node?: {
+          name?: string;
+        };
+      };
+      content?: string;
+      date?: string;
+      rating?: number;
+    }[];
+  };
 }
 
 /**
@@ -412,6 +427,23 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
       product(id: $slug, idType: SLUG) {
         ...ProductCardFields
         description
+        averageRating
+        reviewCount
+        reviews(first: 10) {
+          nodes {
+            id
+            author {
+              node {
+                name
+              }
+            }
+            content
+            date
+            ... on WooCommerceReview {
+              rating
+            }
+          }
+        }
         allGalleryImages: galleryImages(first: 10) {
           nodes {
             sourceUrl
@@ -447,6 +479,59 @@ export async function getProductSlugs(first: number = 50): Promise<string[]> {
 
   const data = await wpFetch<{ products: { nodes: { slug: string }[] } }>(query, { first });
   return data.products.nodes.map((node) => node.slug);
+}
+
+interface SlugsResponse {
+  products: {
+    pageInfo: PageInfo;
+    nodes: {
+      slug: string;
+      date: string;
+    }[];
+  };
+}
+
+export async function getAllProductSlugs(limit: number = 10000): Promise<{ slug: string; date: string }[]> {
+  const query = `
+    query GetAllProductSlugs($first: Int, $after: String) {
+      products(first: $first, after: $after, where: { status: "PUBLISH" }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          slug
+          date
+        }
+      }
+    }
+  `;
+
+  let results: { slug: string; date: string }[] = [];
+  let hasNextPage = true;
+  let after: string | null = null;
+  const batchSize = 100;
+
+  try {
+    while (hasNextPage && results.length < limit) {
+      const data: SlugsResponse = await wpFetch<SlugsResponse>(
+        query,
+        { first: batchSize, after }
+      );
+      
+      const nodes = data.products?.nodes || [];
+      results = [...results, ...nodes.map((n) => ({ slug: n.slug, date: n.date || new Date().toISOString() }))];
+      
+      hasNextPage = data.products?.pageInfo?.hasNextPage ?? false;
+      after = data.products?.pageInfo?.endCursor ?? null;
+
+      if (!hasNextPage || !after) break;
+    }
+  } catch (error) {
+    console.error("Error fetching all product slugs for sitemap:", error);
+  }
+
+  return results;
 }
 
 export async function searchProducts(search: string, first: number = 10): Promise<UnifiedSearchResult[]> {

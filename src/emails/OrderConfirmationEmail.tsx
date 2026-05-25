@@ -78,7 +78,7 @@ export const OrderConfirmationEmail = ({
     postcode: 'E1 6AN',
     country: 'United Kingdom',
   },
-  shippingMethod = 'Express Delivery',
+  shippingMethod = 'Standard Delivery',
 }: OrderConfirmationEmailProps) => {
   return (
     <Html>

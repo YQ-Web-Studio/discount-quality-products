@@ -12,11 +12,16 @@ type BreadcrumbsProps = {
 };
 
 export function Breadcrumbs({ paths }: BreadcrumbsProps) {
-  // Generate JSON-LD schema for breadcrumbs
+  // Generate JSON-LD schema for breadcrumbs including Home as the first item
+  const allBreadcrumbs = [
+    { label: "Home", href: "/" },
+    ...paths
+  ];
+
   const schema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: paths.map((path, index) => ({
+    itemListElement: allBreadcrumbs.map((path, index) => ({
       "@type": "ListItem",
       position: index + 1,
       name: path.label,

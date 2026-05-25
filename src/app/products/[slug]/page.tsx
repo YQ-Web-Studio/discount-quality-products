@@ -1,4 +1,4 @@
-import { getProductBySlug, getProducts } from '@/lib/wordpress';
+import { getProductBySlug, getProducts, getProductSlugs } from '@/lib/wordpress';
 import type { Product } from '@/lib/wordpress';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -21,11 +21,15 @@ import { Breadcrumbs } from '@/components/navigation/Breadcrumbs';
 import { ProductStructuredData } from '@/components/seo/ProductStructuredData';
 import type { Metadata } from 'next';
 
-// ─── ISR: render all slugs on-demand (avoids pre-building 25k pages at build time).
-// dynamicParams defaults to true, so any unrecognised slug is fetched live and then
-// cached by Next.js for 3 600 s (set on the underlying fetch in wpFetch).
 export async function generateStaticParams() {
-  return []; // no build-time pre-rendering; all pages rendered on first visit
+  try {
+    // Statically pre-render the top 50 products at build time for high Core Web Vitals
+    const slugs = await getProductSlugs(50);
+    return slugs.map((slug) => ({ slug }));
+  } catch (error) {
+    console.error("generateStaticParams error:", error);
+    return [];
+  }
 }
 
 // ─── Per-page metadata ─────────────────────────────────────────────────────────

@@ -66,15 +66,10 @@ export default function ShippingPage() {
                 <span>Estimate</span>
                 <span>Cost</span>
               </div>
-              <div className="grid grid-cols-3 items-center px-5 py-4 border-b border-zinc-100">
+              <div className="grid grid-cols-3 items-center px-5 py-4">
                 <span className="text-sm font-semibold text-zinc-900">Standard Delivery</span>
                 <span className="text-sm text-zinc-600">3–5 business days</span>
                 <span className="text-sm font-bold text-emerald-600">FREE</span>
-              </div>
-              <div className="grid grid-cols-3 items-center px-5 py-4">
-                <span className="text-sm font-semibold text-zinc-900">Express Delivery</span>
-                <span className="text-sm text-zinc-600">1–2 business days</span>
-                <span className="text-sm font-bold text-zinc-900">£6.99</span>
               </div>
             </div>
             <p className="mt-3 text-xs text-zinc-400">UK Mainland only. No minimum spend required for free delivery.</p>

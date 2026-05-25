@@ -70,13 +70,12 @@ export async function generateMetadata({
   }
 
   const baseUrl = "https://discountqualityproducts.co.uk/shop";
-  const searchParamsObj = new URLSearchParams();
-  if (category) searchParamsObj.set("category", category);
-  if (typeof params.subcategory === "string") searchParamsObj.set("subcategory", params.subcategory);
-  if (q) searchParamsObj.set("q", q);
   
-  const getUrlForPage = (pageNum: number) => {
-    const p = new URLSearchParams(searchParamsObj);
+  // Clean canonical builder to prevent indexing of dynamic facets
+  const getCleanCanonicalUrl = (pageNum: number) => {
+    const p = new URLSearchParams();
+    if (category) p.set("category", category);
+    if (typeof params.subcategory === "string") p.set("subcategory", params.subcategory);
     if (pageNum > 1) p.set("page", pageNum.toString());
     const qs = p.toString();
     return qs ? `${baseUrl}?${qs}` : baseUrl;
@@ -86,7 +85,7 @@ export async function generateMetadata({
     title: `${title} | Discount Quality Products`,
     description: `Browse ${title.toLowerCase()} — professional grade hardware, collectibles, and more.`,
     alternates: {
-      canonical: getUrlForPage(page),
+      canonical: getCleanCanonicalUrl(page),
     },
   };
 }

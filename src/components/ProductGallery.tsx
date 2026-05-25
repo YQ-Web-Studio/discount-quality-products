@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Image from "next/image";
 import { Box } from "lucide-react";
 import { PRODUCT_SHIMMER, THUMB_SHIMMER } from "@/lib/shimmer";
+import { generateSeoAltText } from "@/lib/seo-utils";
 
 interface GalleryImage {
   sourceUrl: string;
@@ -67,7 +68,7 @@ export function ProductGallery({
             >
               <Image
                 src={img.sourceUrl}
-                alt={img.altText || `${productName} – image ${i + 1}`}
+                alt={img.altText || generateSeoAltText(productName, `image ${i + 1}`)}
                 fill
                 sizes="80px"
                 className="object-contain"
@@ -93,7 +94,7 @@ export function ProductGallery({
             {/* Standard image layer */}
             <Image
               src={activeImage.sourceUrl}
-              alt={activeImage.altText || productName}
+              alt={activeImage.altText || generateSeoAltText(productName)}
               fill
               /**
                * Main gallery image: full-width on mobile,
