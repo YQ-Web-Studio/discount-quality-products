@@ -65,23 +65,12 @@ export function Header() {
           {/* 1. Left: Logo */}
           <div className="flex flex-1 justify-start shrink-0">
             <Link href="/" className="flex items-center gap-3 sm:gap-4 transition-all hover:opacity-90 group shrink-0 outline-none pt-2">
-              <div className="relative shrink-0">
-                {/* Minimalist shopping bag handle above the green box */}
-                <svg 
-                  viewBox="0 0 24 12" 
-                  className="absolute -top-[9px] left-1/2 -translate-x-1/2 w-5 h-2.5 text-zinc-400 group-hover:text-primary transition-colors duration-300"
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2.5" 
-                  strokeLinecap="round"
-                >
-                  <path d="M4 12C4 5.5 8 2 12 2C16 2 20 5.5 20 12" />
-                </svg>
-                
-                {/* Exact original plain-text DQP Green Box */}
-                <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-md group-hover:scale-105 transition-transform duration-300">
-                  <span className="font-black text-lg sm:text-xl tracking-tighter">DQP</span>
-                </div>
+              <div className="relative shrink-0 w-10 h-10 sm:w-12 sm:h-12 group-hover:scale-105 transition-transform duration-300">
+                <img 
+                  src="/icon.svg" 
+                  alt="DQP Logo" 
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div className="flex flex-col leading-none justify-center pl-1">
                 <span 
