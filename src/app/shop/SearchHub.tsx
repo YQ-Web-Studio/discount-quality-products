@@ -538,11 +538,9 @@ export default function SearchHub({
   }, [updateUrl, initialCategories]);
 
   const handleClearAll = useCallback(() => {
-    const empty = new Set<number>();
-    setSelectedCategories(empty);
     setSelectedPrice("");
     setSelectedSort("");
-    // Build a clean URL removing all filter params
+    // Build a clean URL removing only secondary filter params
     const params = new URLSearchParams(searchParams.toString());
     
     // Remove all pa_ params
@@ -552,8 +550,6 @@ export default function SearchHub({
       }
     }
     
-    params.delete("category");
-    params.delete("subcategory");
     params.delete("min_price");
     params.delete("max_price");
     params.delete("orderby");
@@ -605,6 +601,14 @@ export default function SearchHub({
 
   /* Page title */
   const pageTitle = useMemo(() => {
+    // Find all selected parent categories
+    const activeParents = initialCategories.filter(cat => selectedCategories.has(cat.id));
+    
+    if (activeParents.length === 1) {
+      return `Shop: ${activeParents[0].label}`;
+    }
+    
+    // Fallback to single subcategory check
     if (selectedCategories.size === 1) {
       const id = Array.from(selectedCategories)[0];
       let catName = "";
@@ -616,9 +620,30 @@ export default function SearchHub({
           }
         }
       }
-      return catName ? `Shop: ${catName}` : "Shop All Products";
+      if (catName) return `Shop: ${catName}`;
     }
-    if (selectedCategories.size > 1) return `Shop: ${selectedCategories.size} Categories`;
+    
+    if (selectedCategories.size > 1) {
+      // Check if all selected IDs belong to a single parent category's tree
+      let parentOwner: typeof initialCategories[0] | null = null;
+      
+      for (const cat of initialCategories) {
+        const belongsToThisCat = Array.from(selectedCategories).every(id => 
+          id === cat.id || (cat.subcategories?.some(s => s.id === id) ?? false)
+        );
+        if (belongsToThisCat) {
+          parentOwner = cat;
+          break;
+        }
+      }
+      
+      if (parentOwner) {
+        return `Shop: ${parentOwner.label}`;
+      }
+      
+      return `Shop: Multiple Categories`;
+    }
+    
     if (initialQuery) return `Results for: "${initialQuery}"`;
     return "Shop All Products";
   }, [selectedCategories, initialQuery, initialCategories]);
@@ -688,7 +713,7 @@ export default function SearchHub({
 
 
 
-            {(selectedCategories.size > 0 || selectedPrice || selectedSort) && (
+            {(selectedPrice || selectedSort || Array.from(searchParams.keys()).some(k => k.startsWith("pa_"))) && (
               <button
                 onClick={handleClearAll}
                 className="text-xs font-semibold text-zinc-400 underline underline-offset-2 hover:text-zinc-700 transition-colors"
