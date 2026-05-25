@@ -13,7 +13,7 @@ export async function GET() {
     if (!session) {
       const response = NextResponse.json(
         { user: null, authenticated: false },
-        { status: 401 }
+        { status: 200 }
       );
 
       response.cookies.set(WORDPRESS_AUTH_COOKIE, "", clearAuthCookieOptions());

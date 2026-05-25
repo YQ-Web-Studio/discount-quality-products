@@ -1427,16 +1427,24 @@ def run_ingestion(args):
                 break
 
             sku, is_fallback = resolve_sku(row, has_sku, has_item_num)
-            if not sku:
-                counters["failed"] += 1
-                continue
-                
-            # Variations gate
+            
+            # Variations Gate: Skip parent products with variations (Use Variations is True)
             if is_variation(row):
-                logger.info("  SKU '%s': Use Variations=True — logged to variations file.", sku)
-                variations_log_fh.write(sku + "\n")
+                logger.info("  SKU '%s': Use Variations=True — logged to variations file.", sku or "Unknown")
+                variations_log_fh.write((sku or "Unknown") + "\n")
                 variations_log_fh.flush()
                 counters["skipped"] += 1
+                continue
+
+            # Variations Gate: Skip child variation rows (empty Item ID)
+            item_id = row.get(COL_ITEM_NUM, "").strip()
+            if not item_id:
+                logger.info("  SKU '%s': Empty Item ID (child variation row) — skipping.", sku or "Unknown")
+                counters["skipped"] += 1
+                continue
+
+            if not sku:
+                counters["failed"] += 1
                 continue
                 
             # Check fast-path skip (Insert-only mode OR unchanged in Standard mode)
