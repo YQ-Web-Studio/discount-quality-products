@@ -14,16 +14,34 @@ type CategoryPageProps = {
 
 export async function generateStaticParams() {
   const initialCategories = await getCategories();
-  return initialCategories.map((cat) => ({
-    slug: cat.slug,
-  }));
+  const slugs: { slug: string }[] = [];
+  
+  initialCategories.forEach((cat) => {
+    if (cat.slug) slugs.push({ slug: cat.slug });
+    cat.subcategories?.forEach((sub) => {
+      if (sub.slug) slugs.push({ slug: sub.slug });
+    });
+  });
+  
+  return slugs;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const initialCategories = await getCategories();
-  const category = initialCategories.find(c => c.slug === slug);
-  const name = category ? category.label : slug.replace(/-/g, " ");
+  
+  let name = slug.replace(/-/g, " ");
+  for (const cat of initialCategories) {
+    if (cat.slug === slug) {
+      name = cat.label;
+      break;
+    }
+    const sub = cat.subcategories?.find(s => s.slug === slug);
+    if (sub) {
+      name = sub.label;
+      break;
+    }
+  }
   
   return {
     title: `${name} | Discount Quality Products`,
@@ -83,14 +101,39 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   
   const initialCategories = await getCategories();
   
-  // Find the exact category structure to pass to the sidebar
-  const category = initialCategories.find(c => c.slug === slug);
-  const activeCategoryId = category ? category.id.toString() : undefined;
-  const categoryName = category ? category.label : slug;
+  let matchedParent: any = null;
+  let matchedSub: any = null;
 
-  // We only pass the current parent category structure to CategoryHub
-  // This satisfies Option A (only subcategories/attributes for current root category)
-  const categoryTreeForSidebar = category ? [category] : [];
+  for (const cat of initialCategories) {
+    if (cat.slug === slug) {
+      matchedParent = cat;
+      break;
+    }
+    const sub = cat.subcategories?.find(s => s.slug === slug);
+    if (sub) {
+      matchedParent = cat;
+      matchedSub = sub;
+      break;
+    }
+  }
+
+  let activeCategoryId: string | undefined = undefined;
+  let categoryName = slug.replace(/-/g, " ");
+  let categoryTreeForSidebar: any[] = [];
+
+  if (matchedSub) {
+    activeCategoryId = matchedSub.id.toString();
+    categoryName = matchedSub.label;
+    categoryTreeForSidebar = [matchedParent];
+  } else if (matchedParent) {
+    const ids = [matchedParent.id];
+    if (matchedParent.subcategories) {
+      matchedParent.subcategories.forEach((s: any) => ids.push(s.id));
+    }
+    activeCategoryId = ids.join(",");
+    categoryName = matchedParent.label;
+    categoryTreeForSidebar = [matchedParent];
+  }
 
   const pageStr = typeof sParams.page === "string" ? sParams.page : "1";
   const page = parseInt(pageStr, 10) || 1;
