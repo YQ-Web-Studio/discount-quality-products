@@ -20,6 +20,8 @@ import { RecentlyViewedTracker } from '@/components/RecentlyViewedTracker';
 import { Breadcrumbs } from '@/components/navigation/Breadcrumbs';
 import { ProductStructuredData } from '@/components/seo/ProductStructuredData';
 import type { Metadata } from 'next';
+export const revalidate = 3600;
+export const dynamicParams = true;
 
 export async function generateStaticParams() {
   // Return an empty array to disable pre-rendering at build time.

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { notFound } from "next/navigation";
 import CategoryHub from "./CategoryHub";
 import type { Metadata } from "next";
 import { fetchWooCommerceProducts, getCategories } from "@/lib/woocommerce";
@@ -112,6 +113,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       matchedSub = sub;
       break;
     }
+  }
+
+  if (!matchedParent) {
+    notFound();
   }
 
   let activeCategoryId: string | undefined = undefined;
