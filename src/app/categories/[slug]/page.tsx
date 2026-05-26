@@ -210,7 +210,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     >
       <CategoryHub
         baseSlug={slug}
-        initialCategories={categoryTreeForSidebar}
+        initialCategories={initialCategories}
         initialCategory={effectiveCategoryIds}
         products={visibleProducts}
         filterProducts={filterResponse.products}

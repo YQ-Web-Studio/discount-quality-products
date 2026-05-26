@@ -272,21 +272,25 @@ function Checkbox({ checked, onChange, size = "md" }: { checked: boolean; onChan
   );
 }
 
-/* ─── Category sidebar tree (multi-select) ─── */
+/* ─── Category sidebar tree (multi-select for active subcategories, links for others) ─── */
 function CategorySidebar({
   categories,
   selectedCategories,
   onToggleCategory,
   onClearAll,
   onCollapse,
+  baseSlug,
 }: {
   categories: DynamicNavCategory[];
   selectedCategories: Set<number>;
   onToggleCategory: (id: number) => void;
   onClearAll: () => void;
   onCollapse?: () => void;
+  baseSlug: string;
 }) {
-  const allNone = selectedCategories.size === 0;
+  const activeParent = categories.find(
+    (cat) => cat.slug === baseSlug || cat.subcategories?.some((sub) => sub.slug === baseSlug)
+  );
 
   return (
     <div>
@@ -303,32 +307,37 @@ function CategorySidebar({
         )}
       </div>
       <div className="space-y-0.5">
-        <div
-          className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-50"
-          onClick={onClearAll}
+        <Link
+          href="/shop"
+          className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
         >
-          <Checkbox checked={allNone} onChange={onClearAll} />
-          <span className={cn("text-sm font-medium", allNone ? "font-semibold text-zinc-900" : "text-zinc-500")}>
-            All Categories
-          </span>
-        </div>
+          <span className="w-4 h-4 flex items-center justify-center text-zinc-400 text-xs">•</span>
+          <span>All Categories</span>
+        </Link>
 
         {categories.map((cat) => {
-          const catChecked = cat.subcategories && cat.subcategories.length > 0
-            ? cat.subcategories.every(sub => selectedCategories.has(sub.id))
-            : selectedCategories.has(cat.id);
+          const isActiveParent = activeParent?.id === cat.id;
+
+          if (!isActiveParent) {
+            return (
+              <Link
+                key={cat.id}
+                href={`/categories/${cat.slug}`}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
+              >
+                <span className="w-4 h-4 flex items-center justify-center text-zinc-400 text-xs">•</span>
+                <span className={cn("transition-colors", cat.hoverText)}>
+                  {cat.label}
+                </span>
+              </Link>
+            );
+          }
 
           return (
-            <div key={cat.id}>
-              <div 
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-50"
-                onClick={() => onToggleCategory(cat.id)}
-              >
-                <Checkbox
-                  checked={catChecked}
-                  onChange={() => onToggleCategory(cat.id)}
-                />
-                <span className={cn("text-sm font-semibold transition-colors", cat.accentColor)}>
+            <div key={cat.id} className="py-0.5">
+              <div className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-bold text-zinc-900">
+                <span className="w-4 h-4 flex items-center justify-center text-zinc-800 text-xs">•</span>
+                <span className={cn("transition-colors", cat.accentColor)}>
                   {cat.label}
                 </span>
               </div>
@@ -683,6 +692,7 @@ export default function CategoryHub({
       onToggleCategory={handleToggleCategory}
       onClearAll={handleClearAll}
       onCollapse={() => setIsSidebarCollapsed(true)}
+      baseSlug={baseSlug}
     />
   );
 
