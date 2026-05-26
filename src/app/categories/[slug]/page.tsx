@@ -14,9 +14,17 @@ type CategoryPageProps = {
 };
 
 export async function generateStaticParams() {
-  // Return an empty array to disable pre-rendering at build time.
-  // Next.js will dynamically generate pages on-demand and cache them at edge.
-  return [];
+  const initialCategories = await getCategories();
+  const slugs: { slug: string }[] = [];
+  
+  initialCategories.forEach((cat) => {
+    if (cat.slug) slugs.push({ slug: cat.slug });
+    cat.subcategories?.forEach((sub) => {
+      if (sub.slug) slugs.push({ slug: sub.slug });
+    });
+  });
+  
+  return slugs;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
