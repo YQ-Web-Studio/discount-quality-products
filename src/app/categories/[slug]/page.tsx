@@ -79,8 +79,8 @@ async function fetchAllCandidateProducts(params: ProductQueryParams) {
   const firstPage = await fetchWooCommerceProducts({ ...params, page: 1, per_page: 100 });
   if (firstPage.totalPages <= 1) return firstPage;
 
-  // HARD CAP: Limit parallel fetching to a maximum of 4 pages (400 products).
-  const maxPages = Math.min(firstPage.totalPages, 4);
+  // HARD CAP: Limit parallel fetching to a maximum of 3 pages (300 products).
+  const maxPages = Math.min(firstPage.totalPages, 3);
 
   if (maxPages <= 1) return firstPage;
 

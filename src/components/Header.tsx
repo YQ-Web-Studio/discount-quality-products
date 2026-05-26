@@ -47,7 +47,7 @@ export function Header() {
       )}
     >
       {/* Top Utility Bar */}
-      <div className="bg-primary/85 backdrop-blur-md py-2 text-primary-foreground">
+      <div className="bg-primary/85 backdrop-blur-md py-1.5 text-primary-foreground">
         <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center justify-between px-4 md:px-6 xl:px-10 text-[11px] font-medium uppercase tracking-wider sm:text-xs">
           <span className="flex items-center gap-2">
             <Mail className="h-3 w-3" />
@@ -59,13 +59,13 @@ export function Header() {
       </div>
 
       {/* Main Header Unified Row */}
-      <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 md:px-6 xl:px-10 py-3 lg:py-5">
+      <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 md:px-6 xl:px-10 py-2 lg:py-3.5">
         <div className="flex items-center justify-between gap-4 xl:gap-8">
           
           {/* 1. Left: Logo */}
           <div className="flex flex-1 justify-start shrink-0">
             <Link href="/" className="flex items-center gap-3 sm:gap-4 transition-all hover:opacity-90 group shrink-0 outline-none py-0.5">
-              <div className="relative shrink-0 w-12 h-12 sm:w-15 sm:h-15 group-hover:scale-105 transition-transform duration-300">
+              <div className="relative shrink-0 w-10 h-10 sm:w-12 sm:h-12 group-hover:scale-105 transition-transform duration-300">
                 <img 
                   src="/icon.svg" 
                   alt="DQP Logo" 
@@ -170,7 +170,7 @@ export function Header() {
             {/* Account Button */}
             <Link
               href="/account"
-              className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200"
+              className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200"
               aria-label="My account"
             >
               <User className="h-5 w-5 text-zinc-900" />
@@ -179,7 +179,7 @@ export function Header() {
             {/* Wishlist Button */}
             <Link
               href="/account"
-              className="relative flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200"
+              className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200"
               aria-label="Wishlist"
             >
               <Heart className="h-5 w-5 text-zinc-900" />
@@ -193,7 +193,7 @@ export function Header() {
             {/* Cart Button */}
             <button
               onClick={() => openMiniCart()}
-              className="relative flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200"
+              className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200"
               aria-label="Shopping basket"
             >
               <ShoppingCart className="h-5 w-5 text-zinc-900" />
@@ -204,7 +204,7 @@ export function Header() {
             
             {/* Mobile Hamburger */}
             <button
-              className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200 lg:hidden"
+              className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 transition-colors hover:bg-zinc-200 lg:hidden"
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label={mobileOpen ? "Close menu" : "Open menu"}
             >

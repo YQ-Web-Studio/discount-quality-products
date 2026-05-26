@@ -272,7 +272,7 @@ function Checkbox({ checked, onChange, size = "md" }: { checked: boolean; onChan
   );
 }
 
-/* ─── Category sidebar tree (multi-select) ─── */
+/* ─── Category sidebar tree (expanded parent links, multi-select subcategory filters) ─── */
 function CategorySidebar({
   categories,
   selectedCategories,
@@ -286,8 +286,6 @@ function CategorySidebar({
   onClearAll: () => void;
   onCollapse?: () => void;
 }) {
-  const allNone = selectedCategories.size === 0;
-
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -303,35 +301,23 @@ function CategorySidebar({
         )}
       </div>
       <div className="space-y-0.5">
-        <div
-          className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-50"
-          onClick={onClearAll}
-        >
-          <Checkbox checked={allNone} onChange={onClearAll} />
-          <span className={cn("text-sm font-medium", allNone ? "font-semibold text-zinc-900" : "text-zinc-500")}>
-            All Categories
-          </span>
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-bold text-zinc-900">
+          <span className="w-4 h-4 flex items-center justify-center text-zinc-800 text-xs">•</span>
+          <span>All Categories</span>
         </div>
 
         {categories.map((cat) => {
-          const catChecked = cat.subcategories && cat.subcategories.length > 0
-            ? cat.subcategories.every(sub => selectedCategories.has(sub.id))
-            : selectedCategories.has(cat.id);
-
           return (
-            <div key={cat.id}>
-              <div 
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-50"
-                onClick={() => onToggleCategory(cat.id)}
+            <div key={cat.id} className="py-0.5">
+              <Link
+                href={`/categories/${cat.slug}`}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
               >
-                <Checkbox
-                  checked={catChecked}
-                  onChange={() => onToggleCategory(cat.id)}
-                />
-                <span className={cn("text-sm font-semibold transition-colors", cat.accentColor)}>
+                <span className="w-4 h-4 flex items-center justify-center text-zinc-400 text-xs">•</span>
+                <span className={cn("transition-colors", cat.hoverText)}>
                   {cat.label}
                 </span>
-              </div>
+              </Link>
 
               {cat.subcategories && cat.subcategories.length > 0 && (
                 <div className="ml-7 mt-0.5 mb-1 space-y-0.5 border-l border-zinc-100 pl-3">
