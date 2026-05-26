@@ -22,14 +22,9 @@ import { ProductStructuredData } from '@/components/seo/ProductStructuredData';
 import type { Metadata } from 'next';
 
 export async function generateStaticParams() {
-  try {
-    // Statically pre-render the top 50 products at build time for high Core Web Vitals
-    const slugs = await getProductSlugs(50);
-    return slugs.map((slug) => ({ slug }));
-  } catch (error) {
-    console.error("generateStaticParams error:", error);
-    return [];
-  }
+  // Return an empty array to disable pre-rendering at build time.
+  // Pages will be generated dynamically on-demand and cached via ISR.
+  return [];
 }
 
 // ─── Per-page metadata ─────────────────────────────────────────────────────────
