@@ -416,27 +416,23 @@ export default function SearchHub({
         
         if (matchedParent) {
           categoryValue = matchedParent.slug;
-        } else if (cats.size === 1) {
-          // 2. Check if it's a single subcategory
-          const catId = Array.from(cats)[0];
-          let foundSlug = "";
-          for (const cat of initialCategories) {
-            // Check if it's the parent itself with no subs
-            if (cat.id === catId && (!cat.subcategories || cat.subcategories.length === 0)) {
-              foundSlug = cat.slug;
-              break;
-            }
-            // Check subs
-            const sub = cat.subcategories?.find(s => s.id === catId);
-            if (sub) {
-              foundSlug = sub.slug;
-              break;
-            }
-          }
-          categoryValue = foundSlug || catId.toString();
         } else {
-          // 3. Mixed selection or partial parent, use IDs
-          categoryValue = [...cats].join(",");
+          // Mixed selection or subcategories, map IDs back to their slugs
+          const selectedSlugs: string[] = [];
+          cats.forEach(id => {
+            for (const cat of initialCategories) {
+              if (cat.id === id) {
+                selectedSlugs.push(cat.slug);
+                break;
+              }
+              const sub = cat.subcategories?.find(s => s.id === id);
+              if (sub) {
+                selectedSlugs.push(sub.slug);
+                break;
+              }
+            }
+          });
+          categoryValue = selectedSlugs.filter(Boolean).join(",");
         }
       }
 

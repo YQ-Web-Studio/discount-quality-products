@@ -117,30 +117,33 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   let activeCategoryId: string | undefined = undefined;
 
   if (activeSlug) {
-    // Check if it's a direct ID list from SearchHub (e.g. "15,16")
-    if (/^[0-9,]+$/.test(activeSlug)) {
-      activeCategoryId = activeSlug;
-    } else {
-      // Find ID from categories using slug from SearchOverlay
-      for (const cat of initialCategories) {
-        if (cat.slug === activeSlug) {
-          // If it's a parent category, include the parent ID and all its children IDs
-          // to ensure they are all "selected" in the SearchHub UI
-          const ids = [cat.id];
-          if (cat.subcategories && cat.subcategories.length > 0) {
-            cat.subcategories.forEach(sub => ids.push(sub.id));
+    const slugParts = activeSlug.split(",");
+    const resolvedIds: number[] = [];
+
+    for (const part of slugParts) {
+      if (/^\d+$/.test(part)) {
+        resolvedIds.push(parseInt(part, 10));
+      } else {
+        // Find by slug
+        for (const cat of initialCategories) {
+          if (cat.slug === part) {
+            resolvedIds.push(cat.id);
+            if (cat.subcategories) {
+              cat.subcategories.forEach(sub => resolvedIds.push(sub.id));
+            }
+            break;
           }
-          activeCategoryId = ids.join(',');
-          break;
-        }
-        if (cat.subcategories) {
-          const sub = cat.subcategories.find(s => s.slug === activeSlug);
+          const sub = cat.subcategories?.find(s => s.slug === part);
           if (sub) {
-            activeCategoryId = sub.id.toString();
+            resolvedIds.push(sub.id);
             break;
           }
         }
       }
+    }
+
+    if (resolvedIds.length > 0) {
+      activeCategoryId = resolvedIds.join(",");
     }
   }
 

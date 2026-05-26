@@ -151,8 +151,38 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   // We can still support deeper subcategory filtering from search params if the user clicks a subcategory check box
   const selectedSubcategories = typeof sParams.category === "string" ? sParams.category : undefined;
   
-  // If subcategory checkboxes are selected, filter down further, otherwise use the parent category ID
-  const effectiveCategoryIds = selectedSubcategories ? selectedSubcategories : activeCategoryId;
+  // If subcategory checkboxes are selected, resolve slugs to IDs, otherwise use the parent category ID
+  let effectiveCategoryIds = activeCategoryId;
+  
+  if (selectedSubcategories) {
+    const slugParts = selectedSubcategories.split(",");
+    const resolvedIds: number[] = [];
+    
+    for (const part of slugParts) {
+      if (/^\d+$/.test(part)) {
+        resolvedIds.push(parseInt(part, 10));
+      } else {
+        for (const cat of initialCategories) {
+          if (cat.slug === part) {
+            resolvedIds.push(cat.id);
+            if (cat.subcategories) {
+              cat.subcategories.forEach(sub => resolvedIds.push(sub.id));
+            }
+            break;
+          }
+          const sub = cat.subcategories?.find(s => s.slug === part);
+          if (sub) {
+            resolvedIds.push(sub.id);
+            break;
+          }
+        }
+      }
+    }
+    
+    if (resolvedIds.length > 0) {
+      effectiveCategoryIds = resolvedIds.join(",");
+    }
+  }
 
   const orderby = parseWooOrderBy(sParams.orderby);
   const order = parseWooOrder(sParams.order);
