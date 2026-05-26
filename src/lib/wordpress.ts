@@ -5,9 +5,7 @@ import { navigationCategories } from "./navigationConfig";
 function getWordPressGraphqlUrl() {
   const baseUrl =
     process.env.NEXT_PUBLIC_WORDPRESS_API_URL ||
-    (process.env.VERCEL === "1"
-      ? "https://admin.discountproducts.co.uk"
-      : "http://discount-products-backend.local");
+    "https://admin.discountproducts.co.uk";
 
   const trimmedUrl = baseUrl.replace(/\/$/, "");
 
