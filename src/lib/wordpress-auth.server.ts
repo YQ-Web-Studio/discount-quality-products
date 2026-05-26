@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import type { AuthUser, WordPressAuthSession } from "@/lib/auth-types";
 
-const DEFAULT_WORDPRESS_URL = "http://discount-products-backend.local";
+const DEFAULT_WORDPRESS_URL = "https://admin.discountproducts.co.uk";
 
 export const WORDPRESS_AUTH_COOKIE = "discount_products_auth_token";
 
