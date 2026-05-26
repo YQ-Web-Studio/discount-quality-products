@@ -10,7 +10,9 @@ function getWordPressBaseUrl() {
   return (
     process.env.NEXT_PUBLIC_WORDPRESS_API_URL ||
     process.env.WOOCOMMERCE_URL ||
-    "https://admin.discountproducts.co.uk"
+    (process.env.VERCEL === "1"
+      ? "https://admin.discountproducts.co.uk"
+      : "http://discount-products-backend.local")
   ).replace(/\/$/, "");
 }
 
