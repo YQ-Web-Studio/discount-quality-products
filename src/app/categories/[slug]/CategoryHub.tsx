@@ -309,9 +309,8 @@ function CategorySidebar({
       <div className="space-y-0.5">
         <Link
           href="/shop"
-          className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
+          className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
         >
-          <span className="w-4 h-4 flex items-center justify-center text-zinc-400 text-xs">•</span>
           <span>All Categories</span>
         </Link>
 
@@ -323,9 +322,8 @@ function CategorySidebar({
               <Link
                 key={cat.id}
                 href={`/categories/${cat.slug}`}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
+                className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
               >
-                <span className="w-4 h-4 flex items-center justify-center text-zinc-400 text-xs">•</span>
                 <span className={cn("transition-colors", cat.hoverText)}>
                   {cat.label}
                 </span>
@@ -335,8 +333,7 @@ function CategorySidebar({
 
           return (
             <div key={cat.id} className="py-0.5">
-              <div className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-bold text-zinc-900">
-                <span className="w-4 h-4 flex items-center justify-center text-zinc-800 text-xs">•</span>
+              <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-bold text-zinc-900">
                 <span className={cn("transition-colors", cat.accentColor)}>
                   {cat.label}
                 </span>
