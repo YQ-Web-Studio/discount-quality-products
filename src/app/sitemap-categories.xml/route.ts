@@ -11,11 +11,11 @@ export async function GET() {
     const categoryUrls: string[] = [];
     categories.forEach((cat) => {
       if (cat.slug) {
-        categoryUrls.push(`${baseUrl}/shop?category=${cat.slug}`);
+        categoryUrls.push(`${baseUrl}/categories/${cat.slug}`);
       }
       cat.subcategories?.forEach((sub) => {
         if (sub.slug) {
-          categoryUrls.push(`${baseUrl}/shop?category=${cat.slug}&subcategory=${sub.slug}`);
+          categoryUrls.push(`${baseUrl}/categories/${cat.slug}?category=${sub.slug}`);
         }
       });
     });

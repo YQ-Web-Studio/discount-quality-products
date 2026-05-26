@@ -123,7 +123,7 @@ export function Header() {
                         {navigationCategories.map((category) => (
                           <div key={category.slug} className="px-5 first:pl-0 last:pr-0">
                             <Link
-                              href={`/shop?category=${category.slug}`}
+                              href={`/categories/${category.slug}`}
                               className={cn(
                                 "block text-[11px] uppercase tracking-[0.1em] font-bold mb-3 transition-opacity hover:opacity-75",
                                 category.accentColor
@@ -135,7 +135,7 @@ export function Header() {
                               {category.subcategories.map((sub) => (
                                 <li key={sub.slug}>
                                   <Link
-                                    href={`/shop?category=${category.slug}&subcategory=${sub.slug}`}
+                                    href={`/categories/${category.slug}?category=${sub.slug}`}
                                     className="block text-xs text-zinc-800 hover:text-zinc-900 transition-colors leading-snug"
                                   >
                                     {sub.label}
@@ -262,7 +262,7 @@ export function Header() {
                   {navigationCategories.map((category) => (
                     <div key={category.slug}>
                       <Link
-                        href={`/shop?category=${category.slug}`}
+                        href={`/categories/${category.slug}`}
                         className={cn("block text-[11px] uppercase tracking-[0.1em] font-bold mb-2 transition-opacity hover:opacity-75", category.accentColor)}
                         onClick={() => setMobileOpen(false)}
                       >
@@ -272,7 +272,7 @@ export function Header() {
                         {category.subcategories.map((sub) => (
                           <li key={sub.slug}>
                             <Link
-                              href={`/shop?category=${category.slug}&subcategory=${sub.slug}`}
+                              href={`/categories/${category.slug}?category=${sub.slug}`}
                               className="block rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
                               onClick={() => setMobileOpen(false)}
                             >

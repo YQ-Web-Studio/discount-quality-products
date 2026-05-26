@@ -292,7 +292,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           <div className="flex flex-col gap-2">
                             {results.slice(0, 8).map((item) => {
                               const isCategory = item.type === 'category';
-                              const route = isCategory ? `/shop?category=${item.slug}` : `/products/${item.slug}`;
+                              const route = isCategory ? `/categories/${item.slug}` : `/products/${item.slug}`;
                               
                               // Frontend Mapping Logic
                               const frontendData = isCategory ? getFrontendCategoryData(item.slug) : null;
@@ -402,7 +402,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                   {navigationCategories.map((category) => (
                     <div key={category.slug} className="rounded-xl border border-zinc-100 p-4">
                       <button
-                        onClick={() => handleNavigate(`/shop?category=${category.slug}`)}
+                        onClick={() => handleNavigate(`/categories/${category.slug}`)}
                         className={cn("text-sm font-bold mb-3 transition-opacity hover:opacity-70", category.accentColor)}
                       >
                         {category.label}
@@ -411,7 +411,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         {category.subcategories.map((sub) => (
                           <button
                             key={sub.slug}
-                            onClick={() => handleNavigate(`/shop?category=${category.slug}&subcategory=${sub.slug}`)}
+                            onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
                             className="flex items-center justify-between text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900"
                           >
                             {sub.label}

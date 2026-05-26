@@ -18,7 +18,7 @@ export const DISCONTINUED_PRODUCTS_REGISTRY: Record<string, DiscontinuedProductR
   // Example 301: Redirect to a relevant category page
   "classic-wired-keyboard-obsolete": {
     status: 301,
-    redirectUrl: "/shop?category=computing",
+    redirectUrl: "/categories/computing",
   },
 
   // Example 410: The product is permanently gone, no replacement exists

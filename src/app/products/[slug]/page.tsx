@@ -198,7 +198,7 @@ export default async function ProductPage(props: PageProps<'/products/[slug]'>) 
               <Breadcrumbs 
                 paths={[
                   { label: 'Products', href: '/#products' },
-                  ...(categories[0] ? [{ label: categories[0].name, href: `/shop?category=${categories[0].slug}` }] : [])
+                  ...(categories[0] ? [{ label: categories[0].name, href: `/categories/${categories[0].slug}` }] : [])
                 ]} 
               />
 

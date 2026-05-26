@@ -115,7 +115,7 @@ export function BentoGrid() {
 
                 {/* Full-coverage background link (z-10 + sr-only label) */}
                 <Link
-                  href={`/shop?category=${category.slug}`}
+                  href={`/categories/${category.slug}`}
                   className="absolute inset-0 z-10"
                   aria-label={`Browse ${category.label}`}
                 />
@@ -139,7 +139,7 @@ export function BentoGrid() {
                         {category.subcategories.map((sub) => (
                           <Link
                             key={sub.slug}
-                            href={`/shop?category=${category.slug}&subcategory=${sub.slug}`}
+                            href={`/categories/${category.slug}?category=${sub.slug}`}
                             className="rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1 text-xs text-white font-medium hover:bg-white hover:text-zinc-900 transition-all duration-200 whitespace-nowrap"
                           >
                             {sub.label}
