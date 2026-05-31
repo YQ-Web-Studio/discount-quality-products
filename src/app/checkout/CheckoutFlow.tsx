@@ -197,6 +197,7 @@ function OrderSummary({
 function StripePaymentForm({
   total,
   form,
+  showBillingAddress,
   savedCards,
   clientSecret,
   agreedToTerms,
@@ -204,6 +205,7 @@ function StripePaymentForm({
 }: {
   total: number;
   form: any;
+  showBillingAddress: boolean;
   savedCards: any[];
   clientSecret: string;
   agreedToTerms: boolean;
@@ -267,11 +269,45 @@ function StripePaymentForm({
       return;
     }
 
+    const billingName = showBillingAddress
+      ? `${form.billingFirstName || ""} ${form.billingLastName || ""}`.trim()
+      : `${form.firstName || ""} ${form.lastName || ""}`.trim();
+
+    const billingAddress = showBillingAddress
+      ? {
+          line1: form.billingAddress1 || "",
+          line2: form.billingAddress2 || undefined,
+          city: form.billingCity || "",
+          state: form.billingCounty || "",
+          postal_code: form.billingPostcode || "",
+          country: 'GB',
+        }
+      : {
+          line1: form.address1 || "",
+          line2: form.address2 || undefined,
+          city: form.city || "",
+          state: form.county || "",
+          postal_code: form.postcode || "",
+          country: 'GB',
+        };
+
+    const billingPhone = showBillingAddress
+      ? form.billingPhone || undefined
+      : form.phone || undefined;
+
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       clientSecret,
       confirmParams: {
         return_url: window.location.origin + "/checkout/success",
+        payment_method_data: {
+          billing_details: {
+            name: billingName || undefined,
+            email: form.email || undefined,
+            phone: billingPhone || undefined,
+            address: billingAddress,
+          }
+        }
       },
       redirect: "if_required"
     });
@@ -363,12 +399,17 @@ function StripePaymentForm({
                 options={{
                   defaultValues: {
                     billingDetails: {
-                      name: form.firstName ? `${form.firstName} ${form.lastName}`.trim() : undefined,
+                      name: showBillingAddress
+                        ? `${form.billingFirstName || ""} ${form.billingLastName || ""}`.trim() || undefined
+                        : `${form.firstName || ""} ${form.lastName || ""}`.trim() || undefined,
                       email: form.email || undefined,
+                      phone: showBillingAddress ? form.billingPhone || undefined : form.phone || undefined,
                       address: {
-                        line1: form.address1 || undefined,
-                        city: form.city || undefined,
-                        postal_code: form.postcode || undefined,
+                        line1: (showBillingAddress ? form.billingAddress1 : form.address1) || undefined,
+                        line2: (showBillingAddress ? form.billingAddress2 : form.address2) || undefined,
+                        city: (showBillingAddress ? form.billingCity : form.city) || undefined,
+                        state: (showBillingAddress ? form.billingCounty : form.county) || undefined,
+                        postal_code: (showBillingAddress ? form.billingPostcode : form.postcode) || undefined,
                         country: 'GB',
                       }
                     }
@@ -474,10 +515,23 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     firstName: "",
     lastName: "",
     email: "",
-    postcode: "",
     address1: "",
+    address2: "",
     city: "",
+    county: "",
+    postcode: "",
+    phone: "",
+
+    billingFirstName: "",
+    billingLastName: "",
+    billingAddress1: "",
+    billingAddress2: "",
+    billingCity: "",
+    billingCounty: "",
+    billingPostcode: "",
+    billingPhone: "",
   });
+  const [showBillingAddress, setShowBillingAddress] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(true);
 
   useEffect(() => {
@@ -496,6 +550,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
             const c = customerData.customer;
             // Prefer shipping address, fallback to billing
             const address = c.shipping?.address_1 ? c.shipping : c.billing;
+            const bAddress = c.billing || {};
             
             const fallbackName = sessionData?.user?.name || "";
             const fallbackFirstName = fallbackName.split(" ")[0] || "";
@@ -505,9 +560,21 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
               firstName: prev.firstName || c.first_name || address?.first_name || fallbackFirstName,
               lastName: prev.lastName || c.last_name || address?.last_name || fallbackLastName,
               email: prev.email || c.email || address?.email || sessionData?.user?.email || "",
-              postcode: prev.postcode || address?.postcode || "",
               address1: prev.address1 || address?.address_1 || "",
+              address2: prev.address2 || address?.address_2 || "",
               city: prev.city || address?.city || "",
+              county: prev.county || address?.state || "",
+              postcode: prev.postcode || address?.postcode || "",
+              phone: prev.phone || address?.phone || "",
+
+              billingFirstName: prev.billingFirstName || bAddress.first_name || "",
+              billingLastName: prev.billingLastName || bAddress.last_name || "",
+              billingAddress1: prev.billingAddress1 || bAddress.address_1 || "",
+              billingAddress2: prev.billingAddress2 || bAddress.address_2 || "",
+              billingCity: prev.billingCity || bAddress.city || "",
+              billingCounty: prev.billingCounty || bAddress.state || "",
+              billingPostcode: prev.billingPostcode || bAddress.postcode || "",
+              billingPhone: prev.billingPhone || bAddress.phone || "",
             }));
           }
         }
@@ -567,9 +634,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
       JSON.stringify({
         items: computedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
         shipping,
-        form,
+        form: { ...form, showBillingAddress },
       }),
-    [computedItems, form, shipping]
+    [computedItems, form, shipping, showBillingAddress]
   );
 
   useEffect(() => {
@@ -588,14 +655,27 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     if (!form.lastName.trim()) e.lastName = "Required";
     if (!form.email.trim()) e.email = "Required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Invalid email";
+    if (!form.address1.trim()) e.address1 = "Required";
+    if (!form.city.trim()) e.city = "Required";
+    if (!form.county.trim()) e.county = "Required";
     if (!form.postcode.trim()) e.postcode = "Required";
     else if (!/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.postcode.trim()))
       e.postcode = "Invalid UK postcode";
-    if (!form.address1.trim()) e.address1 = "Required";
-    if (!form.city.trim()) e.city = "Required";
+
+    if (showBillingAddress) {
+      if (!form.billingFirstName.trim()) e.billingFirstName = "Required";
+      if (!form.billingLastName.trim()) e.billingLastName = "Required";
+      if (!form.billingAddress1.trim()) e.billingAddress1 = "Required";
+      if (!form.billingCity.trim()) e.billingCity = "Required";
+      if (!form.billingCounty.trim()) e.billingCounty = "Required";
+      if (!form.billingPostcode.trim()) e.billingPostcode = "Required";
+      else if (!/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.billingPostcode.trim()))
+        e.billingPostcode = "Invalid UK postcode";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
-  }, [form]);
+  }, [form, showBillingAddress]);
 
   const initialiseCardPayment = useCallback(async () => {
     if (fetchingSecret || clientSecret) return;
@@ -611,7 +691,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         headers: { "Content-Type": "application/json" },
         // Pass the full form so customer data is embedded securely in the
         // Stripe PaymentIntent metadata for webhook-side order creation.
-        body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form })
+        body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form: { ...form, showBillingAddress } })
       });
       const data = await res.json();
       if (data.clientSecret) {
@@ -626,7 +706,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     } finally {
       setFetchingSecret(false);
     }
-  }, [checkoutSnapshot, clientSecret, computedItems, fetchingSecret, form, shipping, validateDetails]);
+  }, [checkoutSnapshot, clientSecret, computedItems, fetchingSecret, form, showBillingAddress, shipping, validateDetails]);
 
 
 
@@ -750,62 +830,190 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field
-                    label="First Name"
-                    id="firstName"
-                    value={form.firstName}
-                    onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
-                    error={errors.firstName}
-                    autoComplete="given-name"
-                  />
-                  <Field
-                    label="Last Name"
-                    id="lastName"
-                    value={form.lastName}
-                    onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
-                    error={errors.lastName}
-                    autoComplete="family-name"
-                  />
-                  <div className="sm:col-span-2">
-                    <Field
-                      label="Email"
-                      id="email"
-                      type="email"
-                      value={form.email}
-                      onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-                      error={errors.email}
-                      placeholder="you@example.co.uk"
-                      autoComplete="email"
-                    />
+                <div className="space-y-6">
+                  {/* Delivery Address block */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-900 mb-4 border-b border-zinc-100 pb-2">Delivery Address</h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <Field
+                        label="First Name"
+                        id="firstName"
+                        value={form.firstName}
+                        onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
+                        error={errors.firstName}
+                        autoComplete="given-name"
+                      />
+                      <Field
+                        label="Last Name"
+                        id="lastName"
+                        value={form.lastName}
+                        onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
+                        error={errors.lastName}
+                        autoComplete="family-name"
+                      />
+                      <div className="sm:col-span-2">
+                        <Field
+                          label="Email Address"
+                          id="email"
+                          type="email"
+                          value={form.email}
+                          onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+                          error={errors.email}
+                          placeholder="you@example.co.uk"
+                          autoComplete="email"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Field
+                          label="Address Line 1"
+                          id="address1"
+                          value={form.address1}
+                          onChange={(v) => setForm((f) => ({ ...f, address1: v }))}
+                          error={errors.address1}
+                          autoComplete="address-line1"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Field
+                          label="Address Line 2 (Optional)"
+                          id="address2"
+                          value={form.address2 || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, address2: v }))}
+                          error={errors.address2}
+                          autoComplete="address-line2"
+                        />
+                      </div>
+                      <Field
+                        label="Town/City"
+                        id="city"
+                        value={form.city}
+                        onChange={(v) => setForm((f) => ({ ...f, city: v }))}
+                        error={errors.city}
+                        autoComplete="address-level2"
+                      />
+                      <Field
+                        label="County"
+                        id="county"
+                        value={form.county || ""}
+                        onChange={(v) => setForm((f) => ({ ...f, county: v }))}
+                        error={errors.county}
+                        placeholder="e.g. Greater London"
+                        autoComplete="address-level1"
+                      />
+                      <Field
+                        label="Postcode"
+                        id="postcode"
+                        value={form.postcode}
+                        onChange={(v) => setForm((f) => ({ ...f, postcode: v }))}
+                        error={errors.postcode}
+                        placeholder="e.g. SW1A 1AA"
+                        autoComplete="postal-code"
+                      />
+                      <Field
+                        label="Phone Number (Optional)"
+                        id="phone"
+                        value={form.phone || ""}
+                        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+                        error={errors.phone}
+                        placeholder="e.g. 07777 777777"
+                        autoComplete="tel"
+                      />
+                    </div>
                   </div>
-                  <div className="sm:col-span-2">
-                    <Field
-                      label="Address Line 1"
-                      id="address1"
-                      value={form.address1}
-                      onChange={(v) => setForm((f) => ({ ...f, address1: v }))}
-                      error={errors.address1}
-                      autoComplete="address-line1"
+
+                  {/* Checkbox toggler */}
+                  <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                    <input
+                      type="checkbox"
+                      id="billing-same-toggle"
+                      checked={!showBillingAddress}
+                      onChange={(e) => setShowBillingAddress(!e.target.checked)}
+                      className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 cursor-pointer"
                     />
+                    <label htmlFor="billing-same-toggle" className="text-sm font-semibold text-zinc-700 cursor-pointer select-none">
+                      My billing and delivery addresses are the same
+                    </label>
                   </div>
-                  <Field
-                    label="Town / City"
-                    id="city"
-                    value={form.city}
-                    onChange={(v) => setForm((f) => ({ ...f, city: v }))}
-                    error={errors.city}
-                    autoComplete="address-level2"
-                  />
-                  <Field
-                    label="Postcode"
-                    id="postcode"
-                    value={form.postcode}
-                    onChange={(v) => setForm((f) => ({ ...f, postcode: v }))}
-                    error={errors.postcode}
-                    placeholder="SW1A 1AA"
-                    autoComplete="postal-code"
-                  />
+
+                  {/* Billing Address block (conditionally rendered) */}
+                  {showBillingAddress && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-900 mb-4 border-b border-zinc-100 pb-2">Billing Address</h3>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field
+                          label="First Name"
+                          id="billingFirstName"
+                          value={form.billingFirstName || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, billingFirstName: v }))}
+                          error={errors.billingFirstName}
+                          autoComplete="billing given-name"
+                        />
+                        <Field
+                          label="Last Name"
+                          id="billingLastName"
+                          value={form.billingLastName || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, billingLastName: v }))}
+                          error={errors.billingLastName}
+                          autoComplete="billing family-name"
+                        />
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Address Line 1"
+                            id="billingAddress1"
+                            value={form.billingAddress1 || ""}
+                            onChange={(v) => setForm((f) => ({ ...f, billingAddress1: v }))}
+                            error={errors.billingAddress1}
+                            autoComplete="billing address-line1"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Address Line 2 (Optional)"
+                            id="billingAddress2"
+                            value={form.billingAddress2 || ""}
+                            onChange={(v) => setForm((f) => ({ ...f, billingAddress2: v }))}
+                            error={errors.billingAddress2}
+                            autoComplete="billing address-line2"
+                          />
+                        </div>
+                        <Field
+                          label="Town/City"
+                          id="billingCity"
+                          value={form.billingCity || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, billingCity: v }))}
+                          error={errors.billingCity}
+                          autoComplete="billing address-level2"
+                        />
+                        <Field
+                          label="County"
+                          id="billingCounty"
+                          value={form.billingCounty || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, billingCounty: v }))}
+                          error={errors.billingCounty}
+                          placeholder="e.g. Greater London"
+                          autoComplete="billing address-level1"
+                        />
+                        <Field
+                          label="Postcode"
+                          id="billingPostcode"
+                          value={form.billingPostcode || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, billingPostcode: v }))}
+                          error={errors.billingPostcode}
+                          placeholder="e.g. SW1A 1AA"
+                          autoComplete="billing postal-code"
+                        />
+                        <Field
+                          label="Phone Number (Optional)"
+                          id="billingPhone"
+                          value={form.billingPhone || ""}
+                          onChange={(v) => setForm((f) => ({ ...f, billingPhone: v }))}
+                          error={errors.billingPhone}
+                          placeholder="e.g. 07777 777777"
+                          autoComplete="billing tel"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-6 flex justify-end">
                   <button
@@ -873,7 +1081,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           const res = await fetch("/api/checkout/paypal/create-order", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form }),
+                            body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form: { ...form, showBillingAddress } }),
                           });
 
                           const data = await res.json();
@@ -893,11 +1101,11 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                             const capData = await capRes.json();
 
                             if (capData.success) {
-                              const wcRes = await fetch("/api/checkout/create-wc-order", {
+                               const wcRes = await fetch("/api/checkout/create-wc-order", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
-                                  form,
+                                  form: { ...form, showBillingAddress },
                                   items: computedItems,
                                   shippingMethod: shipping,
                                   paymentProvider: "paypal",
@@ -952,6 +1160,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           <StripePaymentForm 
                             total={computedSubtotal + shippingCost} 
                             form={form}
+                            showBillingAddress={showBillingAddress}
                             clientSecret={clientSecret}
                             savedCards={savedCards}
                             agreedToTerms={agreedToTerms}

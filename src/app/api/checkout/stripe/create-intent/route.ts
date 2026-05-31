@@ -59,15 +59,44 @@ export async function POST(req: Request) {
       resolvedItems.map((i: { numericId: number; quantity: number }) => ({ i: i.numericId, q: i.quantity }))
     );
 
+    // Build address metadata objects for delivery and billing.
+    const deliveryAddress = form
+      ? {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          address1: form.address1,
+          address2: form.address2 || "",
+          city: form.city,
+          county: form.county,
+          postcode: form.postcode,
+          phone: form.phone || "",
+        }
+      : null;
+
+    const isBillingDifferent = form?.showBillingAddress === true;
+    const billingAddress = form
+      ? {
+          firstName: isBillingDifferent ? form.billingFirstName : form.firstName,
+          lastName: isBillingDifferent ? form.billingLastName : form.lastName,
+          address1: isBillingDifferent ? form.billingAddress1 : form.address1,
+          address2: isBillingDifferent ? (form.billingAddress2 || "") : (form.address2 || ""),
+          city: isBillingDifferent ? form.billingCity : form.city,
+          county: isBillingDifferent ? form.billingCounty : form.county,
+          postcode: isBillingDifferent ? form.billingPostcode : form.postcode,
+          phone: isBillingDifferent ? (form.billingPhone || "") : (form.phone || ""),
+          email: form.email,
+        }
+      : null;
+
     // Serialise the customer form data for the webhook to reconstruct billing/shipping.
     const cartForm = form
       ? JSON.stringify({
           fn: form.firstName,
           ln: form.lastName,
           em: form.email,
-          a1: form.shippingAddress1 || form.address1,
-          ct: form.shippingCity || form.city,
-          pc: form.shippingPostcode || form.postcode,
+          a1: form.address1,
+          ct: form.city,
+          pc: form.postcode,
         })
       : "";
 
@@ -107,6 +136,8 @@ export async function POST(req: Request) {
         cart_items: cartItems,
         cart_shipping: shippingMethod ?? "standard",
         cart_form: cartForm,
+        delivery_address: deliveryAddress ? JSON.stringify(deliveryAddress) : "",
+        billing_address: billingAddress ? JSON.stringify(billingAddress) : "",
         wc_customer_id: session?.user?.id ? String(session.user.id) : "",
       },
     });

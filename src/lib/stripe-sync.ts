@@ -75,11 +75,11 @@ export async function processOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {
-  const { cart_items, cart_shipping, cart_form, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
+  const { cart_items, cart_shipping, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
 
-  if (!cart_items || !cart_form) {
+  if (!cart_items || (!cart_form && !delivery_address)) {
     console.warn(
-      `[stripe-sync] missing cart_items or cart_form in metadata. ` +
+      `[stripe-sync] missing cart_items, cart_form, or delivery_address in metadata. ` +
       `Order processing skipped. PaymentIntent: ${paymentIntent.id}`
     );
     return null;
@@ -87,10 +87,19 @@ export async function processOrderFromPaymentIntent(
 
   let items: { i: number; q: number }[];
   let form: { fn: string; ln: string; em: string; a1: string; ct: string; pc: string };
+  let delivery: any = null;
+  let billing: any = null;
 
   try {
     items = JSON.parse(cart_items);
-    form = JSON.parse(cart_form);
+    if (cart_form) {
+      form = JSON.parse(cart_form);
+    } else {
+      form = { fn: "", ln: "", em: "", a1: "", ct: "", pc: "" };
+    }
+
+    if (delivery_address) delivery = JSON.parse(delivery_address);
+    if (billing_address) billing = JSON.parse(billing_address);
   } catch (err) {
     console.error(`[stripe-sync] Failed to parse cart metadata for ${paymentIntent.id}:`, err);
     return null;
@@ -125,6 +134,50 @@ export async function processOrderFromPaymentIntent(
   }
 
   // ── Path B: fallback — create order from scratch (WC was down at intent time) ──
+  const billingPayload = billing
+    ? {
+        first_name: billing.firstName,
+        last_name: billing.lastName,
+        address_1: billing.address1,
+        address_2: billing.address2 || "",
+        city: billing.city,
+        state: billing.county, // Aligning county to WooCommerce state field
+        postcode: billing.postcode,
+        country: "GB",
+        email: billing.email || form.em,
+        phone: billing.phone || "",
+      }
+    : {
+        first_name: form.fn,
+        last_name: form.ln,
+        address_1: form.a1,
+        city: form.ct,
+        postcode: form.pc,
+        country: "GB",
+        email: form.em,
+      };
+
+  const shippingPayload = delivery
+    ? {
+        first_name: delivery.firstName,
+        last_name: delivery.lastName,
+        address_1: delivery.address1,
+        address_2: delivery.address2 || "",
+        city: delivery.city,
+        state: delivery.county, // Aligning county to WooCommerce state field
+        postcode: delivery.postcode,
+        country: "GB",
+        phone: delivery.phone || "",
+      }
+    : {
+        first_name: form.fn,
+        last_name: form.ln,
+        address_1: form.a1,
+        city: form.ct,
+        postcode: form.pc,
+        country: "GB",
+      };
+
   const orderPayload = {
     payment_method: "stripe",
     payment_method_title: "Credit Card (Stripe)",
@@ -133,23 +186,8 @@ export async function processOrderFromPaymentIntent(
     transaction_id: chargeId || paymentIntent.id,
     customer_id: wc_customer_id ? parseInt(wc_customer_id, 10) : 0,
     customer_note: `Payment captured securely via Stripe. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}.`,
-    billing: {
-      first_name: form.fn,
-      last_name: form.ln,
-      address_1: form.a1,
-      city: form.ct,
-      postcode: form.pc,
-      country: "GB",
-      email: form.em,
-    },
-    shipping: {
-      first_name: form.fn,
-      last_name: form.ln,
-      address_1: form.a1,
-      city: form.ct,
-      postcode: form.pc,
-      country: "GB",
-    },
+    billing: billingPayload,
+    shipping: shippingPayload,
     line_items,
     shipping_lines: [
       {

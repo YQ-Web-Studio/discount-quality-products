@@ -9,9 +9,22 @@ interface CheckoutCustomerForm {
   firstName: string;
   lastName: string;
   email: string;
-  postcode: string;
   address1: string;
+  address2?: string;
   city: string;
+  county: string;
+  postcode: string;
+  phone?: string;
+
+  showBillingAddress?: boolean;
+  billingFirstName?: string;
+  billingLastName?: string;
+  billingAddress1?: string;
+  billingAddress2?: string;
+  billingCity?: string;
+  billingCounty?: string;
+  billingPostcode?: string;
+  billingPhone?: string;
 }
 
 interface CheckoutItem {
@@ -75,6 +88,32 @@ export async function POST(req: Request) {
     const providerName = paymentProvider === "paypal" ? "PayPal" : "Credit Card (Stripe)";
     const session = await getCurrentWordPressSession();
 
+    const delivery = {
+      first_name: form.firstName,
+      last_name: form.lastName,
+      address_1: form.address1,
+      address_2: form.address2 || "",
+      city: form.city,
+      state: form.county, // Aligning county to WooCommerce state parameter
+      postcode: form.postcode,
+      country: "GB",
+      phone: form.phone || "",
+    };
+
+    const isBillingDifferent = form.showBillingAddress === true;
+    const billing = {
+      first_name: isBillingDifferent ? (form.billingFirstName || form.firstName) : form.firstName,
+      last_name: isBillingDifferent ? (form.billingLastName || form.lastName) : form.lastName,
+      address_1: isBillingDifferent ? (form.billingAddress1 || form.address1) : form.address1,
+      address_2: isBillingDifferent ? (form.billingAddress2 || form.address2 || "") : (form.address2 || ""),
+      city: isBillingDifferent ? (form.billingCity || form.city) : form.city,
+      state: isBillingDifferent ? (form.billingCounty || form.county) : form.county, // Aligning county to WooCommerce state parameter
+      postcode: isBillingDifferent ? (form.billingPostcode || form.postcode) : form.postcode,
+      country: "GB",
+      email: form.email,
+      phone: isBillingDifferent ? (form.billingPhone || form.phone || "") : (form.phone || ""),
+    };
+
     const orderData: Record<string, unknown> = {
       payment_method: paymentProvider === "paypal" ? "ppcp-gateway" : paymentProvider,
       payment_method_title: providerName,
@@ -84,23 +123,8 @@ export async function POST(req: Request) {
       transaction_id: transactionId,
       customer_id: session?.user?.id ? session.user.id : 0,
       customer_note: `Payment captured securely via ${providerName}. Transaction ID: ${transactionId ?? ""}`,
-      billing: {
-        first_name: form.firstName,
-        last_name: form.lastName,
-        address_1: form.address1,
-        city: form.city,
-        postcode: form.postcode,
-        country: "GB",
-        email: form.email,
-      },
-      shipping: {
-        first_name: form.firstName,
-        last_name: form.lastName,
-        address_1: form.address1,
-        city: form.city,
-        postcode: form.postcode,
-        country: "GB",
-      },
+      billing: billing,
+      shipping: delivery,
       line_items,
       shipping_lines: [
         {
