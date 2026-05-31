@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, ArrowRight, Package, Loader2 } from "lucide-react";
+import { Check, ArrowRight, Package, Loader2, AlertCircle } from "lucide-react";
 
 // Maximum time to wait for the Stripe webhook to create the WC order (ms).
 // Webhooks typically fire within 1–3 s of payment confirmation.
@@ -12,13 +12,14 @@ const POLL_INTERVAL_MS = 1_500;
 
 export default function SuccessContent() {
   const searchParams = useSearchParams();
-  const pi = searchParams.get("pi");          // Stripe PaymentIntent ID
+  const pi = searchParams.get("pi") || searchParams.get("payment_intent");          // Stripe PaymentIntent ID
   const directOrder = searchParams.get("order"); // PayPal — order number passed directly
 
   const [orderNumber, setOrderNumber] = useState<string | null>(
     directOrder ?? null
   );
   const [polling, setPolling] = useState(!!pi && !directOrder);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!pi || directOrder) return;
@@ -26,12 +27,10 @@ export default function SuccessContent() {
     let elapsed = 0;
     let stopped = false;
 
-    async function poll() {
+    async function poll(isFallback = false) {
       try {
-        const res = await fetch(
-          `/api/checkout/stripe/order-status?pi=${encodeURIComponent(pi!)}`,
-          { cache: "no-store" }
-        );
+        const url = `/api/checkout/stripe/order-status?pi=${encodeURIComponent(pi!)}${isFallback ? "&fallback=true" : ""}`;
+        const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
 
         if (data.orderId) {
@@ -44,14 +43,20 @@ export default function SuccessContent() {
       }
 
       elapsed += POLL_INTERVAL_MS;
-      if (elapsed >= POLL_TIMEOUT_MS) {
-        // Timed out — show a fallback message.
-        setPolling(false);
+      if (elapsed >= POLL_TIMEOUT_MS && !isFallback) {
+        // Timed out normal polling — try one last time with fallback sync to force order creation.
+        // This is crucial for local dev without webhook forwarding, or if webhook dropped.
+        poll(true);
         return;
+      } else if (isFallback) {
+         // Fallback also failed.
+         setPolling(false);
+         setError(true);
+         return;
       }
 
       if (!stopped) {
-        setTimeout(poll, POLL_INTERVAL_MS);
+        setTimeout(() => poll(false), POLL_INTERVAL_MS);
       }
     }
 
@@ -69,19 +74,27 @@ export default function SuccessContent() {
       </div>
 
       <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl mb-2">
-        Order Confirmed
+        {orderNumber ? "Order Confirmed" : "Payment Received"}
       </h1>
 
       <p className="text-sm text-zinc-500 max-w-md mb-6">
-        Thank you for your purchase. We&apos;ve received your order and will begin processing it shortly.
-        A confirmation email has been sent to your inbox.
+        {orderNumber 
+          ? "Thank you for your purchase. We've received your order and will begin processing it shortly. A confirmation email has been sent to your inbox."
+          : "Thank you for your purchase. Your payment was successful, but we are still verifying the order details. This may take a few moments."}
       </p>
 
       {/* Order reference */}
       <div className="mb-8 rounded-xl border border-zinc-200 bg-white px-8 py-5 inline-flex flex-col items-center gap-2 min-w-[220px]">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-          Order Number
-        </span>
+        {error ? (
+           <span className="flex items-center gap-2 text-sm text-amber-600">
+             <AlertCircle className="h-4 w-4" />
+             Order processing delayed
+           </span>
+        ) : (
+          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+            Order Number
+          </span>
+        )}
 
         {polling ? (
           <span className="flex items-center gap-2 text-sm text-zinc-400">
@@ -94,14 +107,16 @@ export default function SuccessContent() {
           </span>
         ) : (
           <span className="text-sm text-zinc-400 italic">
-            Check your email for your order reference
+            Please check your email for order reference.
           </span>
         )}
 
-        <div className="flex items-center gap-2 mt-1">
-          <Package className="h-3.5 w-3.5 text-zinc-400" />
-          <span className="text-xs text-zinc-500">Estimated delivery: 3–5 working days</span>
-        </div>
+        {orderNumber && (
+          <div className="flex items-center gap-2 mt-1">
+            <Package className="h-3.5 w-3.5 text-zinc-400" />
+            <span className="text-xs text-zinc-500">Estimated delivery: 3–5 working days</span>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

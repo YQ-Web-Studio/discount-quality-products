@@ -279,7 +279,6 @@ class WooCommerceAPI:
                 if attempt < max_retries:
                     if getattr(e, "response", None) is None or getattr(e.response, "status_code", 0) in (502, 503, 504):
                         self.log.info("  Retrying API call (%d/%d)...", attempt + 1, max_retries)
-                        import time
                         time.sleep(2 ** attempt)
                         continue
                 return None

@@ -88,6 +88,20 @@ body {
   }
 }
 
+/* Enforce hand cursor on all interactive elements across the site */
+button,
+a,
+select,
+summary,
+[role="button"],
+.cursor-pointer,
+input[type="submit"],
+input[type="button"],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer !important;
+}
+
 @layer utilities {
   /* ─── Aggressive eBay HTML sanitizer ──────────────────────────────────── */
   .sanitize-html * {

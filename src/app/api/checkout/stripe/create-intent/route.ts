@@ -4,7 +4,7 @@ import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
-  apiVersion: "2026-03-25.dahlia",
+  apiVersion: "2023-10-16" as any,
 });
 
 /**

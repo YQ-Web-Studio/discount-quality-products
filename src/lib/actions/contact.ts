@@ -78,7 +78,7 @@ export async function submitContactForm(formData: FormData) {
   // 5. Send Email via Resend
   try {
     const { data, error } = await resend.emails.send({
-      from: 'Contact Form <noreply@discountqualityproducts.co.uk>',
+      from: 'Contact Form <notifications@send.yqwebstudio.com>',
       to: 'yusufq2004@gmail.com',
       replyTo: email,
       subject: `New Enquiry: ${subject}`,

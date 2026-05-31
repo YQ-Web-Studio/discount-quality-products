@@ -32,15 +32,15 @@ const tileVariants: Variants = {
  * All category/subcategory data comes from navigationConfig.
  */
 const bentoMeta: Record<string, { image: string; className: string }> = {
-  computing:     { image: "/images/bento/computing_modern_v2.png",             className: "lg:col-span-2 lg:row-span-2 2xl:col-span-1 2xl:row-span-1" },
-  electrical:    { image: "/images/bento/electrical_modern_v2.png", className: "lg:col-span-1 lg:row-span-1" },
-  media:         { image: "/images/bento/media_modern_v2.png",       className: "lg:col-span-1 lg:row-span-1" },
-  collectibles:  { image: "/images/bento/collectibles_composite.png",          className: "lg:col-span-1 lg:row-span-1" },
-  miscellaneous: { image: "/images/bento/miscellaneous_light.png",   className: "lg:col-span-1 lg:row-span-1" },
+  computing:     { image: "/images/bento/computing_modern_v2.png",             className: "md:col-span-2 md:row-span-2 lg:col-span-1 lg:row-span-1" },
+  electrical:    { image: "/images/bento/electrical_modern_v2.png", className: "md:col-span-1 md:row-span-1" },
+  media:         { image: "/images/bento/media_modern_v2.png",       className: "md:col-span-1 md:row-span-1" },
+  collectibles:  { image: "/images/bento/collectibles_composite.png",          className: "md:col-span-1 md:row-span-1" },
+  miscellaneous: { image: "/images/bento/miscellaneous_light.png",   className: "md:col-span-1 md:row-span-1" },
 };
 
 /* Render order for the bento grid — independent of nav menu order */
-const bentoOrder = ["computing", "electrical", "media", "collectibles", "miscellaneous"];
+const bentoOrder = ["electrical", "computing", "media", "collectibles", "miscellaneous"];
 
 export function BentoGrid() {
   const sortedCategories = bentoOrder
@@ -48,8 +48,8 @@ export function BentoGrid() {
     .filter(Boolean) as typeof navigationCategories;
 
   return (
-    <section id="categories" className="bg-white pt-12 pb-12 md:pt-16 md:pb-16 lg:pt-12 lg:pb-24 2xl:pt-24 scroll-mt-32">
-      <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-8 md:px-16 lg:px-32 xl:px-48 2xl:px-20">
+    <section id="categories" className="bg-white pt-12 pb-0 md:pt-16 md:pb-0 lg:pt-12 lg:pb-0 2xl:pt-24 scroll-mt-32">
+      <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 sm:px-8 md:px-12 2xl:px-16">
         <div className="mb-8 flex items-end justify-between">
           <div className="space-y-4">
             <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
@@ -68,7 +68,7 @@ export function BentoGrid() {
         </div>
 
         <motion.div 
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5 auto-rows-[200px] lg:auto-rows-fr 2xl:auto-rows-[300px]"
+          className="grid grid-cols-1 gap-4 md:grid-cols-4 lg:grid-cols-5 auto-rows-[200px] md:auto-rows-auto"
           variants={gridVariants}
           initial="hidden"
           whileInView="visible"
@@ -85,7 +85,7 @@ export function BentoGrid() {
                 variants={tileVariants}
                 whileHover={{ scale: 1.02 }}
                 className={cn(
-                  "group relative flex flex-col overflow-hidden rounded-3xl bg-zinc-900 transition-shadow hover:shadow-2xl lg:aspect-square 2xl:aspect-auto",
+                  "group relative flex flex-col overflow-hidden rounded-3xl bg-zinc-900 transition-shadow hover:shadow-2xl md:aspect-square",
                   meta.className
                 )}
               >
@@ -98,8 +98,8 @@ export function BentoGrid() {
                     priority={index < 3}
                     sizes={
                       category.slug === "computing"
-                        ? "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        : "(max-width: 768px) 100vw, (max-width: 1200px) 25vw, 20vw"
+                        ? "(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 20vw"
+                        : "(max-width: 768px) 100vw, (max-width: 1024px) 25vw, 20vw"
                     }
                     className="object-cover object-center transition-all duration-500 group-hover:blur-sm"
                   />
@@ -125,7 +125,7 @@ export function BentoGrid() {
                   <h3
                     className={cn(
                       "font-black leading-tight tracking-tight drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] text-white/90 transition-colors duration-500 group-hover:text-white text-xl md:text-2xl lg:text-3xl",
-                      category.slug === 'computing' && "lg:text-5xl 2xl:text-3xl"
+                      category.slug === 'computing' && "md:text-5xl lg:text-3xl"
                     )}
                   >
                     {category.label}
@@ -140,7 +140,7 @@ export function BentoGrid() {
                           <Link
                             key={sub.slug}
                             href={`/categories/${category.slug}?category=${sub.slug}`}
-                            className="rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1 text-xs text-white font-medium hover:bg-white hover:text-zinc-900 transition-all duration-200 whitespace-nowrap"
+                            className="rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1.5 text-xs text-white font-medium hover:bg-white hover:text-zinc-900 transition-all duration-200 whitespace-normal text-left"
                           >
                             {sub.label}
                           </Link>

@@ -232,11 +232,22 @@ async function wpFetch<T>(
 
     const json = JSON.parse(responseText) as {
       data?: T;
-      errors?: unknown;
+      errors?: { message?: string; path?: string[] }[];
     };
 
     if (json.errors) {
       console.error('GraphQL Errors Details:', JSON.stringify(json.errors, null, 2));
+      
+      const isNotFound = json.errors.some(err => 
+        err.message?.toLowerCase().includes("no product id was found") ||
+        err.message?.toLowerCase().includes("invalid") ||
+        err.message?.toLowerCase().includes("not found")
+      );
+
+      if (isNotFound && json.data) {
+        return json.data;
+      }
+      
       throw new Error('GraphQL query failed');
     }
 
@@ -341,7 +352,7 @@ export const getSmartFeaturedProducts = unstable_cache(
 
       // If we still have a deficit (e.g. less than 5 products because a category had no products),
       // fill the remaining slots with globally recent products.
-      const currentDeficit = 5 - featuredProducts.length;
+      const currentDeficit = 6 - featuredProducts.length;
       if (currentDeficit > 0) {
         const excludeIds = featuredProducts.map(p => p.id);
 

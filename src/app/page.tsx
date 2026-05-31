@@ -10,23 +10,23 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Discount Quality Products | Essentials & Rare Finds",
   description:
-    "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more. Professional quality, competitive prices. Shipped worldwide from the UK.",
+    "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books. UK shipping at discount prices.",
   openGraph: {
     title: "Discount Quality Products | Essentials & Rare Finds",
     description:
-      "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more.",
+      "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
     images: [
       {
-        url: "/images/og-image.jpg",
+        url: "/images/icon.svg",
         width: 1200,
         height: 630,
-        alt: "Discount Quality Products — 25,000+ Discounted Products",
+        alt: "Discount Quality Products — 12,000+ Discounted Products",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/images/og-image.jpg"],
+    images: ["/images/icon.svg"],
   },
   alternates: {
     canonical: "https://discountqualityproducts.co.uk",
@@ -66,7 +66,7 @@ export default async function Home() {
       </div>
 
       {/* Featured Products Grid */}
-      <main id="products" className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 sm:px-8 pt-12 md:pt-16 pb-24 md:px-12 2xl:px-16 scroll-mt-32">
+      <main id="products" className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 sm:px-8 pt-24 pb-24 md:px-12 2xl:px-16 scroll-mt-32">
         <div className="mb-12 flex flex-col items-start gap-4 sm:flex-row sm:items-end justify-between">
           <div className="space-y-4">
             <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
@@ -90,7 +90,7 @@ export default async function Home() {
           </div>
         ) : products.length > 0 ? (
           <MotionProductGrid>
-            {products.slice(0, 5).map((product, idx) => (
+            {products.slice(0, 6).map((product, idx) => (
               <ProductCard key={`featured-${product.databaseId}`} product={product} priority={idx < 2} />
             ))}
           </MotionProductGrid>
@@ -126,7 +126,7 @@ export default async function Home() {
           </div>
         ) : newArrivals.length > 0 ? (
           <MotionProductGrid>
-            {newArrivals.slice(0, 5).map((product, idx) => (
+            {newArrivals.slice(0, 6).map((product, idx) => (
               <ProductCard key={`new-${product.databaseId}`} product={product} priority={idx < 2} />
             ))}
           </MotionProductGrid>

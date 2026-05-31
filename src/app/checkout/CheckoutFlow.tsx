@@ -528,6 +528,15 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState<CheckoutStep>("details");
 
+  // Scroll to top on step transition
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+  }, [currentStep]);
+
   const stripeElementsOptions = useMemo(() => {
     if (!clientSecret) return undefined;
     return {

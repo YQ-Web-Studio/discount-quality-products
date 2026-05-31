@@ -18,6 +18,8 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { MiniCart } from "@/components/MiniCart";
 import { AuthProvider } from "@/context/AuthContext";
 import { StructuredData } from "@/components/seo/StructuredData";
+import { ScrollToTop } from "@/components/ScrollToTop";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://discountqualityproducts.co.uk"),
@@ -26,11 +28,11 @@ export const metadata: Metadata = {
     default: "Discount Quality Products | Essentials & Rare Finds",
   },
   description:
-    "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more. Professional quality, competitive prices. Shipped worldwide from the UK.",
+    "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books. UK shipping at discount prices.",
   openGraph: {
     title: "Discount Quality Products | Essentials & Rare Finds",
     description:
-      "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more.",
+      "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
     url: "https://discountqualityproducts.co.uk",
     siteName: "Discount Quality Products",
     type: "website",
@@ -40,7 +42,7 @@ export const metadata: Metadata = {
         url: "/images/og-image.jpg",
         width: 1200,
         height: 630,
-        alt: "Discount Quality Products — 25,000+ Discounted Products",
+        alt: "Discount Quality Products — 12,000+ Discounted Products",
       },
     ],
   },
@@ -48,7 +50,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Discount Quality Products | Essentials & Rare Finds",
     description:
-      "Shop 25,000+ discounted products: premium electricals, curated collectibles, computing, and more.",
+      "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
     images: ["/images/og-image.jpg"],
   },
   icons: {
@@ -73,6 +75,9 @@ export default function RootLayout({
         <div className="relative flex min-h-screen flex-col overflow-x-clip">
           <StructuredData />
           <AuthProvider>
+            <Suspense fallback={null}>
+              <ScrollToTop />
+            </Suspense>
             <Header />
             <main className="flex-1 relative z-[1]">{children}</main>
             <Footer />

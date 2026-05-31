@@ -143,7 +143,8 @@ export async function POST(req: Request) {
 
     // 4. Send Order Confirmation Email
     try {
-      if (newOrder.billing?.email) {
+      const recipientEmail = newOrder.billing?.email || form?.email;
+      if (recipientEmail) {
         const emailItems = newOrder.line_items?.map((item: any) => ({
           id: item.id.toString(),
           title: item.name,
@@ -153,10 +154,10 @@ export async function POST(req: Request) {
         })) || [];
 
         await sendEmail({
-          to: newOrder.billing.email,
+          to: recipientEmail,
           subject: `Order Confirmation - #${newOrder.id}`,
           react: React.createElement(OrderConfirmationEmail, {
-            customerName: newOrder.billing.first_name || 'Customer',
+            customerName: newOrder.billing?.first_name || form?.firstName || 'Customer',
             orderNumber: newOrder.id.toString(),
             orderDate: new Date(newOrder.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
             items: emailItems,

@@ -47,7 +47,7 @@ export function Footer() {
               </div>
             </Link>
             <p className="max-w-xl text-sm text-zinc-500 leading-relaxed mb-6">
-              Your destination for professional-grade hardware, modern electronics, and curated collectibles. We deliver exceptional value across our vast catalogue to provide reliable solutions for every project and passion.
+              Your destination for premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books. We deliver exceptional value and reliable shipping worldwide from the UK.
             </p>
             <div className="flex flex-col gap-4 text-xs text-zinc-500">
               <div className="flex items-start gap-3">

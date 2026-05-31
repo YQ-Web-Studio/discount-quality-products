@@ -582,6 +582,91 @@ export default function SearchHub({
     });
   }
 
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxNeighbours = 3; // Show 3 pages on each side of active page for generous options
+    if (totalPages <= 9) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    const startNeighbours = Math.max(2, currentPage - maxNeighbours);
+    const endNeighbours = Math.min(totalPages - 1, currentPage + maxNeighbours);
+    if (startNeighbours > 2) {
+      pages.push("...");
+    }
+    for (let i = startNeighbours; i <= endNeighbours; i++) {
+      pages.push(i);
+    }
+    if (endNeighbours < totalPages - 1) {
+      pages.push("...");
+    }
+    pages.push(totalPages);
+    return pages;
+  };
+
+  const renderPagination = (position: 'top' | 'bottom') => {
+    if (totalPages <= 1) return null;
+    const pageNumbers = getPageNumbers();
+    return (
+      <div className={cn(
+        "flex flex-wrap items-center justify-center gap-y-2 gap-x-6",
+        position === 'top' ? "" : "mt-auto pt-4"
+      )}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="flex h-9 items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            aria-label="Previous Page"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Prev</span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            {pageNumbers.map((p, idx) => {
+              if (p === "...") {
+                return (
+                  <span key={`ellipses-${idx}`} className="px-2 text-xs text-zinc-400 font-bold select-none">
+                    ...
+                  </span>
+                );
+              }
+              const isCurrent = p === currentPage;
+              return (
+                <button
+                  key={`page-${p}`}
+                  onClick={() => handlePageChange(p as number)}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all border border-transparent",
+                    isCurrent 
+                      ? "bg-primary text-white shadow-sm scale-105" 
+                      : "text-zinc-500 hover:text-primary hover:bg-zinc-50"
+                  )}
+                  aria-current={isCurrent ? "page" : undefined}
+                  aria-label={`Go to page ${p}`}
+                >
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="flex h-9 items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            aria-label="Next Page"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   /* Page title */
   const pageTitle = useMemo(() => {
     // Find all selected parent categories
@@ -681,7 +766,7 @@ export default function SearchHub({
             </div>
           </div>
 
-          <div className="flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 pb-4 flex-wrap">
+          <div className="relative flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 pb-4 flex-wrap w-full">
             <button
               onClick={() => setMobileFiltersOpen(true)}
               className="flex items-center gap-1.5 rounded-full border border-zinc-200 px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-semibold text-zinc-600 transition-all hover:border-zinc-400 hover:text-zinc-900 lg:hidden"
@@ -694,8 +779,6 @@ export default function SearchHub({
             <ToolbarDropdown label="Price"     options={priceRanges}  value={selectedPrice}     onChange={handlePriceChange}     />
             <FilterModal products={filterProducts && filterProducts.length > 0 ? filterProducts : products} />
 
-
-
             {(selectedPrice || selectedSort || Array.from(searchParams.keys()).some(k => k.startsWith("pa_"))) && (
               <button
                 onClick={handleClearAll}
@@ -703,6 +786,13 @@ export default function SearchHub({
               >
                 Clear all
               </button>
+            )}
+
+            {/* Top Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="lg:absolute lg:right-0 lg:top-1/2 lg:-translate-y-[calc(50%+4px)] shrink-0 mt-2 lg:mt-0">
+                {renderPagination('top')}
+              </div>
             )}
           </div>
         </div>
@@ -778,30 +868,7 @@ export default function SearchHub({
                   ))}
                 </div>
 
-                {/* Pagination Controls */}
-                {totalPages > 1 && (
-                  <div className="mt-auto flex items-center justify-center gap-4">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1}
-                      className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </button>
-                    <span className="text-sm font-medium text-zinc-500">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages}
-                      className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                {renderPagination('bottom')}
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-20 text-center">
