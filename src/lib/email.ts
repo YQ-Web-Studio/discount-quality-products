@@ -15,19 +15,23 @@ export async function sendEmail({
   to,
   subject,
   react,
-  from = 'Discount Quality Products <notifications@send.yqwebstudio.com>',
-  replyTo,
+  from = 'Discount Quality Products <sales@discountproducts.co.uk>',
+  replyTo = 'sales@discountproducts.co.uk',
 }: SendEmailParams) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY is not set. Email sending skipped.");
     return { success: false, error: "Missing API Key" };
   }
 
+  // Intercept all outgoing emails to redirect them to the client's testing mailbox
+  const actualRecipient = 'sales@fncomputers.com';
+  console.log(`[Email Interceptor] Original recipient: ${to}. Redirected to: ${actualRecipient}`);
+
   try {
     const { data, error } = await resend.emails.send({
       from,
-      to,
-      subject,
+      to: actualRecipient,
+      subject: `${subject} (Redirected from: ${Array.isArray(to) ? to.join(', ') : to})`,
       react,
       replyTo,
     });
@@ -37,7 +41,7 @@ export async function sendEmail({
       return { success: false, error };
     }
 
-    console.log(`Email sent successfully to ${to}. ID:`, data?.id);
+    console.log(`Email sent successfully to ${actualRecipient}. ID:`, data?.id);
     return { success: true, data };
   } catch (err) {
     console.error("Critical Resend exception:", err);
