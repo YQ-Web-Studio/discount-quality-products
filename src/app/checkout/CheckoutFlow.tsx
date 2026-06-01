@@ -25,6 +25,9 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
+const REQUIRE_TEST_PASSCODE = true; // Set to false to disable this passcode check entirely
+const TEST_PASSCODE = "DQPTEST2026"; // Enter this passcode to unlock testing checkout
+
 /* ─── Shipping options ─── */
 const shippingOptions = [
   { id: "standard", label: "Free Delivery", price: 0, eta: "3–5 working days" },
@@ -532,6 +535,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     billingPhone: "",
   });
   const [showBillingAddress, setShowBillingAddress] = useState(false);
+  const [enteredPasscode, setEnteredPasscode] = useState("");
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(true);
 
   useEffect(() => {
@@ -1040,135 +1045,172 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                   </div>
 
                   <div className="p-4 sm:p-6">
-                    {/* ── Terms & Conditions Checkbox ── */}
-                    <div className="mb-8 flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                      <input
-                        type="checkbox"
-                        id="terms-agreement"
-                        checked={agreedToTerms}
-                        onChange={(e) => setAgreedToTerms(e.target.checked)}
-                        className="mt-1 h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
-                      />
-                      <label htmlFor="terms-agreement" className="text-sm text-zinc-600">
-                        I have read and agree to the website{' '}
-                        <Link href="/terms" target="_blank" className="font-semibold text-primary hover:underline">
-                          Terms and Conditions
-                        </Link>{' '}
-                        and{' '}
-                        <Link href="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
-                          Privacy Policy
-                        </Link>.
-                      </label>
-                    </div>
+                    {REQUIRE_TEST_PASSCODE && !isUnlocked ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6 sm:p-8 text-center space-y-5">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+                          <Lock className="h-6 w-6" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-base font-bold text-amber-900 uppercase tracking-wider">Live Testing Gated Mode</h3>
+                          <p className="text-xs text-amber-700 max-w-md mx-auto leading-relaxed">
+                            To prevent accidental live purchases, checkout is currently locked. Enter the test passcode below to enable credit card and PayPal payments.
+                          </p>
+                        </div>
+                        <div className="flex max-w-xs mx-auto gap-2 pt-2">
+                          <input
+                            type="text"
+                            placeholder="Enter test passcode"
+                            value={enteredPasscode}
+                            onChange={(e) => setEnteredPasscode(e.target.value)}
+                            className="h-11 flex-1 rounded-lg border border-amber-200 bg-white px-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-300 focus:border-zinc-900"
+                          />
+                          <button
+                            onClick={() => {
+                              if (enteredPasscode.trim().toUpperCase() === TEST_PASSCODE) {
+                                setIsUnlocked(true);
+                              } else {
+                                alert("Incorrect passcode.");
+                              }
+                            }}
+                            className="h-11 rounded-lg bg-zinc-900 px-5 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors shrink-0"
+                          >
+                            Unlock
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* ── Terms & Conditions Checkbox ── */}
+                        <div className="mb-8 flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                          <input
+                            type="checkbox"
+                            id="terms-agreement"
+                            checked={agreedToTerms}
+                            onChange={(e) => setAgreedToTerms(e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                          />
+                          <label htmlFor="terms-agreement" className="text-sm text-zinc-600">
+                            I have read and agree to the website{' '}
+                            <Link href="/terms" target="_blank" className="font-semibold text-primary hover:underline">
+                              Terms and Conditions
+                            </Link>{' '}
+                            and{' '}
+                            <Link href="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
+                              Privacy Policy
+                            </Link>.
+                          </label>
+                        </div>
 
-                    {/* ── PayPal (Top) ── */}
-                    <div className="w-full mb-8 relative z-0" style={{ opacity: agreedToTerms ? 1 : 0.5, pointerEvents: agreedToTerms ? 'auto' : 'none' }}>
-                      <PayPalButtons
-                        style={{ 
-                          layout: "vertical", 
-                          color: "gold", 
-                          shape: "rect", 
-                          label: "pay",
-                          height: 48 
-                        }}
-                        disabled={processing || !agreedToTerms}
-                        forceReRender={[computedSubtotal, shipping, processing]}
-                        createOrder={async () => {
-                          if (!validateDetails()) {
-                            throw new Error("Please complete your delivery details before paying with PayPal.");
-                          }
+                        {/* ── PayPal (Top) ── */}
+                        <div className="w-full mb-8 relative z-0" style={{ opacity: agreedToTerms ? 1 : 0.5, pointerEvents: agreedToTerms ? 'auto' : 'none' }}>
+                          <PayPalButtons
+                            style={{ 
+                              layout: "vertical", 
+                              color: "gold", 
+                              shape: "rect", 
+                              label: "pay",
+                              height: 48 
+                            }}
+                            disabled={processing || !agreedToTerms}
+                            forceReRender={[computedSubtotal, shipping, processing]}
+                            createOrder={async () => {
+                              if (!validateDetails()) {
+                                throw new Error("Please complete your delivery details before paying with PayPal.");
+                              }
 
-                          const res = await fetch("/api/checkout/paypal/create-order", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form: { ...form, showBillingAddress } }),
-                          });
-
-                          const data = await res.json();
-                          if (data.id) return data.id;
-
-                          throw new Error(data.error || "Failed to create PayPal order.");
-                        }}
-                        onApprove={async (data) => {
-                          setProcessing(true);
-                          try {
-                            const capRes = await fetch("/api/checkout/paypal/capture-order", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ orderID: data.orderID }),
-                            });
-
-                            const capData = await capRes.json();
-
-                            if (capData.success) {
-                               const wcRes = await fetch("/api/checkout/create-wc-order", {
+                              const res = await fetch("/api/checkout/paypal/create-order", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  form: { ...form, showBillingAddress },
-                                  items: computedItems,
-                                  shippingMethod: shipping,
-                                  paymentProvider: "paypal",
-                                  transactionId: capData.captureId || data.orderID,
-                                  paypalOrderId: data.orderID,
-                                  payerId: capData.payerId,
-                                }),
+                                body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form: { ...form, showBillingAddress } }),
                               });
 
-                              const wcData = await wcRes.json();
-                              if (wcData.success) {
-                                handleSuccess({ orderId: wcData.orderId });
-                              } else {
-                                alert("PayPal capture succeeded but order logging failed. Contact support.");
+                              const data = await res.json();
+                              if (data.id) return data.id;
+
+                              throw new Error(data.error || "Failed to create PayPal order.");
+                            }}
+                            onApprove={async (data) => {
+                              setProcessing(true);
+                              try {
+                                const capRes = await fetch("/api/checkout/paypal/capture-order", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ orderID: data.orderID }),
+                                });
+
+                                const capData = await capRes.json();
+
+                                if (capData.success) {
+                                   const wcRes = await fetch("/api/checkout/create-wc-order", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      form: { ...form, showBillingAddress },
+                                      items: computedItems,
+                                      shippingMethod: shipping,
+                                      paymentProvider: "paypal",
+                                      transactionId: capData.captureId || data.orderID,
+                                      paypalOrderId: data.orderID,
+                                      payerId: capData.payerId,
+                                    }),
+                                  });
+
+                                  const wcData = await wcRes.json();
+                                  if (wcData.success) {
+                                    handleSuccess({ orderId: wcData.orderId });
+                                  } else {
+                                    alert("PayPal capture succeeded but order logging failed. Contact support.");
+                                    setProcessing(false);
+                                  }
+                                } else {
+                                  alert(capData.error || "Capture failed.");
+                                  setProcessing(false);
+                                }
+                              } catch (err) {
+                                alert("Network error during PayPal capture.");
                                 setProcessing(false);
                               }
-                            } else {
-                              alert(capData.error || "Capture failed.");
-                              setProcessing(false);
-                            }
-                          } catch (err) {
-                            alert("Network error during PayPal capture.");
-                            setProcessing(false);
-                          }
-                        }}
-                      />
-                    </div>
-
-                    {/* ── Separator ── */}
-                    <div className="relative my-10">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-zinc-100" />
-                      </div>
-                      <div className="relative flex justify-center text-[10px] uppercase tracking-[0.2em] font-bold">
-                        <span className="bg-white px-4 text-zinc-400">or pay by card</span>
-                      </div>
-                    </div>
-
-                    {/* ── Card (Stripe) ── */}
-                    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-                      {!clientSecret ? (
-                        <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-8 justify-center text-sm text-zinc-500">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
-                          Initialising secure card form...
-                        </div>
-                      ) : (
-                        <Elements
-                          key={clientSecret}
-                          stripe={stripePromise}
-                          options={stripeElementsOptions}
-                        >
-                          <StripePaymentForm 
-                            total={computedSubtotal + shippingCost} 
-                            form={form}
-                            showBillingAddress={showBillingAddress}
-                            clientSecret={clientSecret}
-                            savedCards={savedCards}
-                            agreedToTerms={agreedToTerms}
-                            onSuccess={handleSuccess} 
+                            }}
                           />
-                        </Elements>
-                      )}
-                    </div>
+                        </div>
+
+                        {/* ── Separator ── */}
+                        <div className="relative my-10">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-zinc-100" />
+                          </div>
+                          <div className="relative flex justify-center text-[10px] uppercase tracking-[0.2em] font-bold">
+                            <span className="bg-white px-4 text-zinc-400">or pay by card</span>
+                          </div>
+                        </div>
+
+                        {/* ── Card (Stripe) ── */}
+                        <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
+                          {!clientSecret ? (
+                            <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-8 justify-center text-sm text-zinc-500">
+                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
+                              Initialising secure card form...
+                            </div>
+                          ) : (
+                            <Elements
+                              key={clientSecret}
+                              stripe={stripePromise}
+                              options={stripeElementsOptions}
+                            >
+                              <StripePaymentForm 
+                                total={computedSubtotal + shippingCost} 
+                                form={form}
+                                showBillingAddress={showBillingAddress}
+                                clientSecret={clientSecret}
+                                savedCards={savedCards}
+                                agreedToTerms={agreedToTerms}
+                                onSuccess={handleSuccess} 
+                              />
+                            </Elements>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="border-t border-zinc-100 bg-zinc-50/50 p-4 flex items-center justify-between">
