@@ -91,7 +91,9 @@ export default async function Home() {
         ) : products.length > 0 ? (
           <MotionProductGrid>
             {products.slice(0, 6).map((product, idx) => (
-              <ProductCard key={`featured-${product.databaseId}`} product={product} priority={idx < 2} />
+              <div key={`featured-${product.databaseId}`} className={idx === 5 ? "xl:hidden" : ""}>
+                <ProductCard product={product} priority={idx < 2} />
+              </div>
             ))}
           </MotionProductGrid>
         ) : (
@@ -127,7 +129,9 @@ export default async function Home() {
         ) : newArrivals.length > 0 ? (
           <MotionProductGrid>
             {newArrivals.slice(0, 6).map((product, idx) => (
-              <ProductCard key={`new-${product.databaseId}`} product={product} priority={idx < 2} />
+              <div key={`new-${product.databaseId}`} className={idx === 5 ? "xl:hidden" : ""}>
+                <ProductCard product={product} priority={idx < 2} />
+              </div>
             ))}
           </MotionProductGrid>
         ) : (
