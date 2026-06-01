@@ -103,8 +103,8 @@ export default function ContactContent() {
               </div>
               <div className="flex flex-col pt-1">
                 <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">Email Support</span>
-                <a href="mailto:sales@discountqualityproducts.org.uk" className="text-base font-bold text-zinc-900 hover:text-primary transition-colors mt-1">
-                  sales@discountqualityproducts.org.uk
+                <a href="mailto:sales@discountproducts.co.uk" className="text-base font-bold text-zinc-900 hover:text-primary transition-colors mt-1">
+                  sales@discountproducts.co.uk
                 </a>
               </div>
             </motion.div>

@@ -61,8 +61,8 @@ export default function RefundsPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               To exercise your right to cancel, you must inform us of your decision by a clear
               statement via email at{' '}
-              <a href="mailto:info@discountproducts.co.uk" className="text-primary hover:underline">
-                info@discountproducts.co.uk
+              <a href="mailto:sales@discountproducts.co.uk" className="text-primary hover:underline">
+                sales@discountproducts.co.uk
               </a>{' '}
               before the 14-day period expires.
             </p>

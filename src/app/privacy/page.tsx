@@ -24,7 +24,7 @@ const sections = [
   },
   {
     title: '4. Your Rights (GDPR & UK Data Protection Act)',
-    body: 'If you are a UK or European resident, you have the right to access personal information we hold about you and to ask that your personal information be corrected, updated, or deleted. If you would like to exercise this right, please contact us at info@discountproducts.co.uk.',
+    body: 'If you are a UK or European resident, you have the right to access personal information we hold about you and to ask that your personal information be corrected, updated, or deleted. If you would like to exercise this right, please contact us at sales@discountproducts.co.uk.',
   },
   {
     title: '5. Data Retention',
@@ -32,7 +32,7 @@ const sections = [
   },
   {
     title: '6. Contact Us',
-    body: 'For more information about our privacy practices, please contact us by email at info@discountproducts.co.uk.',
+    body: 'For more information about our privacy practices, please contact us by email at sales@discountproducts.co.uk.',
   },
 ];
 

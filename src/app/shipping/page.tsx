@@ -98,10 +98,10 @@ export default function ShippingPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               If you receive your order damaged, please contact our support team immediately at{' '}
               <a
-                href="mailto:info@discountproducts.co.uk"
+                href="mailto:sales@discountproducts.co.uk"
                 className="text-primary hover:underline"
               >
-                info@discountproducts.co.uk
+                sales@discountproducts.co.uk
               </a>{' '}
               to file a claim. Please save all packaging materials and damaged goods before filing a
               claim.
