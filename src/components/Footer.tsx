@@ -6,7 +6,7 @@ import { Mail, Phone, MapPin } from "lucide-react";
 const footerLinks = {
   "Customer Service": [
     { label: "Contact Us", href: "/contact" },
-    { label: "Order Tracking", href: "/track" },
+    { label: "Buying Guides", href: "/guides" },
     { label: "Returns & Refunds", href: "/returns" },
   ],
   "Legal": [
