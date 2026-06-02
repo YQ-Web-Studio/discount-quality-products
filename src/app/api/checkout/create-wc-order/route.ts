@@ -15,6 +15,7 @@ interface CheckoutCustomerForm {
   county: string;
   postcode: string;
   phone?: string;
+  country?: string;
 
   showBillingAddress?: boolean;
   billingFirstName?: string;
@@ -25,6 +26,7 @@ interface CheckoutCustomerForm {
   billingCounty?: string;
   billingPostcode?: string;
   billingPhone?: string;
+  billingCountry?: string;
 }
 
 interface CheckoutItem {
@@ -96,7 +98,7 @@ export async function POST(req: Request) {
       city: form.city,
       state: form.county, // Aligning county to WooCommerce state parameter
       postcode: form.postcode,
-      country: "GB",
+      country: form.country || "GB",
       phone: form.phone || "",
     };
 
@@ -109,7 +111,7 @@ export async function POST(req: Request) {
       city: isBillingDifferent ? (form.billingCity || form.city) : form.city,
       state: isBillingDifferent ? (form.billingCounty || form.county) : form.county, // Aligning county to WooCommerce state parameter
       postcode: isBillingDifferent ? (form.billingPostcode || form.postcode) : form.postcode,
-      country: "GB",
+      country: isBillingDifferent ? (form.billingCountry || form.country || "GB") : (form.country || "GB"),
       email: form.email,
       phone: isBillingDifferent ? (form.billingPhone || form.phone || "") : (form.phone || ""),
     };

@@ -532,6 +532,188 @@ export async function getAllProductSlugs(limit: number = 10000): Promise<{ slug:
   return results;
 }
 
+// ─── WordPress Posts (Trade Hub / Guides) ────────────────────────────────────
+
+export interface WpPost {
+  id: string;
+  databaseId: number;
+  slug: string;
+  title: string;
+  content: string;
+  excerpt?: string;
+  date: string;
+  modified: string;
+  author?: {
+    node?: {
+      name?: string;
+    };
+  };
+  featuredImage?: {
+    node?: {
+      sourceUrl: string;
+      altText?: string;
+      mediaDetails?: {
+        width?: number;
+        height?: number;
+      };
+    };
+  };
+  categories?: {
+    nodes: { name: string; slug: string }[];
+  };
+}
+
+/**
+ * Fetches a single WordPress post by its slug.
+ * Returns null if the post does not exist.
+ */
+export async function getPostBySlug(slug: string): Promise<WpPost | null> {
+  const query = `
+    query GetPostBySlug($slug: ID!) {
+      post(id: $slug, idType: SLUG) {
+        id
+        databaseId
+        slug
+        title
+        content
+        excerpt
+        date
+        modified
+        author {
+          node {
+            name
+          }
+        }
+        featuredImage {
+          node {
+            sourceUrl
+            altText
+            mediaDetails {
+              width
+              height
+            }
+          }
+        }
+        categories {
+          nodes {
+            name
+            slug
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const data = await wpFetch<{ post: WpPost | null }>(query, { slug });
+    return data.post ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches a paginated list of published WordPress posts for the guides index.
+ */
+export async function getPosts(first: number = 12, after: string | null = null): Promise<{
+  posts: WpPost[];
+  pageInfo: PageInfo;
+}> {
+  const query = `
+    query GetPosts($first: Int, $after: String) {
+      posts(first: $first, after: $after, where: { status: PUBLISH, orderby: { field: DATE, order: DESC } }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          databaseId
+          slug
+          title
+          excerpt
+          date
+          modified
+          author {
+            node {
+              name
+            }
+          }
+          featuredImage {
+            node {
+              sourceUrl
+              altText
+            }
+          }
+          categories {
+            nodes {
+              name
+              slug
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const data = await wpFetch<{ posts: { nodes: WpPost[]; pageInfo: PageInfo } }>(query, { first, after });
+    return {
+      posts: data.posts.nodes,
+      pageInfo: data.posts.pageInfo,
+    };
+  } catch {
+    return { posts: [], pageInfo: { hasNextPage: false, endCursor: '' } };
+  }
+}
+
+/**
+ * Fetches all published post slugs and their last-modified dates.
+ * Used for sitemap generation.
+ */
+export async function getAllPostSlugs(): Promise<{ slug: string; date: string }[]> {
+  const query = `
+    query GetAllPostSlugs($first: Int, $after: String) {
+      posts(first: $first, after: $after, where: { status: PUBLISH }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          slug
+          modified
+        }
+      }
+    }
+  `;
+
+  let results: { slug: string; date: string }[] = [];
+  let hasNextPage = true;
+  let after: string | null = null;
+  const batchSize = 100;
+
+  type PostSlugsResponse = {
+    posts: { nodes: { slug: string; modified: string }[]; pageInfo: PageInfo };
+  };
+
+  try {
+    while (hasNextPage) {
+      const data: PostSlugsResponse = await wpFetch<PostSlugsResponse>(query, { first: batchSize, after });
+
+      const nodes: { slug: string; modified: string }[] = data.posts?.nodes || [];
+      results = [...results, ...nodes.map((n: { slug: string; modified: string }) => ({ slug: n.slug, date: n.modified || new Date().toISOString() }))];
+
+      hasNextPage = data.posts?.pageInfo?.hasNextPage ?? false;
+      after = data.posts?.pageInfo?.endCursor ?? null;
+      if (!hasNextPage || !after) break;
+    }
+  } catch (error) {
+    console.error('Error fetching all post slugs for sitemap:', error);
+  }
+
+  return results;
+}
+
 export async function searchProducts(search: string, first: number = 10): Promise<UnifiedSearchResult[]> {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}

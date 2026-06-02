@@ -18,10 +18,15 @@ import { ProductGallery } from '@/components/ProductGallery';
 import { RelatedProducts } from '@/components/RelatedProducts';
 import { RecentlyViewedTracker } from '@/components/RecentlyViewedTracker';
 import { Breadcrumbs } from '@/components/navigation/Breadcrumbs';
-import { ProductStructuredData } from '@/components/seo/ProductStructuredData';
+import { ProductSchema } from '@/components/seo/ProductSchema';
 import type { Metadata } from 'next';
 export const revalidate = 3600;
 export const dynamicParams = true;
+
+type ProductPageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+};
 
 export async function generateStaticParams() {
   // Return an empty array to disable pre-rendering at build time.
@@ -31,38 +36,43 @@ export async function generateStaticParams() {
 
 // ─── Per-page metadata ─────────────────────────────────────────────────────────
 export async function generateMetadata(
-  props: PageProps<'/products/[slug]'>
+  props: ProductPageProps
 ): Promise<Metadata> {
   const { slug } = await props.params;
   const product = await getProductBySlug(slug);
 
   if (!product) {
-    return { title: 'Product Not Found | Discount Quality Products' };
+    notFound();
   }
 
   const description =
     product.shortDescription?.replace(/<[^>]*>/g, "").trim().slice(0, 155) ||
-    `Buy ${product.name} from Discount Quality Products. Premium quality, competitive prices.`;
+    `Buy ${product.name} from Discount Products. Premium quality, competitive prices with free standard UK delivery.`;
+
+  const absoluteUrl = `https://www.discountproducts.co.uk/products/${slug}`;
+  const imageUrl = product.image?.sourceUrl || "";
 
   return {
-    title: product.name,
+    title: `${product.name} | Discount Products`,
     description,
+    alternates: {
+      canonical: absoluteUrl,
+    },
     openGraph: {
       title: product.name,
       description,
+      url: absoluteUrl,
       type: "website",
-      images: product.image?.sourceUrl
-        ? [{ url: product.image.sourceUrl, width: 800, height: 800, alt: product.name }]
+      siteName: "Discount Products",
+      images: imageUrl
+        ? [{ url: imageUrl, width: 800, height: 800, alt: product.name }]
         : [],
     },
     twitter: {
       card: "summary_large_image",
       title: product.name,
       description,
-      images: product.image?.sourceUrl ? [product.image.sourceUrl] : [],
-    },
-    alternates: {
-      canonical: `https://discountqualityproducts.co.uk/products/${slug}`,
+      images: imageUrl ? [imageUrl] : [],
     },
   };
 }
@@ -75,7 +85,8 @@ const trustItems = [
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default async function ProductPage(props: PageProps<'/products/[slug]'>) {
+export default async function ProductPage(props: ProductPageProps) {
+
   const { slug } = await props.params;
   const product = await getProductBySlug(slug);
 
@@ -134,7 +145,7 @@ export default async function ProductPage(props: PageProps<'/products/[slug]'>) 
       </div>
 
       <RecentlyViewedTracker product={product} />
-      <ProductStructuredData product={product} slug={slug} />
+      <ProductSchema product={product} />
 
       {/* ── Main content ── */}
       <main className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-8 pb-8 pt-8 md:px-12 2xl:px-16">

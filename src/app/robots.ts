@@ -17,6 +17,6 @@ export default function robots(): MetadataRoute.Robots {
         "*?*q=*", // prevent dynamic search pages from consuming crawl budget
       ],
     },
-    sitemap: "https://discountqualityproducts.co.uk/sitemap.xml",
+    sitemap: "https://www.discountproducts.co.uk/sitemap.xml",
   };
 }

@@ -22,7 +22,7 @@ export function AddressForm({ type, customer }: AddressFormProps) {
   const [county, setCounty] = useState(initialAddress?.state || "");
   const [postcode, setPostcode] = useState(initialAddress?.postcode || "");
   const [phone, setPhone] = useState(initialAddress?.phone || "");
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +169,6 @@ export function AddressForm({ type, customer }: AddressFormProps) {
                 type="text"
                 value={county}
                 onChange={(e) => setCounty(e.target.value)}
-                placeholder="e.g. London or Surrey"
                 disabled={isSaving}
                 className="bg-white"
               />
@@ -207,9 +206,9 @@ export function AddressForm({ type, customer }: AddressFormProps) {
           )}
 
           <div className="flex items-center gap-4 pt-2">
-            <Button 
-              type="submit" 
-              className="w-full sm:w-auto bg-zinc-900 text-white hover:bg-zinc-800 transition-all" 
+            <Button
+              type="submit"
+              className="w-full sm:w-auto bg-zinc-900 text-white hover:bg-zinc-800 transition-all"
               disabled={isSaving}
             >
               {isSaving ? (

@@ -91,24 +91,101 @@ function Field({
   );
 }
 
+const COUNTRIES = [
+  { code: "GB", name: "United Kingdom" },
+  // Easily enable other countries later:
+  // { code: "US", name: "United States" },
+  // { code: "CA", name: "Canada" },
+];
+
+/* ─── Form select field ─── */
+function SelectField({
+  label,
+  id,
+  value,
+  onChange,
+  options,
+  error,
+  disabled = false,
+}: {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { code: string; name: string }[];
+  error?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+        {label}
+      </label>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className={cn(
+            "h-11 w-full rounded-lg border bg-white px-3 text-sm text-zinc-900 outline-none transition-colors appearance-none cursor-pointer",
+            "focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900",
+            error ? "border-red-400" : "border-zinc-200"
+          )}
+        >
+          {options.map((opt) => (
+            <option key={opt.code} value={opt.code}>
+              {opt.name}
+            </option>
+          ))}
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-500">
+          <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+          </svg>
+        </div>
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 /* ─── Order summary sidebar ─── */
 function OrderSummary({ 
   shippingCost, 
   items, 
   subtotal,
   onUpdateQuantity,
-  onRemove
+  onRemove,
+  appliedCoupon,
+  discountAmount,
+  onRemoveCoupon,
+  couponCode,
+  setCouponCode,
+  onApplyCoupon,
+  couponError,
+  couponSuccess,
+  couponLoading
 }: { 
   shippingCost: number;
   items: CheckoutLineItem[];
   subtotal: number;
   onUpdateQuantity: (id: string, qty: number) => void;
   onRemove: (id: string) => void;
+  appliedCoupon: string | null;
+  discountAmount: number;
+  onRemoveCoupon: () => void;
+  couponCode: string;
+  setCouponCode: (code: string) => void;
+  onApplyCoupon: (e: React.FormEvent) => void;
+  couponError: string | null;
+  couponSuccess: string | null;
+  couponLoading: boolean;
 }) {
   const isMounted = useIsMounted();
-  // VAT-inclusive: prices already contain VAT. Extract it for display.
-  const vatIncluded = subtotal / 6;
-  const total = subtotal + shippingCost;
+  const netTotal = subtotal - discountAmount;
+  const vatIncluded = netTotal / 6;
+  const total = netTotal + shippingCost;
 
   if (!isMounted) {
     return (
@@ -175,11 +252,26 @@ function OrderSummary({
       </div>
 
       {/* Totals */}
-      <div className="border-t border-zinc-100 px-5 py-4 space-y-2">
+      <div className="border-t border-zinc-100 px-5 py-4 space-y-2 bg-zinc-50/30">
         <div className="flex justify-between text-xs text-zinc-500">
-          <span>Items</span>
+          <span>Items Subtotal</span>
           <span>£{subtotal.toFixed(2)}</span>
         </div>
+        {discountAmount > 0 && (
+          <div className="flex justify-between text-xs text-primary font-semibold">
+            <span className="flex items-center gap-1">
+              Promo ({appliedCoupon})
+              <button 
+                type="button" 
+                onClick={onRemoveCoupon}
+                className="text-[10px] text-red-500 hover:text-red-700 font-bold ml-1 hover:underline"
+              >
+                Remove
+              </button>
+            </span>
+            <span>-£{discountAmount.toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-xs text-zinc-500">
           <span>Shipping</span>
           <span>{shippingCost > 0 ? `£${shippingCost.toFixed(2)}` : "Free"}</span>
@@ -191,6 +283,43 @@ function OrderSummary({
         <p className="text-right text-[11px] text-zinc-400">
           Includes £{vatIncluded.toFixed(2)} VAT
         </p>
+      </div>
+
+      {/* Promo Code Input Block */}
+      <div className="border-t border-zinc-100 p-4 bg-white">
+        <form onSubmit={onApplyCoupon} className="space-y-2">
+          <label htmlFor="promoCode" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+            Promo Code
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="promoCode"
+              type="text"
+              placeholder="Enter code"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              disabled={couponLoading}
+              className="flex-1 h-9 rounded-lg border border-zinc-200 px-3 text-xs text-zinc-900 outline-none placeholder:text-zinc-300 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 uppercase disabled:bg-zinc-50"
+            />
+            <button
+              type="submit"
+              disabled={couponLoading || !couponCode.trim()}
+              className="h-9 rounded-lg bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-not-allowed shrink-0"
+            >
+              {couponLoading ? "Applying..." : "Apply"}
+            </button>
+          </div>
+        </form>
+        {couponError && (
+          <p className="mt-2 text-xs text-red-500 font-medium animate-in fade-in duration-200">
+            {couponError}
+          </p>
+        )}
+        {couponSuccess && (
+          <p className="mt-2 text-xs text-primary font-medium animate-in fade-in duration-200">
+            {couponSuccess}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -278,21 +407,21 @@ function StripePaymentForm({
 
     const billingAddress = showBillingAddress
       ? {
-          line1: form.billingAddress1 || "",
-          line2: form.billingAddress2 || undefined,
-          city: form.billingCity || "",
-          state: form.billingCounty || "",
-          postal_code: form.billingPostcode || "",
-          country: 'GB',
-        }
+        line1: form.billingAddress1 || "",
+        line2: form.billingAddress2 || undefined,
+        city: form.billingCity || "",
+        state: form.billingCounty || "",
+        postal_code: form.billingPostcode || "",
+        country: form.billingCountry || 'GB',
+      }
       : {
-          line1: form.address1 || "",
-          line2: form.address2 || undefined,
-          city: form.city || "",
-          state: form.county || "",
-          postal_code: form.postcode || "",
-          country: 'GB',
-        };
+        line1: form.address1 || "",
+        line2: form.address2 || undefined,
+        city: form.city || "",
+        state: form.county || "",
+        postal_code: form.postcode || "",
+        country: form.country || 'GB',
+      };
 
     const billingPhone = showBillingAddress
       ? form.billingPhone || undefined
@@ -338,11 +467,10 @@ function StripePaymentForm({
               {savedCards.map((card) => (
                 <label
                   key={card.id}
-                  className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${
-                    selectedCardId === card.id
+                  className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${selectedCardId === card.id
                       ? "border-zinc-900 bg-zinc-50"
                       : "border-zinc-200 hover:border-zinc-300 bg-white"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <input
@@ -366,11 +494,10 @@ function StripePaymentForm({
               ))}
 
               <label
-                className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${
-                  selectedCardId === "new"
+                className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${selectedCardId === "new"
                     ? "border-zinc-900 bg-zinc-50"
                     : "border-zinc-200 hover:border-zinc-300 bg-white"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <input
@@ -397,7 +524,7 @@ function StripePaymentForm({
               Card Details
             </h3>
             <div className="rounded-lg border border-zinc-200 bg-white p-4">
-              <PaymentElement 
+              <PaymentElement
                 key="stripe-payment-element"
                 options={{
                   defaultValues: {
@@ -413,7 +540,7 @@ function StripePaymentForm({
                         city: (showBillingAddress ? form.billingCity : form.city) || undefined,
                         state: (showBillingAddress ? form.billingCounty : form.county) || undefined,
                         postal_code: (showBillingAddress ? form.billingPostcode : form.postcode) || undefined,
-                        country: 'GB',
+                        country: (showBillingAddress ? form.billingCountry : form.country) || 'GB',
                       }
                     }
                   }
@@ -427,7 +554,7 @@ function StripePaymentForm({
         <button
           onClick={selectedCardId === "new" ? handlePay : handlePayWithSavedCard}
           disabled={processing || !stripe || (!elements && selectedCardId === "new") || !agreedToTerms}
-          className="relative w-full overflow-hidden rounded-lg bg-zinc-900 px-6 py-4 flex items-center justify-center gap-2 text-sm font-medium text-white transition-all hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed"
+          className="relative w-full overflow-hidden rounded-lg bg-primary px-6 py-4 flex items-center justify-center gap-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:bg-zinc-300 disabled:cursor-not-allowed"
         >
           {processing ? (
             <>
@@ -472,7 +599,7 @@ export default function CheckoutWrapper({ directCheckoutItem }: { directCheckout
 function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLineItem }) {
   const isMounted = useIsMounted();
   const router = useRouter();
-  
+
   // Persistent Basket State
   const rawItems = useBasket((s) => s.items);
   const clearBasket = useBasket((s) => s.clearBasket);
@@ -524,6 +651,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     county: "",
     postcode: "",
     phone: "",
+    country: "GB",
 
     billingFirstName: "",
     billingLastName: "",
@@ -533,6 +661,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     billingCounty: "",
     billingPostcode: "",
     billingPhone: "",
+    billingCountry: "GB",
   });
   const [showBillingAddress, setShowBillingAddress] = useState(false);
   const [enteredPasscode, setEnteredPasscode] = useState("");
@@ -546,7 +675,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
           fetch("/api/account/customer"),
           fetch("/api/auth/session")
         ]);
-        
+
         if (customerRes.ok) {
           const customerData = await customerRes.json();
           const sessionData = sessionRes.ok ? await sessionRes.json() : null;
@@ -556,7 +685,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
             // Prefer shipping address, fallback to billing
             const address = c.shipping?.address_1 ? c.shipping : c.billing;
             const bAddress = c.billing || {};
-            
+
             const fallbackName = sessionData?.user?.name || "";
             const fallbackFirstName = fallbackName.split(" ")[0] || "";
             const fallbackLastName = fallbackName.split(" ").slice(1).join(" ") || "";
@@ -571,6 +700,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
               county: prev.county || address?.state || "",
               postcode: prev.postcode || address?.postcode || "",
               phone: prev.phone || address?.phone || "",
+              country: prev.country || address?.country || "GB",
 
               billingFirstName: prev.billingFirstName || bAddress.first_name || "",
               billingLastName: prev.billingLastName || bAddress.last_name || "",
@@ -580,6 +710,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
               billingCounty: prev.billingCounty || bAddress.state || "",
               billingPostcode: prev.billingPostcode || bAddress.postcode || "",
               billingPhone: prev.billingPhone || bAddress.phone || "",
+              billingCountry: prev.billingCountry || bAddress.country || "GB",
             }));
           }
         }
@@ -613,7 +744,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     if (!clientSecret) return undefined;
     return {
       clientSecret,
-      appearance: { 
+      appearance: {
         theme: "stripe" as const,
         variables: {
           colorPrimary: "#18181b",
@@ -631,6 +762,68 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     [shipping]
   );
 
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const discountAmount = useMemo(() => {
+    if (appliedCoupon === "THANKYOU10") {
+      return computedSubtotal * 0.1; // 10% discount
+    }
+    return 0;
+  }, [appliedCoupon, computedSubtotal]);
+
+  const finalTotal = computedSubtotal - discountAmount + shippingCost;
+
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponCode.trim()) return;
+
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponSuccess(null);
+
+    const code = couponCode.trim().toUpperCase();
+
+    if (code === "THANKYOU10") {
+      const USED_COUPON_EMAILS = ["used@discountproducts.co.uk", "alreadyused@gmail.com", "customer@example.com"];
+      const currentEmail = form.email.trim().toLowerCase();
+      if (currentEmail && USED_COUPON_EMAILS.includes(currentEmail)) {
+        setCouponError("This coupon code has already been used with this email address.");
+        setCouponLoading(false);
+        return;
+      }
+
+      setAppliedCoupon(code);
+      setCouponSuccess(`Coupon "${code}" applied successfully! (10% Off)`);
+      setCouponCode("");
+    } else {
+      setCouponError("Invalid coupon code.");
+    }
+    setCouponLoading(false);
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponSuccess(null);
+    setCouponError(null);
+  };
+
+  // Email-validation edge case: automatically validate and strip coupon if email changes to an already-used one
+  useEffect(() => {
+    if (appliedCoupon === "THANKYOU10" && form.email) {
+      const emailLower = form.email.trim().toLowerCase();
+      const USED_COUPON_EMAILS = ["used@discountproducts.co.uk", "alreadyused@gmail.com", "customer@example.com"];
+      if (USED_COUPON_EMAILS.includes(emailLower)) {
+        setAppliedCoupon(null);
+        setCouponSuccess(null);
+        setCouponError("This discount code has already been used with this email address.");
+      }
+    }
+  }, [form.email, appliedCoupon]);
+
   const [fetchingSecret, setFetchingSecret] = useState(false);
   const preparedCheckoutSnapshotRef = useRef<string | null>(null);
 
@@ -640,8 +833,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         items: computedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
         shipping,
         form: { ...form, showBillingAddress },
+        couponCode: appliedCoupon,
       }),
-    [computedItems, form, shipping, showBillingAddress]
+    [computedItems, form, shipping, showBillingAddress, appliedCoupon]
   );
 
   useEffect(() => {
@@ -662,7 +856,6 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Invalid email";
     if (!form.address1.trim()) e.address1 = "Required";
     if (!form.city.trim()) e.city = "Required";
-    if (!form.county.trim()) e.county = "Required";
     if (!form.postcode.trim()) e.postcode = "Required";
     else if (!/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.postcode.trim()))
       e.postcode = "Invalid UK postcode";
@@ -672,7 +865,6 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
       if (!form.billingLastName.trim()) e.billingLastName = "Required";
       if (!form.billingAddress1.trim()) e.billingAddress1 = "Required";
       if (!form.billingCity.trim()) e.billingCity = "Required";
-      if (!form.billingCounty.trim()) e.billingCounty = "Required";
       if (!form.billingPostcode.trim()) e.billingPostcode = "Required";
       else if (!/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.billingPostcode.trim()))
         e.billingPostcode = "Invalid UK postcode";
@@ -696,7 +888,12 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         headers: { "Content-Type": "application/json" },
         // Pass the full form so customer data is embedded securely in the
         // Stripe PaymentIntent metadata for webhook-side order creation.
-        body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form: { ...form, showBillingAddress } })
+        body: JSON.stringify({ 
+          items: computedItems, 
+          shippingMethod: shipping, 
+          form: { ...form, showBillingAddress },
+          couponCode: appliedCoupon,
+        })
       });
       const data = await res.json();
       if (data.clientSecret) {
@@ -798,9 +995,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-full border text-[11px]",
                   isActive
-                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : isComplete
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                      ? "border-primary/20 bg-primary/5 text-primary"
                       : "border-zinc-200 bg-white text-zinc-400"
                 )}
               >
@@ -825,7 +1022,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                     Enter your delivery address and contact information.
                   </p>
                 </div>
-                
+
                 {isAutofilling && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-sm">
                     <div className="flex flex-col items-center gap-2">
@@ -897,12 +1094,11 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                         autoComplete="address-level2"
                       />
                       <Field
-                        label="County"
+                        label="County (Optional)"
                         id="county"
                         value={form.county || ""}
                         onChange={(v) => setForm((f) => ({ ...f, county: v }))}
                         error={errors.county}
-                        placeholder="e.g. Greater London"
                         autoComplete="address-level1"
                       />
                       <Field
@@ -913,6 +1109,14 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                         error={errors.postcode}
                         placeholder="e.g. SW1A 1AA"
                         autoComplete="postal-code"
+                      />
+                      <SelectField
+                        label="Country"
+                        id="country"
+                        value={form.country}
+                        onChange={(v) => setForm((f) => ({ ...f, country: v }))}
+                        options={COUNTRIES}
+                        error={errors.country}
                       />
                       <Field
                         label="Phone Number (Optional)"
@@ -990,12 +1194,11 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           autoComplete="billing address-level2"
                         />
                         <Field
-                          label="County"
+                          label="County (Optional)"
                           id="billingCounty"
                           value={form.billingCounty || ""}
                           onChange={(v) => setForm((f) => ({ ...f, billingCounty: v }))}
                           error={errors.billingCounty}
-                          placeholder="e.g. Greater London"
                           autoComplete="billing address-level1"
                         />
                         <Field
@@ -1006,6 +1209,14 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           error={errors.billingPostcode}
                           placeholder="e.g. SW1A 1AA"
                           autoComplete="billing postal-code"
+                        />
+                        <SelectField
+                          label="Country"
+                          id="billingCountry"
+                          value={form.billingCountry}
+                          onChange={(v) => setForm((f) => ({ ...f, billingCountry: v }))}
+                          options={COUNTRIES}
+                          error={errors.billingCountry}
                         />
                         <Field
                           label="Phone Number (Optional)"
@@ -1023,7 +1234,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                 <div className="mt-6 flex justify-end">
                   <button
                     onClick={goToPaymentStep}
-                    className="inline-flex w-full justify-center sm:w-auto items-center gap-2 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
+                    className="inline-flex w-full justify-center sm:w-auto items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                   >
                     Continue to payment
                     <ArrowRight className="h-4 w-4" />
@@ -1072,7 +1283,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                                 alert("Incorrect passcode.");
                               }
                             }}
-                            className="h-11 rounded-lg bg-zinc-900 px-5 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors shrink-0"
+                            className="h-11 rounded-lg bg-primary px-5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
                           >
                             Unlock
                           </button>
@@ -1104,12 +1315,12 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                         {/* ── PayPal (Top) ── */}
                         <div className="w-full mb-8 relative z-0" style={{ opacity: agreedToTerms ? 1 : 0.5, pointerEvents: agreedToTerms ? 'auto' : 'none' }}>
                           <PayPalButtons
-                            style={{ 
-                              layout: "vertical", 
-                              color: "gold", 
-                              shape: "rect", 
+                            style={{
+                              layout: "vertical",
+                              color: "gold",
+                              shape: "rect",
                               label: "pay",
-                              height: 48 
+                              height: 48
                             }}
                             disabled={processing || !agreedToTerms}
                             forceReRender={[computedSubtotal, shipping, processing]}
@@ -1121,7 +1332,12 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               const res = await fetch("/api/checkout/paypal/create-order", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ items: computedItems, shippingMethod: shipping, form: { ...form, showBillingAddress } }),
+                                body: JSON.stringify({ 
+                                  items: computedItems, 
+                                  shippingMethod: shipping, 
+                                  form: { ...form, showBillingAddress },
+                                  couponCode: appliedCoupon,
+                                }),
                               });
 
                               const data = await res.json();
@@ -1141,7 +1357,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                                 const capData = await capRes.json();
 
                                 if (capData.success) {
-                                   const wcRes = await fetch("/api/checkout/create-wc-order", {
+                                  const wcRes = await fetch("/api/checkout/create-wc-order", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
@@ -1197,14 +1413,14 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               stripe={stripePromise}
                               options={stripeElementsOptions}
                             >
-                              <StripePaymentForm 
-                                total={computedSubtotal + shippingCost} 
+                              <StripePaymentForm
+                                total={finalTotal}
                                 form={form}
                                 showBillingAddress={showBillingAddress}
                                 clientSecret={clientSecret}
                                 savedCards={savedCards}
                                 agreedToTerms={agreedToTerms}
-                                onSuccess={handleSuccess} 
+                                onSuccess={handleSuccess}
                               />
                             </Elements>
                           )}
@@ -1235,12 +1451,21 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         {/* ── Right: Order Summary ── */}
         <div className="w-full lg:w-[360px] shrink-0 order-1 lg:order-2">
           <div className="lg:sticky lg:top-24">
-            <OrderSummary 
-              shippingCost={shippingCost} 
+            <OrderSummary
+              shippingCost={shippingCost}
               items={computedItems}
               subtotal={computedSubtotal}
               onUpdateQuantity={handleUpdateQuantity}
               onRemove={handleRemoveItem}
+              appliedCoupon={appliedCoupon}
+              discountAmount={discountAmount}
+              onRemoveCoupon={handleRemoveCoupon}
+              couponCode={couponCode}
+              setCouponCode={setCouponCode}
+              onApplyCoupon={handleApplyCoupon}
+              couponError={couponError}
+              couponSuccess={couponSuccess}
+              couponLoading={couponLoading}
             />
 
             {/* Trust signals */}

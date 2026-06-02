@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Returns & Refund Policy | Discount Quality Products',
+  title: 'Refund & Cancellation Policy | Discount Quality Products',
   description:
-    'Understand your 30-day returns window and our refund process at Discount Quality Products, including card and PayPal refund timelines.',
+    'Understand your 14-day right to cancel and our refund process at Discount Quality Products, in accordance with UK Consumer Contracts Regulations.',
   alternates: { canonical: 'https://discountqualityproducts.co.uk/refunds' },
 };
 
@@ -29,41 +29,42 @@ export default function RefundsPage() {
             <p className="text-xs font-bold uppercase tracking-widest text-primary">Legal</p>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 sm:text-5xl mb-3">
-            Returns & Refund Policy
+            Refund & Cancellation Policy
           </h1>
-          <p className="text-sm text-zinc-500">Last Updated: June 1, 2026</p>
+          <p className="text-sm text-zinc-500">Last Updated: May 20, 2026</p>
         </div>
       </div>
 
       {/* Body */}
       <div className="mx-auto max-w-4xl px-6 sm:px-8 py-14 md:py-20">
         <p className="text-base text-zinc-600 leading-relaxed mb-12 border-l-4 border-primary/30 pl-5">
-          Thank you for shopping with Discount Quality Products. We want you to be completely satisfied with your purchase. 
-          If you need to make a return, we offer a straightforward, customer-friendly policy.
+          Under the UK Consumer Contracts Regulations, you have the statutory right to cancel your
+          order and request a refund for any reason within a specific timeframe.
         </p>
 
         <div className="space-y-10">
-          {/* 30-day highlight card */}
+          {/* 14-day highlight card */}
           <section>
-            <h2 className="text-lg font-bold text-zinc-900 mb-4">1. Your 30-Day Returns Window</h2>
+            <h2 className="text-lg font-bold text-zinc-900 mb-4">1. Your 14-Day Right to Cancel</h2>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 mb-4 flex items-start gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
                 <RotateCcw className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800 mb-1">30-Day Satisfaction Period</p>
+                <p className="text-sm font-bold text-emerald-800 mb-1">14-Day Cooling-Off Period</p>
                 <p className="text-sm text-emerald-700 leading-relaxed">
-                  You have the right to return your purchase for any reason within <strong>30 days</strong> from
-                  the day you receive the goods — no hassle, no fuss.
+                  You have the right to cancel your purchase within <strong>14 days</strong> from
+                  the day you receive the goods — no questions asked.
                 </p>
               </div>
             </div>
             <p className="text-base text-zinc-600 leading-relaxed">
-              To exercise your right to cancel or return an item, you must inform us of your decision by submitting a request through our returns portal or contacting us via email at{' '}
+              To exercise your right to cancel, you must inform us of your decision by a clear
+              statement via email at{' '}
               <a href="mailto:sales@discountproducts.co.uk" className="text-primary hover:underline">
                 sales@discountproducts.co.uk
               </a>{' '}
-              before the 30-day period expires.
+              before the 14-day period expires.
             </p>
           </section>
 
@@ -78,23 +79,13 @@ export default function RefundsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-bold text-zinc-900 mb-3">3. Processing & Receiving Refunds</h2>
-            <p className="text-base text-zinc-600 leading-relaxed mb-4">
-              Once your returned item is received and inspected by our warehouse team, we will process your refund immediately. 
+            <h2 className="text-lg font-bold text-zinc-900 mb-3">3. Processing Refunds</h2>
+            <p className="text-base text-zinc-600 leading-relaxed">
+              Once your return is received and inspected, we will notify you of the approval or
+              rejection of your refund. If approved, your refund will be processed and a credit will
+              automatically be applied to your original method of payment (Stripe or PayPal) within
+              14 days of us receiving the returned goods.
             </p>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-6 space-y-4 text-sm text-zinc-600">
-              <p>
-                <strong className="text-zinc-900">Refund Timelines & Methods:</strong>
-              </p>
-              <ul className="list-disc pl-5 space-y-2">
-                <li>
-                  <strong className="text-zinc-900">Credit / Debit Card Purchases (via Stripe):</strong> Refunds will be issued directly back to the bank account linked to the card you used to make the purchase. These typically take <strong className="text-zinc-900">3 to 5 working days</strong> to show up in your bank account, depending on your bank's processing times.
-                </li>
-                <li>
-                  <strong className="text-zinc-900">PayPal Purchases:</strong> Refunds will be credited back to your PayPal balance or your linked funding source, usually showing within <strong className="text-zinc-900">3 to 5 working days</strong>.
-                </li>
-              </ul>
-            </div>
           </section>
         </div>
 

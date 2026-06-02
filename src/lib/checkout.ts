@@ -62,10 +62,10 @@ export async function validateCartTotals(items: CartItem[], shippingMethod: stri
       const wooProduct = products.find((p) => p.databaseId === numericId);
 
       if (!wooProduct) {
-        return { 
-          isValid: false, 
-          subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0, 
-          error: `Product not found: ${item.id}` 
+        return {
+          isValid: false,
+          subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+          error: `Product not found: ${item.id}`
         };
       }
 
@@ -91,10 +91,10 @@ export async function validateCartTotals(items: CartItem[], shippingMethod: stri
     };
   } catch (error: any) {
     console.error("Cart Validation Error:", error);
-    return { 
-      isValid: false, 
-      subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0, 
-      error: "Failed to validate cart with backend." 
+    return {
+      isValid: false,
+      subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+      error: "Failed to validate cart with backend."
     };
   }
 }

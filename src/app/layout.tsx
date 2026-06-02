@@ -22,44 +22,41 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import { Suspense } from "react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://discountqualityproducts.co.uk"),
+  metadataBase: new URL("https://www.discountproducts.co.uk"),
   title: {
     template: "%s | Discount Quality Products",
-    default: "Discount Quality Products | Essentials & Rare Finds",
+    default: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
   },
   description:
-    "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books. UK shipping at discount prices.",
+    "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
   openGraph: {
-    title: "Discount Quality Products | Essentials & Rare Finds",
+    title: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
     description:
-      "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
-    url: "https://discountqualityproducts.co.uk",
+      "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
+    url: "https://www.discountproducts.co.uk",
     siteName: "Discount Quality Products",
     type: "website",
     locale: "en_GB",
     images: [
       {
-        url: "/images/og-image.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Discount Quality Products — 12,000+ Discounted Products",
+        url: "/icon.svg",
+        width: 512,
+        height: 512,
+        alt: "Discount Quality Products — Light Bulbs, Screws, Electricals & Collectibles",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Discount Quality Products | Essentials & Rare Finds",
+    title: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
     description:
-      "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
-    images: ["/images/og-image.jpg"],
+      "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
+    images: ["/icon.svg"],
   },
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",
     apple: "/icon.svg",
-  },
-  verification: {
-    google: "BxEUSUv7ENG3l--pchmq69TW89bKn-QOQ7kwx00nsmc",
   },
 };
 

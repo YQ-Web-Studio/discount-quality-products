@@ -62,42 +62,44 @@ export async function POST(req: Request) {
     // Build address metadata objects for delivery and billing.
     const deliveryAddress = form
       ? {
-          firstName: form.firstName,
-          lastName: form.lastName,
-          address1: form.address1,
-          address2: form.address2 || "",
-          city: form.city,
-          county: form.county,
-          postcode: form.postcode,
-          phone: form.phone || "",
-        }
+        firstName: form.firstName,
+        lastName: form.lastName,
+        address1: form.address1,
+        address2: form.address2 || "",
+        city: form.city,
+        county: form.county,
+        postcode: form.postcode,
+        country: form.country || "GB",
+        phone: form.phone || "",
+      }
       : null;
 
     const isBillingDifferent = form?.showBillingAddress === true;
     const billingAddress = form
       ? {
-          firstName: isBillingDifferent ? form.billingFirstName : form.firstName,
-          lastName: isBillingDifferent ? form.billingLastName : form.lastName,
-          address1: isBillingDifferent ? form.billingAddress1 : form.address1,
-          address2: isBillingDifferent ? (form.billingAddress2 || "") : (form.address2 || ""),
-          city: isBillingDifferent ? form.billingCity : form.city,
-          county: isBillingDifferent ? form.billingCounty : form.county,
-          postcode: isBillingDifferent ? form.billingPostcode : form.postcode,
-          phone: isBillingDifferent ? (form.billingPhone || "") : (form.phone || ""),
-          email: form.email,
-        }
+        firstName: isBillingDifferent ? form.billingFirstName : form.firstName,
+        lastName: isBillingDifferent ? form.billingLastName : form.lastName,
+        address1: isBillingDifferent ? form.billingAddress1 : form.address1,
+        address2: isBillingDifferent ? (form.billingAddress2 || "") : (form.address2 || ""),
+        city: isBillingDifferent ? form.billingCity : form.city,
+        county: isBillingDifferent ? form.billingCounty : form.county,
+        postcode: isBillingDifferent ? form.billingPostcode : form.postcode,
+        country: isBillingDifferent ? (form.billingCountry || "GB") : (form.country || "GB"),
+        phone: isBillingDifferent ? (form.billingPhone || "") : (form.phone || ""),
+        email: form.email,
+      }
       : null;
 
     // Serialise the customer form data for the webhook to reconstruct billing/shipping.
     const cartForm = form
       ? JSON.stringify({
-          fn: form.firstName,
-          ln: form.lastName,
-          em: form.email,
-          a1: form.address1,
-          ct: form.city,
-          pc: form.postcode,
-        })
+        fn: form.firstName,
+        ln: form.lastName,
+        em: form.email,
+        a1: form.address1,
+        ct: form.city,
+        pc: form.postcode,
+      })
       : "";
 
     // Look up the Stripe customer by email to allow saved cards to appear in Elements

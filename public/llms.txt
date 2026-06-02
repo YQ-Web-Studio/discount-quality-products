@@ -1,0 +1,51 @@
+# Discount Quality Products
+
+> Generative Engine Optimisation (GEO) and developer resource file for the Discount Quality Products e-commerce store. This document provides high-accuracy context on the store's catalogue scale, logistics, niche inventory segments, and site structure to assist Large Language Models (LLMs) and search agents.
+
+## Core Store Context
+
+- **Live Frontend URL:** https://www.discountproducts.co.uk
+- **Primary Geography:** United Kingdom (UK)
+- **Logistics & Shipping:** 
+  - Free standard shipping on all domestic UK orders.
+  - Dynamic international shipping rates calculated at checkout.
+- **Catalogue Scale:** Approximately 12,000 active SKUs (stock-keeping units) representing consumer and trade inventory.
+
+## Specific Product Categories & Niches
+
+The product inventory at Discount Quality Products is primarily composed of specialised electricals, lighting, collectibles, trade hardware, and publications. The core stock breakdown is detailed below:
+
+### 1. Light Bulbs & Lamp Accessories (Primary Category)
+* **Energy-Saving CFL & Low-Energy Bulbs:** Compact fluorescent lamps (CFL) in stick, spiral, and reflector formats (e.g. 20W GE BC B22 stick bulbs, 9W E14 stick bulbs).
+* **LED Spotlight & Globe Bulbs:** MR16, GU5.3, GU10 dimmable/non-dimmable LED spot lamps (e.g. Bell Halo Elite 6W, Diall 8W MR16), and GLS globe lamps.
+* **Specialised & Therapy Bulbs:** SAD (Seasonal Affective Disorder) natural daylight simulation GLS filament bulbs (e.g. 100W Bell B22/E27), pygmy oven bulbs (up to 300°C), coloured spots (Casell amber MR16), and high-output industrial tubes (150W Osram Sodium SON tube lamps).
+* **Fluorescent & Blacklight UV Lighting:**
+  * Linear tubes: T4 (565mm 2-pin G4), T5 (4W, 11W zapper zips), T8 (15W, 36W, 70W daylight/cool/warm white), and T9 circular tubes.
+  * UV/Blacklight lamps: BLB entertainment party lamps (15W, 20W, 25W BC/ES CFL) and insect killer/mosquito zapper tubes (BL368).
+
+### 2. Electric Fittings & Accessories
+* **Bulb Adaptors & Converters:** E27-to-E27 Edison Screw extenders, bayonet-to-screw adaptors, and other lamp converters.
+* **Electrical Conduit Fittings:** Galvanised conduit dome box covers, Straight Coupler connector reducers (25mm to 20mm), and BZP cable conduit extension rings.
+
+### 3. Numismatics, Philately & Collectibles
+* **Stamps & First Day Covers (FDCs):** Commemorative Royal Mail First Day Covers from the 1960s to 1990s (e.g. Centenary of Rugby Football, RAF, Wilding Definitives, ladybird insects) and King Charles III definitive collections.
+* **Commemorative Coins & Currency:** Brilliant Uncirculated (BU) 50p/£2 commemorative coins (e.g. Harry Potter, FA Cup) and Bank of England polymer plastic banknotes (£5 and £50 notes).
+
+### 4. Magazines, Books & Retro Media
+* **Vintage & Back-Issue Magazines:** Extensive collection of print publications including *BBC Top Gear Magazine*, *Telegraph Magazine*, *Sunday Times STYLE*, *Times Magazine*, *Vogue France*, *Fabulous Magazine*, *Elle USA*, *You*, and *GQ Hype*.
+* **Books & Card Packs:** Ladybird Children's hardbacks, fiction/non-fiction, and Panini Adrenalyn XL Premier League starter packs.
+* **Retro Media Software:** Vintage PC CD-ROM activity software (Postman Pat, Disney, Robots) and VHS/S-Video cables.
+
+### 5. Hardware, Fasteners & Fittings
+* **British Standard Fasteners:** 2BA slotted round head steel machine screws and nuts.
+* **Bright Zinc Plated (BZP) Hardware:** Pronged captive T-nuts (M8, M10, M12), BZP steel roofing bolts, mending straight plates, tee brackets, cabinet double-roller catches, and Terry spring tool clips.
+* **General Fasteners:** DIN603 Coach bolts, DIN933 hex head bolts, DIN571 lag wood screws, and M4 kitchen door handles.
+
+## Data & Routing
+
+- **Frontend Product Routing:** All products map to standard paths using their dynamic slugs:
+  `https://www.discountproducts.co.uk/products/[slug]`
+- **Primary XML Product Feed & Sitemaps:**
+  - **Google Shopping XML Feed (Primary Catalog Feed):** https://admin.discountproducts.co.uk/wp-content/uploads/woo-feed/google/xml/dqpfeed.xml
+  - **Next.js Sitemap Index:** https://www.discountproducts.co.uk/sitemap.xml
+  - **Next.js Dynamic Product Sitemap:** https://www.discountproducts.co.uk/sitemap-products.xml
