@@ -23,15 +23,11 @@ export async function sendEmail({
     return { success: false, error: "Missing API Key" };
   }
 
-  // Intercept all outgoing emails to redirect them to the client's testing mailbox
-  const actualRecipient = 'sales@fncomputers.com';
-  console.log(`[Email Interceptor] Original recipient: ${to}. Redirected to: ${actualRecipient}`);
-
   try {
     const { data, error } = await resend.emails.send({
       from,
-      to: actualRecipient,
-      subject: `${subject} (Redirected from: ${Array.isArray(to) ? to.join(', ') : to})`,
+      to,
+      subject,
       react,
       replyTo,
     });
@@ -41,7 +37,7 @@ export async function sendEmail({
       return { success: false, error };
     }
 
-    console.log(`Email sent successfully to ${actualRecipient}. ID:`, data?.id);
+    console.log(`Email sent successfully to ${Array.isArray(to) ? to.join(', ') : to}. ID:`, data?.id);
     return { success: true, data };
   } catch (err) {
     console.error("Critical Resend exception:", err);
