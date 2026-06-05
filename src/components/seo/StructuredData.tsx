@@ -29,7 +29,7 @@ export function StructuredData() {
         "@type": "ContactPoint",
         telephone: "+44-1702-339033",
         contactType: "customer service",
-        email: "sales@discountproducts.co.uk",
+        email: "sales@fncomputers.com",
         areaServed: "GB",
         availableLanguage: "English",
       },

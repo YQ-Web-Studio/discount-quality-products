@@ -50,8 +50,8 @@ export default function TermsPage() {
               <p>This website is operated by <strong className="text-zinc-900">Discount Quality Products</strong>.</p>
               <p>
                 <span className="text-zinc-400 font-medium">Email:</span>{' '}
-                <a href="mailto:sales@discountproducts.co.uk" className="text-primary hover:underline">
-                  sales@discountproducts.co.uk
+                <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline">
+                  sales@fncomputers.com
                 </a>
               </p>
               <p>

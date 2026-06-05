@@ -79,7 +79,7 @@ export async function submitContactForm(formData: FormData) {
   try {
     const { data, error } = await resend.emails.send({
       from: 'Contact Form <notifications@send.yqwebstudio.com>',
-      to: 'yusufq2004@gmail.com',
+      to: 'sales@fncomputers.com',
       replyTo: email,
       subject: `New Enquiry: ${subject}`,
       text: `You have received a new message from the contact form.\n\nName: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,

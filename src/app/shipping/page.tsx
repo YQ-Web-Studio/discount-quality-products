@@ -98,10 +98,10 @@ export default function ShippingPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               If you receive your order damaged, please contact our support team immediately at{' '}
               <a
-                href="mailto:sales@discountproducts.co.uk"
+                href="mailto:sales@fncomputers.com"
                 className="text-primary hover:underline"
               >
-                sales@discountproducts.co.uk
+                sales@fncomputers.com
               </a>{' '}
               to file a claim. Please save all packaging materials and damaged goods before filing a
               claim.
