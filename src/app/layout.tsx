@@ -60,6 +60,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { GlobalRouteLoader } from "@/components/GlobalRouteLoader";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -77,6 +79,9 @@ export default function RootLayout({
           <AuthProvider>
             <Suspense fallback={null}>
               <ScrollToTop />
+            </Suspense>
+            <Suspense fallback={null}>
+              <GlobalRouteLoader />
             </Suspense>
             <Header />
             <main className="flex-1 relative z-[1]">{children}</main>

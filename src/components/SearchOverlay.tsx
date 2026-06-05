@@ -80,7 +80,6 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const [loading, setLoading] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [navigatingRoute, setNavigatingRoute] = useState<string | null>(null);
 
   /* Portal & mount guard */
   useEffect(() => { setMounted(true); }, []);
@@ -95,7 +94,6 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       setQuery("");
       setResults([]);
       setExpandedCategory(null);
-      setNavigatingRoute(null);
     }
     return () => { document.body.style.overflow = ""; };
   }, [open]);
@@ -226,6 +224,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
   const handleNavigate = useCallback((href: string) => {
     onClose();
+    window.dispatchEvent(new CustomEvent("trigger-global-loading"));
     router.push(href);
   }, [onClose, router]);
 
@@ -329,7 +328,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           animate={{ opacity: 1, y: 0 }}
                         >
                           <div className="flex flex-col gap-2">
-                            {results.slice(0, 5).map((item) => {
+                            {results.slice(0, 4).map((item) => {
                               const isCategory = item.type === 'category';
                               const route = isCategory ? `/categories/${item.slug}` : `/products/${item.slug}`;
                               
@@ -339,8 +338,6 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                               const parentName = frontendData?.parentName || item.parentName;
                               const topLevelName = frontendData?.topLevel || "Other";
                               const badgeColor = getCategoryBadgeColor(topLevelName, mappedName, frontendData?.accentColor);
-
-                              const isNavigating = navigatingRoute === route;
 
                               return (
                                 <button
@@ -385,13 +382,13 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             })}
                           </div>
                           
-                          {results.length > 5 && (
+                          {results.length > 4 && (
                             <button
                               onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
-                              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50"
+                              className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-1 w-fit mx-auto"
                             >
                               View all
-                              <ArrowRight className="h-4 w-4" />
+                              <ArrowRight className="h-3 w-3" />
                             </button>
                           )}
                         </motion.div>
