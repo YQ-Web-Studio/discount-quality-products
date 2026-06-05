@@ -15,8 +15,8 @@ export async function sendEmail({
   to,
   subject,
   react,
-  from = 'Discount Quality Products <sales@discountproducts.co.uk>',
-  replyTo = 'sales@discountproducts.co.uk',
+  from = 'Discount Quality Products <notifications@send.yqwebstudio.com>',
+  replyTo = 'sales@fncomputers.com',
 }: SendEmailParams) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY is not set. Email sending skipped.");
