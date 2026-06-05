@@ -23,10 +23,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { id, status, billing, shipping, line_items, total, total_tax, date_created, meta_data } = order;
+  const { id, status, billing, shipping, line_items, total, total_tax, date_created, meta_data, webhook_id } = order;
 
-  if (!id) {
-    return NextResponse.json({ error: "Missing order ID" }, { status: 400 });
+  // Handle WooCommerce Webhook ping/verification request
+  if (webhook_id || !id) {
+    console.log(`[woocommerce-webhook] Received verification ping (Webhook ID: ${webhook_id || 'N/A'}).`);
+    return NextResponse.json({ success: true, message: "Webhook URL successfully verified" });
   }
 
   console.log(`[woocommerce-webhook] Received webhook for order #${id} (Status: ${status})`);
