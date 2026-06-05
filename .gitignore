@@ -48,3 +48,9 @@ next-env.d.ts
 /tools
 
 .vercel
+
+# Binaries
+stripe.exe
+
+# Logs
+*.log

@@ -25,13 +25,10 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
-const REQUIRE_TEST_PASSCODE = true; // Set to false to disable this passcode check entirely
-const TEST_PASSCODE = "DQPTEST2026"; // Enter this passcode to unlock testing checkout
+const REQUIRE_TEST_PASSCODE = process.env.NODE_ENV !== "production"; // Automatically disabled in production
+const TEST_PASSCODE = "DQPTEST2026"; // Enter this passcode to unlock testing checkout in dev/staging
 
-/* ─── Shipping options ─── */
-const shippingOptions = [
-  { id: "standard", label: "Free Delivery", price: 0, eta: "3–5 working days" },
-] as const;
+
 
 interface CheckoutLineItem {
   id: string;
@@ -93,9 +90,11 @@ function Field({
 
 const COUNTRIES = [
   { code: "GB", name: "United Kingdom" },
-  // Easily enable other countries later:
-  // { code: "US", name: "United States" },
-  // { code: "CA", name: "Canada" },
+  { code: "US", name: "United States" },
+  { code: "FR", name: "France" },
+  { code: "DE", name: "Germany" },
+  { code: "AU", name: "Australia" },
+  { code: "CA", name: "Canada" },
 ];
 
 /* ─── Form select field ─── */
@@ -151,9 +150,9 @@ function SelectField({
 }
 
 /* ─── Order summary sidebar ─── */
-function OrderSummary({ 
-  shippingCost, 
-  items, 
+function OrderSummary({
+  shippingCost,
+  items,
   subtotal,
   onUpdateQuantity,
   onRemove,
@@ -166,7 +165,7 @@ function OrderSummary({
   couponError,
   couponSuccess,
   couponLoading
-}: { 
+}: {
   shippingCost: number;
   items: CheckoutLineItem[];
   subtotal: number;
@@ -261,8 +260,8 @@ function OrderSummary({
           <div className="flex justify-between text-xs text-primary font-semibold">
             <span className="flex items-center gap-1">
               Promo ({appliedCoupon})
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={onRemoveCoupon}
                 className="text-[10px] text-red-500 hover:text-red-700 font-bold ml-1 hover:underline"
               >
@@ -468,8 +467,8 @@ function StripePaymentForm({
                 <label
                   key={card.id}
                   className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${selectedCardId === card.id
-                      ? "border-zinc-900 bg-zinc-50"
-                      : "border-zinc-200 hover:border-zinc-300 bg-white"
+                    ? "border-zinc-900 bg-zinc-50"
+                    : "border-zinc-200 hover:border-zinc-300 bg-white"
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -495,8 +494,8 @@ function StripePaymentForm({
 
               <label
                 className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${selectedCardId === "new"
-                    ? "border-zinc-900 bg-zinc-50"
-                    : "border-zinc-200 hover:border-zinc-300 bg-white"
+                  ? "border-zinc-900 bg-zinc-50"
+                  : "border-zinc-200 hover:border-zinc-300 bg-white"
                   }`}
               >
                 <div className="flex items-center gap-3">
@@ -575,13 +574,13 @@ function StripePaymentForm({
 
 /* ─── Main CheckoutFlow ─── */
 export default function CheckoutWrapper({ directCheckoutItem }: { directCheckoutItem?: CheckoutLineItem }) {
-  const paypalSdkCurrency = "USD";
+  const paypalSdkCurrency = "GBP";
   const paypalScriptOptions = useMemo(
     () => ({
       clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "test",
       currency: paypalSdkCurrency,
       intent: "capture" as const,
-      disableFunding: ["card"],
+      disableFunding: ["card"] as string[],
     }),
     [paypalSdkCurrency]
   );
@@ -724,7 +723,60 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }, []);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [shipping, setShipping] = useState("standard");
+  const [shippingRates, setShippingRates] = useState<{ id: string; label: string; price: number; eta: string }[]>([]);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shipping, setShipping] = useState("");
+
+  // Live WooCommerce Cart Shipping Evaluation Lookup
+  useEffect(() => {
+    if (!form.country) return;
+
+    const controller = new AbortController();
+    const delayDebounceFn = setTimeout(async () => {
+      setShippingLoading(true);
+      try {
+        const res = await fetch("/api/checkout/shipping-rates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: computedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+            address: {
+              country: form.country,
+              city: form.city || "",
+              postcode: form.postcode || "",
+            },
+          }),
+          signal: controller.signal,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const rates = data.shippingRates || [];
+          setShippingRates(rates);
+          if (rates.length > 0) {
+            // Automatically select first rate if none is selected or the selected one isn't in new rates
+            if (!shipping || !rates.some((r: any) => r.id === shipping)) {
+              setShipping(rates[0].id);
+            }
+          } else {
+            setShipping("");
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          console.error("Failed to load shipping rates:", err);
+        }
+      } finally {
+        setShippingLoading(false);
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(delayDebounceFn);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.country, form.city, form.postcode, computedItems]);
   const [processing, setProcessing] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [clientSecret, setClientSecret] = useState("");
@@ -757,10 +809,10 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     };
   }, [clientSecret]);
 
-  const shippingCost = useMemo(
-    () => shippingOptions.find((o) => o.id === shipping)?.price ?? 3.99,
-    [shipping]
-  );
+  const shippingCost = useMemo(() => {
+    const matched = shippingRates.find((r) => r.id === shipping);
+    return matched ? matched.price : 0;
+  }, [shippingRates, shipping]);
 
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -857,7 +909,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     if (!form.address1.trim()) e.address1 = "Required";
     if (!form.city.trim()) e.city = "Required";
     if (!form.postcode.trim()) e.postcode = "Required";
-    else if (!/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.postcode.trim()))
+    else if (form.country === "GB" && !/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.postcode.trim()))
       e.postcode = "Invalid UK postcode";
 
     if (showBillingAddress) {
@@ -866,7 +918,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
       if (!form.billingAddress1.trim()) e.billingAddress1 = "Required";
       if (!form.billingCity.trim()) e.billingCity = "Required";
       if (!form.billingPostcode.trim()) e.billingPostcode = "Required";
-      else if (!/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.billingPostcode.trim()))
+      else if (form.billingCountry === "GB" && !/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.billingPostcode.trim()))
         e.billingPostcode = "Invalid UK postcode";
     }
 
@@ -888,9 +940,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         headers: { "Content-Type": "application/json" },
         // Pass the full form so customer data is embedded securely in the
         // Stripe PaymentIntent metadata for webhook-side order creation.
-        body: JSON.stringify({ 
-          items: computedItems, 
-          shippingMethod: shipping, 
+        body: JSON.stringify({
+          items: computedItems,
+          shippingMethod: shipping,
           form: { ...form, showBillingAddress },
           couponCode: appliedCoupon,
         })
@@ -1130,6 +1182,57 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                     </div>
                   </div>
 
+                  {/* Dynamic Shipping Methods Selector */}
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50/30 p-4 sm:p-5">
+                    <div className="mb-4">
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Shipping Method</h3>
+                    </div>
+                    {shippingLoading ? (
+                      <div className="flex items-center gap-2 py-3 text-sm text-zinc-500">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
+                        <span>Calculating live shipping rates...</span>
+                      </div>
+                    ) : shippingRates.length > 0 ? (
+                      <div className="grid gap-3">
+                        {shippingRates.map((rate) => (
+                          <label
+                            key={rate.id}
+                            className={cn(
+                              "flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors",
+                              shipping === rate.id
+                                ? "border-zinc-900 bg-zinc-50"
+                                : "border-zinc-200 hover:border-zinc-300 bg-white"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="radio"
+                                name="shipping_method"
+                                value={rate.id}
+                                checked={shipping === rate.id}
+                                onChange={() => setShipping(rate.id)}
+                                className="h-4 w-4 border-zinc-300 text-zinc-900 focus:ring-zinc-900 cursor-pointer"
+                              />
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-zinc-900">
+                                  {rate.label}
+                                </span>
+                                <span className="text-xs text-zinc-500">
+                                  {rate.eta}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-zinc-900">
+                              {rate.price > 0 ? `£${rate.price.toFixed(2)}` : "Free"}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-500">Please select your country and enter a valid address to calculate shipping rates.</p>
+                    )}
+                  </div>
+
                   {/* Checkbox toggler */}
                   <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
                     <input
@@ -1332,9 +1435,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               const res = await fetch("/api/checkout/paypal/create-order", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ 
-                                  items: computedItems, 
-                                  shippingMethod: shipping, 
+                                body: JSON.stringify({
+                                  items: computedItems,
+                                  shippingMethod: shipping,
                                   form: { ...form, showBillingAddress },
                                   couponCode: appliedCoupon,
                                 }),

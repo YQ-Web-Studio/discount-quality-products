@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     const orderData: Record<string, unknown> = {
       payment_method: paymentProvider === "paypal" ? "ppcp-gateway" : paymentProvider,
       payment_method_title: providerName,
-      currency: paymentProvider === "paypal" ? "USD" : "GBP",
+      currency: "GBP",
       set_paid: true,
       status: "processing",
       transaction_id: transactionId,

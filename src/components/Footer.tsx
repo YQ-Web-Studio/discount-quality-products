@@ -6,7 +6,7 @@ import { Mail, Phone, MapPin } from "lucide-react";
 const footerLinks = {
   "Customer Service": [
     { label: "Contact Us", href: "/contact" },
-    { label: "Buying Guides", href: "/guides" },
+    { label: "Order Tracking", href: "/track" },
     { label: "Returns & Refunds", href: "/returns" },
   ],
   "Legal": [
@@ -28,14 +28,14 @@ export function Footer() {
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-4 transition-all hover:opacity-90 group mb-8 outline-none pt-2">
               <div className="relative shrink-0 w-12 h-12 group-hover:scale-105 transition-transform duration-300">
-                <img 
-                  src="/icon.svg" 
-                  alt="DQP Logo" 
+                <img
+                  src="/icon.svg"
+                  alt="DQP Logo"
                   className="w-full h-full object-contain"
                 />
               </div>
               <div className="flex flex-col leading-none justify-center pl-1">
-                <span 
+                <span
                   className="text-[15px] font-black italic tracking-[0.08em] uppercase text-primary inline-block origin-left"
                   style={{ transform: 'scaleX(1.2)', transformOrigin: 'left' }}
                 >

@@ -3,7 +3,11 @@ import Stripe from "stripe";
 import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 
-const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
+if (!process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV === "production") {
+  throw new Error("STRIPE_SECRET_KEY is not set. Stripe cannot initialise in production without a valid secret key.");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2023-10-16" as any,
 });
 
@@ -28,9 +32,9 @@ function resolveToNumericId(id: string): number {
 
 export async function POST(req: Request) {
   try {
-    const { items, shippingMethod, form } = await req.json();
+    const { items, shippingMethod, form, couponCode } = await req.json();
 
-    const validation = await validateCartTotals(items, shippingMethod);
+    const validation = await validateCartTotals(items, shippingMethod, form ? { ...form, email: form.email } : undefined, couponCode);
 
     if (!validation.isValid) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
@@ -137,6 +141,8 @@ export async function POST(req: Request) {
         slugs,
         cart_items: cartItems,
         cart_shipping: shippingMethod ?? "standard",
+        cart_shipping_cost: validation.shippingCost.toString(),
+        cart_discount: validation.discountAmount.toString(),
         cart_form: cartForm,
         delivery_address: deliveryAddress ? JSON.stringify(deliveryAddress) : "",
         billing_address: billingAddress ? JSON.stringify(billingAddress) : "",

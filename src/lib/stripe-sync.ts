@@ -75,7 +75,7 @@ export async function processOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {
-  const { cart_items, cart_shipping, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
+  const { cart_items, cart_shipping, cart_shipping_cost, cart_discount, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
 
   if (!cart_items || (!cart_form && !delivery_address)) {
     console.warn(
@@ -106,8 +106,8 @@ export async function processOrderFromPaymentIntent(
   }
 
   const shippingMethod = cart_shipping ?? "standard";
-  const shippingCost = 0;
-  const shippingTitle = "Free Delivery";
+  const shippingCost = cart_shipping_cost ? parseFloat(cart_shipping_cost) : 0;
+  const shippingTitle = shippingCost > 0 ? `Shipping (${shippingMethod})` : "Free Delivery";
   const line_items = items.map((item) => ({ product_id: item.i, quantity: item.q }));
   const paymentMeta = buildPaymentMeta(paymentIntent.id, chargeId);
 

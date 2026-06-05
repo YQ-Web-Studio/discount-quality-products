@@ -18,7 +18,10 @@ async function generatePayPalAccessToken() {
     throw new Error("MISSING_API_CREDENTIALS");
   }
 
-  const baseUrl = process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com";
+  const baseUrl = process.env.PAYPAL_API_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://api-m.paypal.com"
+      : "https://api-m.sandbox.paypal.com");
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64");
   const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
     method: "POST",
@@ -44,9 +47,9 @@ async function readPayPalResponse(response: Response): Promise<PayPalCreateOrder
 
 export async function POST(req: Request) {
   try {
-    const { items, shippingMethod } = await req.json();
+    const { items, shippingMethod, form, couponCode } = await req.json();
 
-    const validation = await validateCartTotals(items, shippingMethod);
+    const validation = await validateCartTotals(items, shippingMethod, form ? { ...form, email: form.email } : undefined, couponCode);
 
     if (!validation.isValid) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
       purchase_units: [
         {
           amount: {
-            currency_code: "USD",
+            currency_code: "GBP",
             value: finalTotalValue,
           },
         },
@@ -78,7 +81,10 @@ export async function POST(req: Request) {
       },
     };
 
-    const baseUrl = process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com";
+    const baseUrl = process.env.PAYPAL_API_URL ||
+      (process.env.NODE_ENV === "production"
+        ? "https://api-m.paypal.com"
+        : "https://api-m.sandbox.paypal.com");
     const response = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: "POST",
       headers: {

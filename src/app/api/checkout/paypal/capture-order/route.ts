@@ -24,7 +24,10 @@ async function generatePayPalAccessToken() {
     throw new Error("MISSING_API_CREDENTIALS");
   }
 
-  const baseUrl = process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com";
+  const baseUrl = process.env.PAYPAL_API_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://api-m.paypal.com"
+      : "https://api-m.sandbox.paypal.com");
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64");
   const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
     method: "POST",
@@ -58,7 +61,10 @@ export async function POST(req: Request) {
 
     const accessToken = await generatePayPalAccessToken();
 
-    const baseUrl = process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com";
+    const baseUrl = process.env.PAYPAL_API_URL ||
+      (process.env.NODE_ENV === "production"
+        ? "https://api-m.paypal.com"
+        : "https://api-m.sandbox.paypal.com");
     const response = await fetch(`${baseUrl}/v2/checkout/orders/${orderID}/capture`, {
       method: "POST",
       headers: {

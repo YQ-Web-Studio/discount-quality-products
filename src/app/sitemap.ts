@@ -10,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 1. Fetch active products from WordPress backend
   let products: { slug: string; date: string }[] = [];
   try {
-    products = await getAllProductSlugs(1500);
+    products = await getAllProductSlugs();
   } catch (error) {
     console.error("Error fetching product slugs for sitemap:", error);
   }

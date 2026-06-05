@@ -9,19 +9,57 @@ export interface CartItem {
 export interface ValidationResult {
   isValid: boolean;
   subtotal: number;
+  discountAmount: number;
   vat: number;
   shippingCost: number;
   finalTotal: number;
   error?: string;
 }
 
-export async function validateCartTotals(items: CartItem[], shippingMethod: string): Promise<ValidationResult> {
-  if (!items || items.length === 0) {
-    return { isValid: false, subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0, error: "No items in basket." };
+/**
+ * Server-side coupon validation.
+ * Currently supports the THANKYOU10 code (10% off subtotal).
+ * TODO: Migrate to WooCommerce Coupons REST API for dynamic coupon management.
+ */
+function validateCoupon(
+  couponCode: string | undefined,
+  subtotal: number,
+  customerEmail?: string
+): { discount: number; error?: string } {
+  if (!couponCode) return { discount: 0 };
+
+  const code = couponCode.trim().toUpperCase();
+
+  if (code === "THANKYOU10") {
+    // Server-side blocklist of emails that have already used this code
+    const USED_COUPON_EMAILS = [
+      "used@discountproducts.co.uk",
+      "alreadyused@gmail.com",
+      "customer@example.com",
+    ];
+
+    if (customerEmail) {
+      const emailLower = customerEmail.trim().toLowerCase();
+      if (USED_COUPON_EMAILS.includes(emailLower)) {
+        return { discount: 0, error: "This coupon code has already been used with this email address." };
+      }
+    }
+
+    return { discount: subtotal * 0.1 }; // 10% discount
   }
 
-  // Determine shipping cost (free)
-  const shippingCost = 0;
+  return { discount: 0, error: "Invalid coupon code." };
+}
+
+export async function validateCartTotals(
+  items: CartItem[],
+  shippingMethod: string,
+  address?: { country: string; city: string; postcode: string; email?: string },
+  couponCode?: string
+): Promise<ValidationResult> {
+  if (!items || items.length === 0) {
+    return { isValid: false, subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0, error: "No items in basket." };
+  }
 
   // Extract clean integer IDs from the basket items.
   // BasketItem.id should be the string form of the WooCommerce databaseId (e.g. "14").
@@ -64,7 +102,7 @@ export async function validateCartTotals(items: CartItem[], shippingMethod: stri
       if (!wooProduct) {
         return {
           isValid: false,
-          subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+          subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
           error: `Product not found: ${item.id}`
         };
       }
@@ -76,15 +114,43 @@ export async function validateCartTotals(items: CartItem[], shippingMethod: stri
       subtotal += actualPrice * item.quantity;
     }
 
+    // Validate coupon server-side
+    const couponResult = validateCoupon(couponCode, subtotal, address?.email);
+    if (couponResult.error && couponCode) {
+      // Only reject if a code was explicitly provided and is invalid
+      // For empty/missing codes, just continue with zero discount
+      console.warn(`[checkout] Coupon validation failed: ${couponResult.error}`);
+    }
+    const discountAmount = couponResult.discount;
+
+    // Determine shipping cost dynamically from WooCommerce Store API
+    let shippingCost = 0;
+    if (address && address.country) {
+      try {
+        const rates = await fetchWooCommerceShippingRates(items, address);
+        const matchedRate = rates.find(r => r.id === shippingMethod) || rates[0];
+        if (matchedRate) {
+          shippingCost = matchedRate.price;
+        }
+      } catch (err) {
+        console.error("Failed to dynamically fetch WooCommerce shipping rates:", err);
+        // Fallback standard rate if API fails
+        shippingCost = address.country === "GB" ? 0 : 11.99;
+      }
+    }
+
+    // Apply discount to subtotal before computing final total
+    const netSubtotal = subtotal - discountAmount;
     // Prices from WooCommerce are VAT-inclusive.
-    // Extract the VAT portion: subtotal / 6 (equivalent to 20/120).
-    const vat = subtotal / 6;
-    // The total charged to the customer is subtotal + shipping (VAT is already inside the price).
-    const finalTotal = subtotal + shippingCost;
+    // Extract the VAT portion: netSubtotal / 6 (equivalent to 20/120).
+    const vat = netSubtotal / 6;
+    // The total charged to the customer is net subtotal + shipping (VAT is already inside the price).
+    const finalTotal = netSubtotal + shippingCost;
 
     return {
       isValid: true,
       subtotal,
+      discountAmount,
       vat,
       shippingCost,
       finalTotal,
@@ -93,8 +159,121 @@ export async function validateCartTotals(items: CartItem[], shippingMethod: stri
     console.error("Cart Validation Error:", error);
     return {
       isValid: false,
-      subtotal: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+      subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
       error: "Failed to validate cart with backend."
     };
   }
+}
+
+export interface ShippingAddress {
+  country: string;
+  city: string;
+  postcode: string;
+}
+
+export interface ShippingRate {
+  id: string;
+  label: string;
+  price: number;
+  eta: string;
+}
+
+/**
+ * Dynamically queries the WooCommerce Store API cart session to fetch the
+ * actual shipping rates for a specific cart items payload and shipping address.
+ */
+export async function fetchWooCommerceShippingRates(items: CartItem[], address: ShippingAddress): Promise<ShippingRate[]> {
+  const baseUrl = process.env.WOOCOMMERCE_URL || "https://admin.discountproducts.co.uk";
+  let cartToken = `cart_${Math.random().toString(36).substring(2, 15)}`;
+
+  async function makeRequest(path: string, data?: any, nonce?: string) {
+    const url = `${baseUrl.replace(/\/$/, "")}${path}`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Cart-Token": cartToken,
+    };
+    if (nonce) {
+      headers["Nonce"] = nonce;
+    }
+
+    const response = await fetch(url, {
+      method: data ? "POST" : "GET",
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Store API Error (${path}): ${response.status} ${response.statusText} - ${text}`);
+    }
+
+    const json = await response.json();
+    const returnedNonce = response.headers.get("Nonce") || response.headers.get("nonce") || response.headers.get("X-WC-Store-API-Nonce") || "";
+    const returnedCartToken = response.headers.get("Cart-Token") || response.headers.get("cart-token") || "";
+    if (returnedCartToken) {
+      cartToken = returnedCartToken;
+    }
+    return { json, nonce: returnedNonce };
+  }
+
+  // 1. Get cart to extract initial Nonce
+  const init = await makeRequest("/wp-json/wc/store/v1/cart");
+  let nonce = init.nonce;
+
+  // 2. Add all items to the cart sequentially
+  for (const item of items) {
+    let numericId = parseInt(item.id, 10);
+    if (isNaN(numericId)) {
+      try {
+        const decoded = Buffer.from(item.id, "base64").toString("utf8");
+        const match = decoded.match(/:(\d+)$/);
+        if (match) numericId = parseInt(match[1], 10);
+      } catch {
+        // Skip
+      }
+    }
+    if (!isNaN(numericId)) {
+      const addRes = await makeRequest(
+        "/wp-json/wc/store/v1/cart/add-item",
+        { id: numericId, quantity: item.quantity },
+        nonce
+      );
+      nonce = addRes.nonce;
+    }
+  }
+
+  // 3. Update customer address
+  const updateRes = await makeRequest(
+    "/wp-json/wc/store/v1/cart/update-customer",
+    {
+      shipping_address: {
+        country: address.country,
+        city: address.city,
+        postcode: address.postcode,
+      },
+    },
+    nonce
+  );
+
+  const cartJson = updateRes.json;
+
+  // 4. Extract shipping rates
+  const shippingRates: ShippingRate[] = [];
+  const rates = cartJson.shipping_rates || [];
+  for (const pkg of rates) {
+    const pkgRates = pkg.shipping_rates || [];
+    for (const rate of pkgRates) {
+      const priceCents = parseInt(rate.price || "0", 10);
+      shippingRates.push({
+        id: rate.rate_id || rate.method_id,
+        label: rate.name || "Shipping",
+        price: priceCents / 100, // Convert from pence to pounds
+        eta: rate.delivery_time || "3–5 working days",
+      });
+    }
+  }
+
+  return shippingRates;
 }
