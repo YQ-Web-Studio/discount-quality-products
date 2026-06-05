@@ -61,6 +61,7 @@ export const metadata: Metadata = {
 };
 
 import { GlobalRouteLoader } from "@/components/GlobalRouteLoader";
+import { GoogleAnalytics } from '@next/third-parties/google';
 
 export default function RootLayout({
   children,
@@ -90,6 +91,9 @@ export default function RootLayout({
             <MiniCart />
           </AuthProvider>
         </div>
+        {process.env.NEXT_PUBLIC_GA_ID && (
+          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+        )}
       </body>
     </html>
   );
