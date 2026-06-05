@@ -2,7 +2,6 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 
 export function GlobalRouteLoader() {
   const pathname = usePathname();
@@ -30,11 +29,27 @@ export function GlobalRouteLoader() {
   if (!loading) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-white/70 backdrop-blur-md pointer-events-auto">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100/80 animate-in fade-in zoom-in duration-200">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="text-sm font-semibold text-zinc-900">Loading page...</span>
-      </div>
+    <div className="fixed top-0 left-0 right-0 z-[99999] h-[3px] w-full overflow-hidden bg-zinc-100/50">
+      <div 
+        className="h-full bg-emerald-600 rounded-r"
+        style={{
+          width: '50%',
+          animation: 'global-route-loading-bar 1.2s infinite ease-in-out',
+        }}
+      />
+      <style>{`
+        @keyframes global-route-loading-bar {
+          0% {
+            transform: translateX(-100%);
+          }
+          50% {
+            transform: translateX(100%);
+          }
+          100% {
+            transform: translateX(200%);
+          }
+        }
+      `}</style>
     </div>
   );
 }
