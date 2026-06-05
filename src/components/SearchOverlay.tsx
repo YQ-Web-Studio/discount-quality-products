@@ -216,7 +216,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
         setResults(sorted);
         setLoading(false);
       }
-    }, 280);
+    }, 150);
 
     return () => {
       active = false;
@@ -225,9 +225,9 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   }, [query]);
 
   const handleNavigate = useCallback((href: string) => {
-    setNavigatingRoute(href);
+    onClose();
     router.push(href);
-  }, [router]);
+  }, [onClose, router]);
 
   if (!mounted) return null;
 
@@ -258,11 +258,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             {/* ── Search bar row ── */}
             <motion.div variants={panelChildVariants} className="border-b border-zinc-100 px-4 py-4 md:px-6 2xl:px-8">
               <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-4">
-                {navigatingRoute ? (
-                  <Loader2 className="h-5 w-5 shrink-0 text-primary animate-spin" />
-                ) : (
-                  <Search className="h-5 w-5 shrink-0 text-zinc-400" />
-                )}
+                <Search className="h-5 w-5 shrink-0 text-zinc-400" />
                 <input
                   ref={inputRef}
                   type="text"
@@ -333,7 +329,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           animate={{ opacity: 1, y: 0 }}
                         >
                           <div className="flex flex-col gap-2">
-                            {results.slice(0, 8).map((item) => {
+                            {results.slice(0, 5).map((item) => {
                               const isCategory = item.type === 'category';
                               const route = isCategory ? `/categories/${item.slug}` : `/products/${item.slug}`;
                               
@@ -350,11 +346,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                 <button
                                   key={`${item.type}-${item.id}`}
                                   onClick={() => handleNavigate(route)}
-                                  disabled={navigatingRoute !== null}
-                                  className={cn(
-                                    "flex items-center gap-4 rounded-xl border border-transparent p-2 text-left transition-all hover:border-zinc-100 hover:bg-zinc-50",
-                                    navigatingRoute !== null && !isNavigating && "opacity-40 pointer-events-none"
-                                  )}
+                                  className="flex items-center gap-4 rounded-xl border border-transparent p-2 text-left transition-all hover:border-zinc-100 hover:bg-zinc-50"
                                 >
                                   {!isCategory && (
                                     <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
@@ -387,36 +379,19 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                       </span>
                                     )}
                                   </div>
-                                  {isNavigating ? (
-                                    <Loader2 className="h-4 w-4 shrink-0 text-primary animate-spin mr-2" />
-                                  ) : (
-                                    <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 mr-2" />
-                                  )}
+                                  <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 mr-2" />
                                 </button>
                               );
                             })}
                           </div>
                           
-                          {results.length > 8 && (
+                          {results.length > 5 && (
                             <button
                               onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
-                              disabled={navigatingRoute !== null}
-                              className={cn(
-                                "mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50",
-                                navigatingRoute !== null && navigatingRoute !== `/shop?q=${encodeURIComponent(query)}` && "opacity-40 pointer-events-none"
-                              )}
+                              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50"
                             >
-                              {navigatingRoute === `/shop?q=${encodeURIComponent(query)}` ? (
-                                <>
-                                  Loading results...
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                </>
-                              ) : (
-                                <>
-                                  View all {results.length} results
-                                  <ArrowRight className="h-4 w-4" />
-                                </>
-                              )}
+                              View all
+                              <ArrowRight className="h-4 w-4" />
                             </button>
                           )}
                         </motion.div>
