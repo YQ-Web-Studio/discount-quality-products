@@ -120,7 +120,10 @@ export async function processOrderFromPaymentIntent(
         set_paid: true,
         transaction_id: chargeId || paymentIntent.id,
         customer_note: `Payment captured securely via Stripe. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}.`,
-        meta_data: paymentMeta,
+        meta_data: [
+          ...paymentMeta,
+          { key: "_confirmation_email_sent", value: "yes" },
+        ],
       });
       console.log(
         `[stripe-sync] ✓ WooCommerce order #${updated.number ?? updated.id} updated to "processing" for PaymentIntent ${paymentIntent.id}.`
@@ -196,7 +199,10 @@ export async function processOrderFromPaymentIntent(
         total: shippingCost.toString(),
       },
     ],
-    meta_data: paymentMeta,
+    meta_data: [
+      ...paymentMeta,
+      { key: "_confirmation_email_sent", value: "yes" },
+    ],
   };
 
   try {

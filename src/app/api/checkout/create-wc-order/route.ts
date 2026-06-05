@@ -158,10 +158,12 @@ export async function POST(req: Request) {
         { key: "_paypal_capture_id", value: transactionId ?? "" },
         { key: "_paypal_payer_id", value: body.payerId ?? "" },
         { key: "_paypal_order_status", value: "COMPLETED" },
+        { key: "_confirmation_email_sent", value: "yes" },
       ];
     } else if (paymentProvider === "stripe") {
       orderData.meta_data = [
         { key: "_stripe_intent_id", value: transactionId ?? "" },
+        { key: "_confirmation_email_sent", value: "yes" },
       ];
     }
 
