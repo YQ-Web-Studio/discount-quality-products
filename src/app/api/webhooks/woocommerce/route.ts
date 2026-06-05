@@ -76,7 +76,7 @@ export async function POST(req: Request) {
 
     try {
       console.log(`[woocommerce-webhook] Triggering order confirmation email for order #${id}...`);
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: recipientEmail,
         subject: `Order Confirmation - #${id}`,
         react: React.createElement(OrderConfirmationEmail, {
@@ -99,6 +99,10 @@ export async function POST(req: Request) {
           shippingMethod: "Free Delivery",
         }),
       });
+
+      if (!emailResult.success) {
+        throw new Error(`Resend email delivery failed: ${JSON.stringify(emailResult.error)}`);
+      }
 
       // Update WooCommerce metadata to flag that the confirmation email has been dispatched
       await updateWooCommerceOrder(id, {
@@ -148,7 +152,7 @@ export async function POST(req: Request) {
 
     try {
       console.log(`[woocommerce-webhook] Triggering order dispatch email for order #${id}...`);
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: recipientEmail,
         subject: `Your Order #${id} Has Been Dispatched!`,
         react: React.createElement(OrderDispatchedEmail, {
@@ -174,6 +178,10 @@ export async function POST(req: Request) {
           trackingLink: trackingLink || undefined,
         }),
       });
+
+      if (!emailResult.success) {
+        throw new Error(`Resend email delivery failed: ${JSON.stringify(emailResult.error)}`);
+      }
 
       // Update WooCommerce metadata to flag that the dispatch email has been sent
       await updateWooCommerceOrder(id, {
