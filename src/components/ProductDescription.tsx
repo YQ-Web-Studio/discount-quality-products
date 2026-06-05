@@ -9,6 +9,13 @@ export function ProductDescription({ htmlContent }: ProductDescriptionProps) {
   const cleanHtml = (html: string): string => {
     let clean = html;
 
+    // Remove style and script blocks and their contents completely
+    clean = clean.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    clean = clean.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+    // Strip bare CSS selector blocks that might leak, e.g. img{max-width:100%}
+    clean = clean.replace(/[a-z0-9#.*_,-]+\s*\{\s*[a-z-]+\s*:\s*[^}]+\}/gi, '');
+
     // Remove entire <a> tags (and their content) that link to eBay
     clean = clean.replace(/<a[^>]*href=["'][^"']*ebay\.(com|co\.uk|ie|com\.au|de|fr)[^"']*["'][^>]*>[\s\S]*?<\/a>/gi, '');
 
