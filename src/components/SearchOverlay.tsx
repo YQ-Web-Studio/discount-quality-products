@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, X, ChevronDown, ArrowRight, Zap, Box } from "lucide-react";
+import { Search, X, ChevronDown, ArrowRight, Zap, Box, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
@@ -80,6 +80,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const [loading, setLoading] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [navigatingRoute, setNavigatingRoute] = useState<string | null>(null);
 
   /* Portal & mount guard */
   useEffect(() => { setMounted(true); }, []);
@@ -94,6 +95,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       setQuery("");
       setResults([]);
       setExpandedCategory(null);
+      setNavigatingRoute(null);
     }
     return () => { document.body.style.overflow = ""; };
   }, [open]);
@@ -107,15 +109,18 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  /* Debounced live search */
+  /* Debounced live search with race condition prevention and keyword relevance filtering */
   useEffect(() => {
     if (query.length < 1) { setResults([]); return; }
     setLoading(true);
+    let active = true;
+
     const timer = setTimeout(async () => {
-      // 1. Fetch Backend Results (if query is at least 2 chars to save API load, or 1 if we want aggressive)
-      // Actually let's keep it 2 for backend to avoid heavy junk, but show local at 1.
+      // 1. Fetch Backend Results (if query is at least 2 chars to save API load)
       const backendResults = query.length >= 2 ? await searchProductsAction(query) : [];
       
+      if (!active) return;
+
       // 2. Collect Local Category Matches (Always)
       const localMatches: UnifiedSearchResult[] = [];
       const lowerQuery = query.toLowerCase();
@@ -159,36 +164,70 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
         return true;
       });
 
-      // 4. Score and Sort by Relevance
+      // 4. Score by Multi-Keyword Text Relevance
       const scoredResults = combined.map(item => {
         const name = item.name.toLowerCase();
         const slug = item.slug.toLowerCase();
+        const queryWords = lowerQuery.split(/\s+/).filter(Boolean);
         let score = 0;
 
-        if (name === lowerQuery || slug === lowerQuery) score += 100;
-        else if (name.startsWith(lowerQuery) || slug.startsWith(lowerQuery)) score += 50;
-        else if (name.includes(lowerQuery) || slug.includes(lowerQuery)) score += 10;
-        
-        // Prioritize categories over products for same text matches
+        // Exact match
+        if (name === lowerQuery || slug === lowerQuery) {
+          score += 100;
+        } else {
+          // Score by individual word presence
+          let matchesAllWords = true;
+          let wordMatchCount = 0;
+
+          queryWords.forEach(word => {
+            if (name.includes(word) || slug.includes(word)) {
+              score += 20;
+              wordMatchCount++;
+            } else {
+              matchesAllWords = false;
+            }
+          });
+
+          // Bonus if all query keywords are present in the result
+          if (matchesAllWords && queryWords.length > 1) {
+            score += 30;
+          }
+
+          // Bonus if any word in the name starts with a query keyword
+          const nameWords = name.split(/[\s\-]+/).filter(Boolean);
+          queryWords.forEach(qw => {
+            if (nameWords.some(nw => nw.startsWith(qw))) {
+              score += 10;
+            }
+          });
+        }
+
+        // Slight priority bias for categories over products for identical scores
         if (item.type === 'category') score += 5;
 
         return { ...item, score };
       });
 
-      // Filter out low relevance backend junk if we have better local matches
-      // but only if the user has typed something
-      const sorted = scoredResults.sort((a, b) => b.score - a.score);
+      // Filter out low relevance/arbitrary products (score of 0 means no query words match)
+      const filtered = scoredResults.filter(item => item.score > 0);
+      const sorted = filtered.sort((a, b) => b.score - a.score);
 
-      setResults(sorted);
-      setLoading(false);
+      if (active) {
+        setResults(sorted);
+        setLoading(false);
+      }
     }, 280);
-    return () => clearTimeout(timer);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   const handleNavigate = useCallback((href: string) => {
-    onClose();
+    setNavigatingRoute(href);
     router.push(href);
-  }, [onClose, router]);
+  }, [router]);
 
   if (!mounted) return null;
 
@@ -219,7 +258,11 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             {/* ── Search bar row ── */}
             <motion.div variants={panelChildVariants} className="border-b border-zinc-100 px-4 py-4 md:px-6 2xl:px-8">
               <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-4">
-                <Search className="h-5 w-5 shrink-0 text-zinc-400" />
+                {navigatingRoute ? (
+                  <Loader2 className="h-5 w-5 shrink-0 text-primary animate-spin" />
+                ) : (
+                  <Search className="h-5 w-5 shrink-0 text-zinc-400" />
+                )}
                 <input
                   ref={inputRef}
                   type="text"
@@ -301,11 +344,17 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                               const topLevelName = frontendData?.topLevel || "Other";
                               const badgeColor = getCategoryBadgeColor(topLevelName, mappedName, frontendData?.accentColor);
 
+                              const isNavigating = navigatingRoute === route;
+
                               return (
                                 <button
                                   key={`${item.type}-${item.id}`}
                                   onClick={() => handleNavigate(route)}
-                                  className="flex items-center gap-4 rounded-xl border border-transparent p-2 text-left transition-all hover:border-zinc-100 hover:bg-zinc-50"
+                                  disabled={navigatingRoute !== null}
+                                  className={cn(
+                                    "flex items-center gap-4 rounded-xl border border-transparent p-2 text-left transition-all hover:border-zinc-100 hover:bg-zinc-50",
+                                    navigatingRoute !== null && !isNavigating && "opacity-40 pointer-events-none"
+                                  )}
                                 >
                                   {!isCategory && (
                                     <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
@@ -338,7 +387,11 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                       </span>
                                     )}
                                   </div>
-                                  <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 mr-2" />
+                                  {isNavigating ? (
+                                    <Loader2 className="h-4 w-4 shrink-0 text-primary animate-spin mr-2" />
+                                  ) : (
+                                    <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 mr-2" />
+                                  )}
                                 </button>
                               );
                             })}
@@ -347,10 +400,23 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           {results.length > 8 && (
                             <button
                               onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
-                              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50"
+                              disabled={navigatingRoute !== null}
+                              className={cn(
+                                "mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50",
+                                navigatingRoute !== null && navigatingRoute !== `/shop?q=${encodeURIComponent(query)}` && "opacity-40 pointer-events-none"
+                              )}
                             >
-                              View all {results.length} results
-                              <ArrowRight className="h-4 w-4" />
+                              {navigatingRoute === `/shop?q=${encodeURIComponent(query)}` ? (
+                                <>
+                                  Loading results...
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                </>
+                              ) : (
+                                <>
+                                  View all {results.length} results
+                                  <ArrowRight className="h-4 w-4" />
+                                </>
+                              )}
                             </button>
                           )}
                         </motion.div>
