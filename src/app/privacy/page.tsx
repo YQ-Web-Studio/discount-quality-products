@@ -23,15 +23,19 @@ const sections = [
     body: 'We share your Personal Information with third parties to help us use your Personal Information, as described above. For example, we use WordPress/WooCommerce to power our backend inventory, Vercel to host our fast frontend architecture, and Stripe and PayPal to process payments securely. Your credit card data never touches our local servers.',
   },
   {
-    title: '4. Your Rights (GDPR & UK Data Protection Act)',
+    title: '4. Cookies & Google Analytics 4',
+    body: 'We use Google Analytics 4 (GA4) to help us understand how visitors interact with the site, which helps us improve the storefront experience. GA4 operates in compliance with Google Consent Mode v2. By default, all tracking cookies and advertising identifiers (analytics_storage, ad_storage, ad_user_data, ad_personalization) are blocked and set to "denied". They are only activated if you explicitly select "Accept All" on our Cookie Consent Banner. You can choose to "Reject All" to block tracking entirely, and you can modify your choice at any time by clearing your browser cookies to re-trigger the preference prompt.',
+  },
+  {
+    title: '5. Your Rights (GDPR & UK Data Protection Act)',
     body: 'If you are a UK or European resident, you have the right to access personal information we hold about you and to ask that your personal information be corrected, updated, or deleted. If you would like to exercise this right, please contact us at sales@fncomputers.com.',
   },
   {
-    title: '5. Data Retention',
+    title: '6. Data Retention',
     body: 'When you place an order through the Site, we will maintain your Order Information for our records unless and until you ask us to delete this information.',
   },
   {
-    title: '6. Contact Us',
+    title: '7. Contact Us',
     body: 'For more information about our privacy practices, please contact us by email at sales@fncomputers.com.',
   },
 ];
