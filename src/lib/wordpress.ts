@@ -271,7 +271,7 @@ export async function getProducts(first: number = 12, after: string | null = nul
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query GetProducts($first: Int, $after: String${categorySlug ? ', $categoryIn: [String]' : ''}${searchTerm ? ', $search: String' : ''}) {
-      products(first: $first, after: $after, where: { status: "PUBLISH"${categorySlug ? ', categoryIn: $categoryIn' : ''}${searchTerm ? ', search: $search' : ''} }) {
+      products(first: $first, after: $after, where: { status: "PUBLISH", visibility: VISIBLE${categorySlug ? ', categoryIn: $categoryIn' : ''}${searchTerm ? ', search: $search' : ''} }) {
         pageInfo {
           hasNextPage
           endCursor
@@ -302,7 +302,7 @@ export const getSmartFeaturedProducts = unstable_cache(
     const queryFeatured = `
       ${PRODUCT_CARD_FRAGMENT}
       query GetFeaturedProducts {
-        products(first: 6, where: { featured: true, status: "PUBLISH", orderby: [{ field: DATE, order: DESC }] }) {
+        products(first: 6, where: { featured: true, status: "PUBLISH", visibility: VISIBLE, orderby: [{ field: DATE, order: DESC }] }) {
           nodes {
             ...ProductCardFields
           }
@@ -330,7 +330,7 @@ export const getSmartFeaturedProducts = unstable_cache(
       let queryFallback = PRODUCT_CARD_FRAGMENT;
       queryFallback += `\nquery GetFallbackCategoryProducts {`;
       fallbackSlugs.forEach((slug, idx) => {
-        queryFallback += `\n  cat_${idx}: products(first: 1, where: { categoryIn: ["${slug}"], status: "PUBLISH", orderby: [{ field: DATE, order: DESC }] }) {\n    nodes {\n      ...ProductCardFields\n    }\n  }`;
+        queryFallback += `\n  cat_${idx}: products(first: 1, where: { categoryIn: ["${slug}"], status: "PUBLISH", visibility: VISIBLE, orderby: [{ field: DATE, order: DESC }] }) {\n    nodes {\n      ...ProductCardFields\n    }\n  }`;
       });
       queryFallback += `\n}`;
 
@@ -359,7 +359,7 @@ export const getSmartFeaturedProducts = unstable_cache(
         const queryGlobalFallback = `
           ${PRODUCT_CARD_FRAGMENT}
           query GetGlobalFallbackProducts($first: Int) {
-            products(first: $first, where: { status: "PUBLISH", orderby: [{ field: MENU_ORDER, order: ASC }] }) {
+            products(first: $first, where: { status: "PUBLISH", visibility: VISIBLE, orderby: [{ field: MENU_ORDER, order: ASC }] }) {
               nodes {
                 ...ProductCardFields
               }
@@ -388,7 +388,7 @@ export const getSmartFeaturedProducts = unstable_cache(
       const queryFallback = `
         ${PRODUCT_CARD_FRAGMENT}
         query GetFallbackProducts($first: Int) {
-          products(first: $first, where: { status: "PUBLISH", orderby: [{ field: MENU_ORDER, order: ASC }] }) {
+          products(first: $first, where: { status: "PUBLISH", visibility: VISIBLE, orderby: [{ field: MENU_ORDER, order: ASC }] }) {
             nodes {
               ...ProductCardFields
             }
@@ -421,7 +421,7 @@ export async function getLatestProducts(first: number = 6): Promise<Product[]> {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query GetLatestProducts($first: Int) {
-      products(first: $first, where: { status: "PUBLISH", orderby: [{ field: DATE, order: DESC }] }) {
+      products(first: $first, where: { status: "PUBLISH", visibility: VISIBLE, orderby: [{ field: DATE, order: DESC }] }) {
         nodes {
           ...ProductCardFields
         }
@@ -467,7 +467,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 export async function getProductSlugs(first: number = 50): Promise<string[]> {
   const query = `
     query GetProductSlugs($first: Int) {
-      products(first: $first, where: { status: "PUBLISH" }) {
+      products(first: $first, where: { status: "PUBLISH", visibility: VISIBLE }) {
         nodes {
           slug
         }
@@ -492,7 +492,7 @@ interface SlugsResponse {
 export async function getAllProductSlugs(limit: number = 10000): Promise<{ slug: string; date: string }[]> {
   const query = `
     query GetAllProductSlugs($first: Int, $after: String) {
-      products(first: $first, after: $after, where: { status: "PUBLISH" }) {
+      products(first: $first, after: $after, where: { status: "PUBLISH", visibility: VISIBLE }) {
         pageInfo {
           hasNextPage
           endCursor
@@ -718,7 +718,7 @@ export async function searchProducts(search: string, first: number = 10): Promis
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query SearchUnified($search: String, $first: Int) {
-      products(first: $first, where: { search: $search, status: "PUBLISH" }) {
+      products(first: $first, where: { search: $search, status: "PUBLISH", visibility: VISIBLE }) {
         nodes {
           ...ProductCardFields
         }
@@ -752,7 +752,7 @@ export async function searchProducts(search: string, first: number = 10): Promis
     const fallbackQuery = `
       ${PRODUCT_CARD_FRAGMENT}
       query SearchUnifiedFallback($search: String, $first: Int) {
-        products(first: $first, where: { tag: [$search], status: "PUBLISH" }) {
+        products(first: $first, where: { tag: [$search], status: "PUBLISH", visibility: VISIBLE }) {
           nodes {
             ...ProductCardFields
           }
