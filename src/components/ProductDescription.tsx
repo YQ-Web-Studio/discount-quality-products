@@ -41,6 +41,10 @@ export function ProductDescription({ htmlContent }: ProductDescriptionProps) {
     // Replace 2 or more consecutive br tags (including those separated by spaces or &nbsp;) with a single br tag
     clean = clean.replace(/(?:<br\s*\/?>\s*(?:&nbsp;\s*)*){2,}/gi, '<br />');
 
+    // Remove br tags that are immediately adjacent to block-level tags to avoid double/triple spacing
+    clean = clean.replace(/<br\s*\/?>\s*(<\/?(p|div|li|ul|ol|h[1-6]|table|tr|td))/gi, '$1');
+    clean = clean.replace(/(<\/(p|div|li|ul|ol|h[1-6]|table|tr|td)>)\s*<br\s*\/?>/gi, '$1');
+
     // Clean up any empty block-level tags or those containing only spaces, &nbsp;, or br tags
     clean = clean.replace(/<(p|div|span|li)[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/\1>/gi, '');
 
