@@ -73,9 +73,9 @@ export const OrderDispatchedEmail = ({
     country: 'United Kingdom',
   },
   shippingMethod = 'Free Delivery',
-  trackingProvider = 'Royal Mail',
-  trackingNumber = 'GB123456789RM',
-  trackingLink = 'https://www.royalmail.com/track-your-item#/tracking-results/GB123456789RM',
+  trackingProvider,
+  trackingNumber,
+  trackingLink,
 }: OrderDispatchedEmailProps) => {
   return (
     <Html>
