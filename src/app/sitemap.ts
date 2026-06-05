@@ -7,39 +7,46 @@ export const revalidate = 86400; // Revalidate sitemap once per day (in seconds)
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://www.discountproducts.co.uk";
 
-  // 1. Fetch active products from WordPress backend
-  let products: { slug: string; date: string }[] = [];
-  try {
-    products = await getAllProductSlugs();
-  } catch (error) {
-    console.error("Error fetching product slugs for sitemap:", error);
-  }
-
-  // 2a. Fetch published blog/guide posts
-  let posts: { slug: string; date: string }[] = [];
-  try {
-    posts = await getAllPostSlugs();
-  } catch (error) {
-    console.error("Error fetching post slugs for sitemap:", error);
-  }
-
-  // 2. Fetch categories from WooCommerce backend
-  let categories: string[] = [];
-  try {
-    const rawCategories = await getCategories();
-    rawCategories.forEach((cat) => {
-      if (cat.slug) {
-        categories.push(`/categories/${cat.slug}`);
+  // Fetch all resources in parallel to minimize overall build time
+  const [products, posts, categories] = await Promise.all([
+    (async () => {
+      try {
+        // Cap to 1000 products to avoid build timeouts on Vercel from slow WordPress sequential requests
+        return await getAllProductSlugs(1000);
+      } catch (error) {
+        console.error("Error fetching product slugs for sitemap:", error);
+        return [];
       }
-      cat.subcategories?.forEach((sub) => {
-        if (sub.slug) {
-          categories.push(`/categories/${cat.slug}?category=${sub.slug}`);
-        }
-      });
-    });
-  } catch (error) {
-    console.error("Error fetching categories for sitemap:", error);
-  }
+    })(),
+    (async () => {
+      try {
+        return await getAllPostSlugs();
+      } catch (error) {
+        console.error("Error fetching post slugs for sitemap:", error);
+        return [];
+      }
+    })(),
+    (async () => {
+      try {
+        const rawCategories = await getCategories();
+        const paths: string[] = [];
+        rawCategories.forEach((cat) => {
+          if (cat.slug) {
+            paths.push(`/categories/${cat.slug}`);
+          }
+          cat.subcategories?.forEach((sub) => {
+            if (sub.slug) {
+              paths.push(`/categories/${cat.slug}?category=${sub.slug}`);
+            }
+          });
+        });
+        return paths;
+      } catch (error) {
+        console.error("Error fetching categories for sitemap:", error);
+        return [];
+      }
+    })(),
+  ]);
 
   // 3. Define standard static pages
   const staticPages = [
