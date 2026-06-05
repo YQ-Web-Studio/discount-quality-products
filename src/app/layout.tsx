@@ -62,6 +62,7 @@ export const metadata: Metadata = {
 
 import { GlobalRouteLoader } from "@/components/GlobalRouteLoader";
 import { GoogleAnalytics } from '@next/third-parties/google';
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 
 export default function RootLayout({
   children,
@@ -74,6 +75,22 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('consent', 'default', {
+                'analytics_storage': 'denied',
+                'ad_storage': 'denied',
+                'ad_user_data': 'denied',
+                'ad_personalization': 'denied'
+              });
+            `
+          }}
+        />
+      </head>
       <body className={`${geistSans.className} min-h-screen bg-background text-foreground`} suppressHydrationWarning>
         <div className="relative flex min-h-screen flex-col overflow-x-clip">
           <StructuredData />
@@ -89,6 +106,7 @@ export default function RootLayout({
             <Footer />
             <GlobalSearch />
             <MiniCart />
+            <AnalyticsProvider />
           </AuthProvider>
         </div>
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID || "G-GYZVWG63H1"} />
