@@ -15,12 +15,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let bodyText = "";
+  try {
+    bodyText = await req.text();
+  } catch (err) {
+    console.error("[woocommerce-webhook] Failed to read body text:", err);
+    return NextResponse.json({ error: "Failed to read body text" }, { status: 400 });
+  }
+
+  if (!bodyText || bodyText.trim() === "") {
+    console.log("[woocommerce-webhook] Received empty request body. Returning verification success.");
+    return NextResponse.json({ success: true, message: "Webhook URL successfully verified" });
+  }
+
   let order: any;
   try {
-    order = await req.json();
+    order = JSON.parse(bodyText);
   } catch (err) {
-    console.error("[woocommerce-webhook] Failed to parse webhook JSON body:", err);
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    console.warn("[woocommerce-webhook] Failed to parse body as JSON. Returning success to pass webhook verification:", err);
+    return NextResponse.json({ success: true, message: "Webhook URL successfully verified (non-JSON)" });
   }
 
   const { id, status, billing, shipping, line_items, total, total_tax, date_created, meta_data, webhook_id } = order;
