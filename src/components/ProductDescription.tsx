@@ -32,8 +32,17 @@ export function ProductDescription({ htmlContent }: ProductDescriptionProps) {
       clean = clean.replace(phrase, '');
     }
 
+    // Replace raw BBCode/shortcode newline representations like [/n], [\n], [n], [nl], [/nl] with <br />
+    clean = clean.replace(/\[\/?(n|nl|br|r)\]/gi, '<br />');
+
+    // Replace literal escaped newlines/carriage returns (\n, \r, \r\n) with <br />
+    clean = clean.replace(/\\r\\n|\\n|\\r/g, '<br />');
+
     // Clean up any empty block-level tags left behind
     clean = clean.replace(/<(p|div|span|li)[^>]*>\s*<\/\1>/gi, '');
+
+    // Replace 3 or more consecutive br tags with at most two to avoid excessive whitespace
+    clean = clean.replace(/(<br\s*\/?>\s*){3,}/gi, '<br /><br />');
 
     return clean;
   };
