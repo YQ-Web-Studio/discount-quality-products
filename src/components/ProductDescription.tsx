@@ -38,11 +38,11 @@ export function ProductDescription({ htmlContent }: ProductDescriptionProps) {
     // Replace literal escaped newlines/carriage returns (\n, \r, \r\n) with <br />
     clean = clean.replace(/\\r\\n|\\n|\\r/g, '<br />');
 
-    // Clean up any empty block-level tags left behind
-    clean = clean.replace(/<(p|div|span|li)[^>]*>\s*<\/\1>/gi, '');
+    // Replace 2 or more consecutive br tags (including those separated by spaces or &nbsp;) with a single br tag
+    clean = clean.replace(/(?:<br\s*\/?>\s*(?:&nbsp;\s*)*){2,}/gi, '<br />');
 
-    // Replace 2 or more consecutive br tags with a single br tag to keep gaps at most 1 line
-    clean = clean.replace(/(<br\s*\/?>\s*){2,}/gi, '<br />');
+    // Clean up any empty block-level tags or those containing only spaces, &nbsp;, or br tags
+    clean = clean.replace(/<(p|div|span|li)[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/\1>/gi, '');
 
     return clean;
   };
