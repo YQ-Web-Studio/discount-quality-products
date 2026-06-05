@@ -91,9 +91,7 @@ export default function RootLayout({
             <MiniCart />
           </AuthProvider>
         </div>
-        {process.env.NEXT_PUBLIC_GA_ID && (
-          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
-        )}
+        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID || "G-GYZVWG63H1"} />
       </body>
     </html>
   );
