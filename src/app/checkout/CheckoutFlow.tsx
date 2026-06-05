@@ -22,11 +22,12 @@ import { THUMB_SHIMMER } from "@/lib/shimmer";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { COUNTRIES } from "@/lib/countries";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
-const REQUIRE_TEST_PASSCODE = process.env.NODE_ENV !== "production"; // Automatically disabled in production
-const TEST_PASSCODE = "DQPTEST2026"; // Enter this passcode to unlock testing checkout in dev/staging
+const REQUIRE_TEST_PASSCODE = true; // Set to false to disable this passcode check entirely
+const TEST_PASSCODE = "DQPTEST2026"; // Enter this passcode to unlock testing checkout
 
 
 
@@ -87,15 +88,6 @@ function Field({
     </div>
   );
 }
-
-const COUNTRIES = [
-  { code: "GB", name: "United Kingdom" },
-  { code: "US", name: "United States" },
-  { code: "FR", name: "France" },
-  { code: "DE", name: "Germany" },
-  { code: "AU", name: "Australia" },
-  { code: "CA", name: "Canada" },
-];
 
 /* ─── Form select field ─── */
 function SelectField({

@@ -183,6 +183,17 @@ export interface ShippingRate {
  * actual shipping rates for a specific cart items payload and shipping address.
  */
 export async function fetchWooCommerceShippingRates(items: CartItem[], address: ShippingAddress): Promise<ShippingRate[]> {
+  if (address.country && address.country.toUpperCase() === "GB") {
+    return [
+      {
+        id: "standard",
+        label: "Free Delivery",
+        price: 0,
+        eta: "3–5 working days",
+      }
+    ];
+  }
+
   const baseUrl = process.env.WOOCOMMERCE_URL || "https://admin.discountproducts.co.uk";
   let cartToken = `cart_${Math.random().toString(36).substring(2, 15)}`;
 
@@ -266,11 +277,22 @@ export async function fetchWooCommerceShippingRates(items: CartItem[], address: 
     const pkgRates = pkg.shipping_rates || [];
     for (const rate of pkgRates) {
       const priceCents = parseInt(rate.price || "0", 10);
+      
+      let label = rate.name || "International Tracked Delivery";
+      if (label === "Flexible Shipping") {
+        label = "International Tracked Delivery";
+      }
+      
+      let eta = rate.delivery_time || "5–10 working days";
+      if (eta === "3–5 working days") {
+        eta = "5–10 working days";
+      }
+
       shippingRates.push({
         id: rate.rate_id || rate.method_id,
-        label: rate.name || "Shipping",
+        label,
         price: priceCents / 100, // Convert from pence to pounds
-        eta: rate.delivery_time || "3–5 working days",
+        eta,
       });
     }
   }
