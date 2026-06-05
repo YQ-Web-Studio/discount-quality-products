@@ -41,8 +41,8 @@ export function ProductDescription({ htmlContent }: ProductDescriptionProps) {
     // Clean up any empty block-level tags left behind
     clean = clean.replace(/<(p|div|span|li)[^>]*>\s*<\/\1>/gi, '');
 
-    // Replace 3 or more consecutive br tags with at most two to avoid excessive whitespace
-    clean = clean.replace(/(<br\s*\/?>\s*){3,}/gi, '<br /><br />');
+    // Replace 2 or more consecutive br tags with a single br tag to keep gaps at most 1 line
+    clean = clean.replace(/(<br\s*\/?>\s*){2,}/gi, '<br />');
 
     return clean;
   };
