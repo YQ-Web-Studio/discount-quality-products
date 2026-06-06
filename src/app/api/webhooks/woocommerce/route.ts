@@ -3,6 +3,7 @@ import { updateWooCommerceOrder } from "@/lib/woocommerce";
 import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import OrderDispatchedEmail from "@/emails/OrderDispatchedEmail";
+import OrderRefundedEmail from "@/emails/OrderRefundedEmail";
 import React from "react";
 
 export async function POST(req: Request) {
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
   const meta = meta_data || [];
   const confirmationSent = meta.find((m: any) => m.key === "_confirmation_email_sent")?.value === "yes";
   const dispatchSent = meta.find((m: any) => m.key === "_dispatch_email_sent")?.value === "yes";
+  const refundSent = meta.find((m: any) => m.key === "_refund_email_sent")?.value === "yes";
 
   const recipientEmail = billing?.email;
   if (!recipientEmail) {
@@ -191,6 +193,63 @@ export async function POST(req: Request) {
     } catch (err) {
       console.error(`[woocommerce-webhook] Error handling dispatch email for order #${id}:`, err);
       return NextResponse.json({ error: "Failed to send dispatch email" }, { status: 500 });
+    }
+  }
+  // 4. Handle 'refunded' status (Order Refunded Email)
+  if (status === "refunded") {
+    if (refundSent) {
+      console.log(`[woocommerce-webhook] Refund email already sent for order #${id}. Skipping.`);
+      return NextResponse.json({ success: true, message: "Skipped (already sent)" });
+    }
+
+    // Determine the refund amount
+    let refundAmountStr = "";
+    if (Array.isArray(order.refunds) && order.refunds.length > 0) {
+      const totalRefunded = order.refunds.reduce((acc: number, r: any) => acc + Math.abs(parseFloat(r.total || '0')), 0);
+      refundAmountStr = `£${totalRefunded.toFixed(2)}`;
+    } else {
+      refundAmountStr = `£${parseFloat(total || '0').toFixed(2)}`;
+    }
+
+    try {
+      console.log(`[woocommerce-webhook] Triggering order refund email for order #${id}...`);
+      const emailResult = await sendEmail({
+        to: recipientEmail,
+        subject: `Refund Issued for Order #${id}`,
+        react: React.createElement(OrderRefundedEmail, {
+          customerName: customerName,
+          orderNumber: id.toString(),
+          orderDate: new Date(date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+          items: emailItems,
+          subtotal: `£${parseFloat(order.total || '0').toFixed(2)}`,
+          shipping: `£0.00`,
+          vat: `£${parseFloat(total_tax || '0').toFixed(2)}`,
+          total: `£${parseFloat(total || '0').toFixed(2)}`,
+          refundAmount: refundAmountStr,
+          shippingAddress: {
+            name: shippingName,
+            line1: shipping?.address_1 || '',
+            line2: shipping?.address_2 || '',
+            city: shipping?.city || '',
+            postcode: shipping?.postcode || '',
+            country: shipping?.country || 'United Kingdom',
+          },
+          shippingMethod: "Free Delivery",
+        }),
+      });
+
+      if (!emailResult.success) {
+        throw new Error(`Resend email delivery failed: ${JSON.stringify(emailResult.error)}`);
+      }
+
+      // Update WooCommerce metadata to flag that the refund email has been sent
+      await updateWooCommerceOrder(id, {
+        meta_data: [{ key: "_refund_email_sent", value: "yes" }],
+      });
+      console.log(`[woocommerce-webhook] ✓ Order #${id} updated with _refund_email_sent: yes`);
+    } catch (err) {
+      console.error(`[woocommerce-webhook] Error handling refund email for order #${id}:`, err);
+      return NextResponse.json({ error: "Failed to send refund email" }, { status: 500 });
     }
   }
 
