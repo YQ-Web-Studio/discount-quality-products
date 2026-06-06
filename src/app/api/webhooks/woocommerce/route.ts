@@ -69,6 +69,11 @@ export async function POST(req: Request) {
   const customerName = billing?.first_name || 'Customer';
   const shippingName = `${shipping?.first_name || ''} ${shipping?.last_name || ''}`.trim() || 'Customer';
 
+  const orderTotal = parseFloat(total || '0');
+  const orderTax = parseFloat(total_tax || '0');
+  const vatVal = orderTax || (orderTotal / 6);
+  const subtotalVal = orderTotal - vatVal;
+
   // 2. Handle 'processing' status (Order Confirmation Email)
   if (status === "processing") {
     if (confirmationSent) {
@@ -86,10 +91,10 @@ export async function POST(req: Request) {
           orderNumber: id.toString(),
           orderDate: new Date(date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
           items: emailItems,
-          subtotal: `£${parseFloat(order.total || '0').toFixed(2)}`,
+          subtotal: `£${subtotalVal.toFixed(2)}`,
           shipping: `£0.00`,
-          vat: `£${parseFloat(total_tax || '0').toFixed(2)}`,
-          total: `£${parseFloat(total || '0').toFixed(2)}`,
+          vat: `£${vatVal.toFixed(2)}`,
+          total: `£${orderTotal.toFixed(2)}`,
           shippingAddress: {
             name: shippingName,
             line1: shipping?.address_1 || '',
@@ -162,10 +167,10 @@ export async function POST(req: Request) {
           orderNumber: id.toString(),
           orderDate: new Date(date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
           items: emailItems,
-          subtotal: `£${parseFloat(order.total || '0').toFixed(2)}`,
+          subtotal: `£${subtotalVal.toFixed(2)}`,
           shipping: `£0.00`,
-          vat: `£${parseFloat(total_tax || '0').toFixed(2)}`,
-          total: `£${parseFloat(total || '0').toFixed(2)}`,
+          vat: `£${vatVal.toFixed(2)}`,
+          total: `£${orderTotal.toFixed(2)}`,
           shippingAddress: {
             name: shippingName,
             line1: shipping?.address_1 || '',
@@ -221,10 +226,10 @@ export async function POST(req: Request) {
           orderNumber: id.toString(),
           orderDate: new Date(date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
           items: emailItems,
-          subtotal: `£${parseFloat(order.total || '0').toFixed(2)}`,
+          subtotal: `£${subtotalVal.toFixed(2)}`,
           shipping: `£0.00`,
-          vat: `£${parseFloat(total_tax || '0').toFixed(2)}`,
-          total: `£${parseFloat(total || '0').toFixed(2)}`,
+          vat: `£${vatVal.toFixed(2)}`,
+          total: `£${orderTotal.toFixed(2)}`,
           refundAmount: refundAmountStr,
           shippingAddress: {
             name: shippingName,

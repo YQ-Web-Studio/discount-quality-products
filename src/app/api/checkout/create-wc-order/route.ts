@@ -181,6 +181,11 @@ export async function POST(req: Request) {
           thumbnail: item.image?.src || null,
         })) || [];
 
+        const orderTotal = parseFloat(newOrder.total || '0');
+        const orderTax = parseFloat(newOrder.total_tax || '0');
+        const vatVal = orderTax || (orderTotal / 6);
+        const subtotalVal = orderTotal - vatVal;
+
         await sendEmail({
           to: recipientEmail,
           subject: `Order Confirmation - #${newOrder.id}`,
@@ -189,10 +194,10 @@ export async function POST(req: Request) {
             orderNumber: newOrder.id.toString(),
             orderDate: new Date(newOrder.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
             items: emailItems,
-            subtotal: `£${parseFloat(newOrder.total || '0').toFixed(2)}`,
+            subtotal: `£${subtotalVal.toFixed(2)}`,
             shipping: `£0.00`,
-            vat: `£${parseFloat(newOrder.total_tax || '0').toFixed(2)}`,
-            total: `£${parseFloat(newOrder.total || '0').toFixed(2)}`,
+            vat: `£${vatVal.toFixed(2)}`,
+            total: `£${orderTotal.toFixed(2)}`,
             shippingAddress: {
               name: `${newOrder.shipping?.first_name || ''} ${newOrder.shipping?.last_name || ''}`.trim(),
               line1: newOrder.shipping?.address_1 || '',
