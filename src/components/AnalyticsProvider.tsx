@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Cookie, X } from "lucide-react";
+import { Cookie } from "lucide-react";
 
 export function AnalyticsProvider() {
   const [mounted, setMounted] = useState(false);
@@ -50,15 +50,8 @@ export function AnalyticsProvider() {
           <Cookie className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center mb-2">
             <h3 className="text-base font-bold text-zinc-900 dark:text-white">Cookie Consent</h3>
-            <button
-              onClick={() => setShowBanner(false)}
-              className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              aria-label="Close banner"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed mb-6">
             We use cookies to improve your experience, analyze site traffic, and support personalized marketing. Please accept or reject cookies. Read our{" "}
