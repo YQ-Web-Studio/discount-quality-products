@@ -5,6 +5,7 @@ import { ShoppingCart, Minus, Plus, Check, Loader2, Zap } from 'lucide-react';
 import { useBasket, parsePriceString } from '@/lib/useBasket';
 import { useMiniCart } from '@/lib/useMiniCart';
 import { useRouter } from 'next/navigation';
+import { sendGAEvent } from '@next/third-parties/google';
 
 interface AddToCartControlsProps {
   productId: string;
@@ -78,6 +79,20 @@ export function AddToCartControls({
 
     // Optimistic update — instant Zustand state mutation
     addItem(item, quantity);
+
+    // GA4 — fire add_to_cart alongside the basket mutation
+    sendGAEvent('event', 'add_to_cart', {
+      currency: 'GBP',
+      value: item.price * quantity,
+      items: [
+        {
+          item_id: productId,
+          item_name: productName,
+          price: item.price,
+          quantity,
+        },
+      ],
+    });
 
     // Open flyout with the item that was just added
     openMiniCart({ ...item, quantity });

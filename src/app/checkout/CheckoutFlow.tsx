@@ -975,6 +975,28 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }, [currentStep, clientSecret, fetchingSecret, initialiseCardPayment, processing, validateDetails]);
 
   function handleSuccess({ paymentIntentId, orderId, orderNumber }: { paymentIntentId?: string; orderId?: number; orderNumber?: string | null } = {}) {
+    // ── GA4: persist purchase payload to sessionStorage before basket is cleared ──
+    // The basket is cleared immediately below and will be gone by the time the
+    // success page mounts, so we snapshot the data here and consume it there.
+    try {
+      const ga4PurchasePayload = {
+        transaction_id: orderNumber ?? orderId?.toString() ?? paymentIntentId ?? '',
+        value: finalTotal,
+        currency: 'GBP',
+        shipping: shippingCost,
+        tax: parseFloat((computedSubtotal / 6).toFixed(2)), // VAT-inclusive: 20% extracted from gross
+        items: computedItems.map((item) => ({
+          item_id: item.id,
+          item_name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+        })),
+      };
+      sessionStorage.setItem('dqp_ga4_purchase', JSON.stringify(ga4PurchasePayload));
+    } catch {
+      // sessionStorage may be blocked in some environments — silently ignore.
+    }
+
     if (!directCheckoutItem) {
       clearBasket();
     }

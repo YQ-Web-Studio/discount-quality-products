@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, ArrowRight, Package, Loader2, AlertCircle } from "lucide-react";
+import { sendGAEvent } from "@next/third-parties/google";
+
 
 // Maximum time to wait for the Stripe webhook to create the WC order (ms).
 // Webhooks typically fire within 1–3 s of payment confirmation.
@@ -21,8 +23,76 @@ export default function SuccessContent() {
   const [polling, setPolling] = useState(!!pi && !directOrder);
   const [error, setError] = useState(false);
 
+  // ── GA4: fire purchase event once from sessionStorage snapshot ──────────────
+  // CheckoutFlow writes a full order snapshot to sessionStorage immediately
+  // before clearing the basket and redirecting. We consume it here exactly once
+  // (deleting it after firing) to prevent duplicate conversions on refresh.
+  const ga4FiredRef = useRef(false);
+
+  useEffect(() => {
+    if (ga4FiredRef.current) return;
+
+    try {
+      const raw = sessionStorage.getItem('dqp_ga4_purchase');
+      if (!raw) return;
+
+      const payload = JSON.parse(raw) as {
+        transaction_id: string;
+        value: number;
+        currency: string;
+        shipping: number;
+        tax: number;
+        items: { item_id: string; item_name: string; price: number; quantity: number }[];
+      };
+
+      // If a confirmed order number is already available (PayPal direct flow),
+      // overwrite the placeholder transaction_id with the authoritative reference.
+      if (directOrder) {
+        payload.transaction_id = directOrder;
+      }
+
+      sendGAEvent('event', 'purchase', {
+        transaction_id: payload.transaction_id,
+        value: payload.value,
+        currency: 'GBP',
+        shipping: payload.shipping,
+        tax: payload.tax,
+        items: payload.items,
+      });
+
+      ga4FiredRef.current = true;
+      // Remove immediately so page refreshes never re-fire the conversion.
+      sessionStorage.removeItem('dqp_ga4_purchase');
+    } catch {
+      // sessionStorage inaccessible or payload malformed — skip silently.
+    }
+  // Intentionally run once on mount only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── GA4: backfill transaction_id once the WC order number resolves ──────────
+  // For Stripe flows the order number is only known after webhook polling.
+  // We send a second targeted event so GA4 conversion reports carry the real
+  // WooCommerce order ID instead of the Stripe PaymentIntent placeholder.
+  const ga4BackfillRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!orderNumber) return;
+    if (ga4BackfillRef.current === orderNumber) return; // already sent for this order
+    if (!pi) return; // PayPal direct flow already set transaction_id correctly above
+
+    ga4BackfillRef.current = orderNumber;
+
+    sendGAEvent('event', 'purchase', {
+      transaction_id: orderNumber,
+      value: undefined, // omit to avoid double-counting revenue in GA4
+      currency: 'GBP',
+    });
+  }, [orderNumber, pi]);
+
   useEffect(() => {
     if (!pi || directOrder) return;
+
 
     let elapsed = 0;
     let stopped = false;

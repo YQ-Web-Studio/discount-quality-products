@@ -19,6 +19,7 @@ import { RelatedProducts } from '@/components/RelatedProducts';
 import { RecentlyViewedTracker } from '@/components/RecentlyViewedTracker';
 import { Breadcrumbs } from '@/components/navigation/Breadcrumbs';
 import { ProductSchema } from '@/components/seo/ProductSchema';
+import { ProductViewTracker } from '@/components/ProductViewTracker';
 import type { Metadata } from 'next';
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -146,6 +147,12 @@ export default async function ProductPage(props: ProductPageProps) {
 
       <RecentlyViewedTracker product={product} />
       <ProductSchema product={product} />
+      <ProductViewTracker
+        productId={String(product.databaseId)}
+        productName={product.name}
+        productPrice={product.price ?? undefined}
+        productSku={product.slug}
+      />
 
       {/* ── Main content ── */}
       <main className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-8 pb-8 pt-8 md:px-12 2xl:px-16">
