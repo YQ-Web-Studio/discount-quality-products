@@ -51,7 +51,7 @@ export const navigationCategories: NavCategory[] = [
     hoverText: "hover:text-rose-600",
     hoverOverlay: "group-hover:bg-rose-600",
     subcategories: [
-      { id: 31, label: "Magazines", slug: "magazines-books", wcSlug: "magazines-books" },
+      { id: 31, label: "Magazines & Books", slug: "magazines-books", wcSlug: "magazines-books" },
       { id: 32, label: "Movies, Blu-Ray, DVDs & VHS", slug: "movies-dvds", wcSlug: "movies-blu-ray-dvds-vhs" },
     ],
   },
