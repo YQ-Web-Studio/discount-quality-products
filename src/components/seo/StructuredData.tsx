@@ -7,7 +7,7 @@ export function StructuredData() {
     name: "Discount Quality Products",
     legalName: "Discount Quality Products Ltd.",
     description:
-      "Your premier destination for premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
+      "Your premier destination for premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.",
     url: "https://www.discountproducts.co.uk",
     foundingDate: "2011",
     logo: {

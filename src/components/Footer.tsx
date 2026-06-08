@@ -47,7 +47,7 @@ export function Footer() {
               </div>
             </Link>
             <p className="max-w-xl text-sm text-zinc-500 leading-relaxed mb-6">
-              Your destination for premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books. We deliver exceptional value and reliable shipping worldwide from the UK.
+              Your destination for premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. We deliver exceptional value and reliable shipping worldwide from the UK.
             </p>
             <div className="flex flex-col gap-4 text-xs text-zinc-500">
               <div className="flex items-start gap-3">
