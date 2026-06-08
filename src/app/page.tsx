@@ -8,11 +8,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
+  title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
   description:
     "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books. UK shipping at discount prices.",
   openGraph: {
-    title: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
+    title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
       "Shop 12,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and books.",
     images: [

@@ -25,12 +25,12 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.discountproducts.co.uk"),
   title: {
     template: "%s | Discount Quality Products",
-    default: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
+    default: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
   },
   description:
     "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
   openGraph: {
-    title: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
+    title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
       "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
     url: "https://www.discountproducts.co.uk",
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Discount Quality Products | Light Bulbs, Screws, Electricals & Collectibles",
+    title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
       "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
     images: ["/icon.svg"],
