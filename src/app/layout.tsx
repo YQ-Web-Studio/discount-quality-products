@@ -28,11 +28,11 @@ export const metadata: Metadata = {
     default: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
   },
   description:
-    "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
+    "Shop 15,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
   openGraph: {
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
+      "Shop 15,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
     url: "https://www.discountproducts.co.uk",
     siteName: "Discount Quality Products",
     type: "website",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      "Shop 12,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
+      "Shop 15,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
     images: ["/icon.svg"],
   },
   icons: {
