@@ -77,6 +77,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const searchCache = useRef<Record<string, { suggestions: string[], bestMatch: UnifiedSearchResult | null }>>({});
 
+  const [inputValue, setInputValue] = useState("");
   const [query, setQuery] = useState("");
   const [localCategories, setLocalCategories] = useState<any[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -94,6 +95,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
+      setInputValue("");
       setQuery("");
       setLocalCategories([]);
       setSuggestions([]);
@@ -112,6 +114,14 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  /* Debounce input text value to set query state */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(inputValue);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [inputValue]);
 
   /* Synchronous local category matching for instant feedback */
   useEffect(() => {
@@ -156,7 +166,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     setLocalCategories(matches);
   }, [query]);
 
-  /* Debounced remote product search */
+  /* Remote product search */
   useEffect(() => {
     const trimmed = query.trim().toLowerCase();
     if (trimmed.length < 2) {
@@ -180,9 +190,12 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     setBestMatch(null);
     setProductsLoading(true);
 
-    const timer = setTimeout(async () => {
+    let active = true;
+
+    const fetchResults = async () => {
       try {
         const backendResults = await searchProductsAction(trimmed);
+        if (!active) return;
         
         // Filter for products only
         const productResults = backendResults.filter(item => item.type === 'product');
@@ -237,16 +250,24 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
           bestMatch: finalBestMatch
         };
 
-        setBestMatch(finalBestMatch);
-        setSuggestions(derivedSuggestions);
+        if (active) {
+          setBestMatch(finalBestMatch);
+          setSuggestions(derivedSuggestions);
+        }
       } catch (error) {
         console.error("Failed to fetch products:", error);
       } finally {
-        setProductsLoading(false);
+        if (active) {
+          setProductsLoading(false);
+        }
       }
-    }, 120);
+    };
 
-    return () => clearTimeout(timer);
+    fetchResults();
+
+    return () => {
+      active = false;
+    };
   }, [query]);
 
   const handleNavigate = useCallback((href: string) => {
@@ -285,22 +306,23 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             <motion.div variants={panelChildVariants} className="border-b border-zinc-100 px-4 py-4 md:px-6 2xl:px-8">
               <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-4">
                 <Search className="h-5 w-5 shrink-0 text-zinc-400" />
-                <input
+                 <input
                   ref={inputRef}
                   type="text"
                   placeholder="Search 15,000+ products..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && query.trim()) {
-                      handleNavigate(`/shop?q=${encodeURIComponent(query.trim())}`);
+                    if (e.key === "Enter" && inputValue.trim()) {
+                      handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`);
                     }
                   }}
                   className="flex-1 bg-transparent text-lg font-medium text-zinc-900 placeholder:text-zinc-400 outline-none"
                 />
                 <button
                   onClick={() => {
-                    if (query) {
+                    if (inputValue) {
+                      setInputValue("");
                       setQuery("");
                       inputRef.current?.focus();
                     } else {
@@ -308,7 +330,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     }
                   }}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-                  aria-label={query ? "Clear search" : "Close search"}
+                  aria-label={inputValue ? "Clear search" : "Close search"}
                 >
                   <X className="h-4 w-4" />
                 </button>
