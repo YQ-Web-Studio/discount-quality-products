@@ -268,7 +268,7 @@ async function wpFetch<T>(
   }
 }
 
-export async function getProducts(first: number = 12, after: string | null = null, categorySlug: string | null = null, searchTerm: string | null = null): Promise<ProductsResponse> {
+async function getProductsInternal(first: number = 12, after: string | null = null, categorySlug: string | null = null, searchTerm: string | null = null): Promise<ProductsResponse> {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query GetProducts($first: Int, $after: String${categorySlug ? ', $categoryIn: [String]' : ''}${searchTerm ? ', $search: String' : ''}) {
@@ -296,6 +296,15 @@ export async function getProducts(first: number = 12, after: string | null = nul
     pageInfo: data.products.pageInfo,
   };
 }
+
+export const getProducts = cache(async (first: number = 12, after: string | null = null, categorySlug: string | null = null, searchTerm: string | null = null): Promise<ProductsResponse> => {
+  const cachedFn = unstable_cache(
+    async (f, a, c, s) => getProductsInternal(f, a, c, s),
+    ['get-products', String(first), String(after), String(categorySlug), String(searchTerm)],
+    { revalidate: 1800, tags: ["wc-products"] }
+  );
+  return cachedFn(first, after, categorySlug, searchTerm);
+});
 
 export const getSmartFeaturedProducts = unstable_cache(
   async (): Promise<Product[]> => {
@@ -418,7 +427,7 @@ export const getSmartFeaturedProducts = unstable_cache(
   { revalidate: 3600 }
 );
 
-export async function getLatestProducts(first: number = 6): Promise<Product[]> {
+async function getLatestProductsInternal(first: number = 6): Promise<Product[]> {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query GetLatestProducts($first: Int) {
@@ -434,7 +443,16 @@ export async function getLatestProducts(first: number = 6): Promise<Product[]> {
   return data.products.nodes.map(mapProductData);
 }
 
-export const getProductBySlug = cache(async (slug: string): Promise<Product | null> => {
+export const getLatestProducts = cache(async (first: number = 6): Promise<Product[]> => {
+  const cachedFn = unstable_cache(
+    async (limit: number) => getLatestProductsInternal(limit),
+    ['latest-products', String(first)],
+    { revalidate: 1800, tags: ["wc-products"] }
+  );
+  return cachedFn(first);
+});
+
+async function getProductBySlugInternal(slug: string): Promise<Product | null> {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query GetProductBySlug($slug: ID!) {
@@ -463,6 +481,15 @@ export const getProductBySlug = cache(async (slug: string): Promise<Product | nu
   };
 
   return mapProductData(product);
+}
+
+export const getProductBySlug = cache(async (slug: string): Promise<Product | null> => {
+  const cachedFn = unstable_cache(
+    async (s: string) => getProductBySlugInternal(s),
+    ['product-by-slug', slug],
+    { revalidate: 1800, tags: ["wc-products", `product-${slug}`] }
+  );
+  return cachedFn(slug);
 });
 
 export async function getProductSlugs(first: number = 50): Promise<string[]> {
@@ -568,7 +595,7 @@ export interface WpPost {
  * Fetches a single WordPress post by its slug.
  * Returns null if the post does not exist.
  */
-export const getPostBySlug = cache(async (slug: string): Promise<WpPost | null> => {
+async function getPostBySlugInternal(slug: string): Promise<WpPost | null> {
   const query = `
     query GetPostBySlug($slug: ID!) {
       post(id: $slug, idType: SLUG) {
@@ -611,12 +638,18 @@ export const getPostBySlug = cache(async (slug: string): Promise<WpPost | null> 
   } catch {
     return null;
   }
+}
+
+export const getPostBySlug = cache(async (slug: string): Promise<WpPost | null> => {
+  const cachedFn = unstable_cache(
+    async (s: string) => getPostBySlugInternal(s),
+    ['post-by-slug', slug],
+    { revalidate: 1800, tags: ["wc-posts", `post-${slug}`] }
+  );
+  return cachedFn(slug);
 });
 
-/**
- * Fetches a paginated list of published WordPress posts for the guides index.
- */
-export async function getPosts(first: number = 12, after: string | null = null): Promise<{
+async function getPostsInternal(first: number = 12, after: string | null = null): Promise<{
   posts: WpPost[];
   pageInfo: PageInfo;
 }> {
@@ -667,6 +700,18 @@ export async function getPosts(first: number = 12, after: string | null = null):
     return { posts: [], pageInfo: { hasNextPage: false, endCursor: '' } };
   }
 }
+
+export const getPosts = cache(async (first: number = 12, after: string | null = null): Promise<{
+  posts: WpPost[];
+  pageInfo: PageInfo;
+}> => {
+  const cachedFn = unstable_cache(
+    async (f, a) => getPostsInternal(f, a),
+    ['get-posts', String(first), String(after)],
+    { revalidate: 1800, tags: ["wc-posts"] }
+  );
+  return cachedFn(first, after);
+});
 
 /**
  * Fetches all published post slugs and their last-modified dates.
