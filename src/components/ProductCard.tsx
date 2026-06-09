@@ -1,6 +1,7 @@
 "use client";
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { Product } from '@/lib/wordpress';
 import { Star, Box, Heart, Loader2, ShoppingCart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -179,7 +180,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         </div>
       </div>
 
-      <a href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${product.name}`} />
+      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${product.name}`} />
 
       <div className="flex flex-col pt-5">
         {fitting && (

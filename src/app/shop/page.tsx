@@ -134,7 +134,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const pageStr = typeof params.page === "string" ? params.page : "1";
   const page = parseInt(pageStr, 10) || 1;
 
-  console.log('[Shop] Filtering by:', { category: categorySlug, subcategory: subcategorySlug });
+
 
   const initialCategories = await getCategories();
 

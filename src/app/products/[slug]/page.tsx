@@ -94,20 +94,23 @@ export default async function ProductPage(props: ProductPageProps) {
   if (!product) notFound();
 
   const categories = product.productCategories?.nodes ?? [];
-  
-  // Fetch related products from the same category using the established getProducts function
+
+  // Fetch related products — fire category-specific and general fallback in parallel
+  // so we never wait for them sequentially
   let relatedProducts: Product[] = [];
   if (categories[0]) {
-    const relatedResponse = await getProducts(10, null, categories[0].slug);
-    relatedProducts = relatedResponse.products
+    const [categoryRelated, generalFallback] = await Promise.all([
+      getProducts(10, null, categories[0].slug),
+      getProducts(10), // pre-fetch fallback in parallel — costs nothing if not needed
+    ]);
+
+    relatedProducts = categoryRelated.products
       .filter(p => p.databaseId !== product.databaseId)
       .slice(0, 5);
-      
-    // Fallback: If the category only has this single product (common in dev environments),
-    // fetch general products so the row still renders and aids discovery.
+
+    // Use fallback only if category gave zero results
     if (relatedProducts.length === 0) {
-      const fallbackResponse = await getProducts(10);
-      relatedProducts = fallbackResponse.products
+      relatedProducts = generalFallback.products
         .filter(p => p.databaseId !== product.databaseId)
         .slice(0, 5);
     }

@@ -6,9 +6,18 @@ const nextConfig = {
   experimental: {
     workerThreads: false,
     cpus: 1,
+    // Keep RSC payloads in the client router cache so back/forward nav is instant
+    staleTimes: {
+      dynamic: 180, // 3 minutes — navigating back serves cached RSC payload
+      static: 600,  // 10 minutes
+    },
   },
 
   images: {
+    // Serve AVIF first (30–50% smaller than WebP), fall back to WebP
+    formats: ['image/avif', 'image/webp'],
+    // Cache optimised images for 30 days in the browser/CDN
+    minimumCacheTTL: 2592000,
     remotePatterns: [
       // ── New Active Live Subdomain ──────────────────────────────────
       {

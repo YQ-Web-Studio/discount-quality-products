@@ -243,7 +243,7 @@ async function fetchProductsInternal(
         ...authHeader,
         "Content-Type": "application/json",
       },
-      next: { revalidate: 1800 },
+      next: { revalidate: 1800, tags: ["wc-products"] },
     });
 
     if (!response.ok) {
@@ -335,7 +335,7 @@ async function getProductBySlugInternal(slug: string): Promise<MappedProduct | n
         ...authHeader,
         "Content-Type": "application/json",
       },
-      cache: "no-store",
+      next: { revalidate: 3600, tags: ["wc-products", `wc-product-${slug}`] },
     });
 
     if (!response.ok) return null;
@@ -445,7 +445,7 @@ async function getCategoriesInternal(): Promise<DynamicNavCategory[]> {
         ...authHeader,
         "Content-Type": "application/json",
       },
-      cache: "no-store",
+      next: { revalidate: 7200, tags: ["wc-categories"] },
     });
 
     if (!response.ok) {

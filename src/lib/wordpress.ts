@@ -110,12 +110,7 @@ export const PRODUCT_CARD_FRAGMENT = `
         databaseId
       }
     }
-    galleryImages(first: 1) {
-      nodes {
-        sourceUrl
-        altText
-      }
-    }
+
     ... on SimpleProduct {
       price
       regularPrice
@@ -207,7 +202,7 @@ async function wpFetch<T>(
         variables,
       }),
       signal: controller.signal,
-      next: { revalidate: 3600, tags: ["wc-products"] }, // Default revalidation for ISR
+      next: { revalidate: 1800, tags: ["wc-products"] },
     });
 
     clearTimeout(timeoutId);
@@ -287,7 +282,7 @@ async function getProductsInternal(first: number = 12, after: string | null = nu
   const variables: Record<string, any> = { first, after };
   if (categorySlug) variables.categoryIn = [categorySlug];
   if (searchTerm) variables.search = searchTerm;
-  console.log('[GraphQL] Variables:', variables);
+
 
   const data = await wpFetch<{ products: { nodes: Product[]; pageInfo: PageInfo } }>(query, variables);
   
