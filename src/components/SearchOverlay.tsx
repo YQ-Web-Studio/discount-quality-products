@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, X, ChevronDown, ArrowRight, Zap, Box, Loader2 } from "lucide-react";
+import { Search, X, ArrowRight, Zap, Box, Tag } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
@@ -31,41 +30,6 @@ const panelChildVariants: Variants = {
   },
 };
 
-const getFrontendCategoryData = (slug: string) => {
-  for (const parent of navigationCategories) {
-    if (parent.slug === slug) return { name: parent.label, parentName: null, topLevel: parent.label, accentColor: parent.accentColor };
-    for (const sub of parent.subcategories) {
-      if (sub.slug === slug || sub.wcSlug === slug) {
-        return { name: sub.label, parentName: parent.label, topLevel: parent.label, accentColor: parent.accentColor };
-      }
-    }
-  }
-  return null;
-};
-
-const COLOR_MAP: Record<string, string> = {
-  emerald: "bg-emerald-100 text-emerald-800",
-  amber: "bg-amber-100 text-amber-800",
-  rose: "bg-rose-100 text-rose-800",
-  cyan: "bg-cyan-100 text-cyan-800",
-  violet: "bg-violet-100 text-violet-800",
-  purple: "bg-purple-100 text-purple-800",
-};
-
-const getCategoryBadgeColor = (topLevelName: string, categoryName: string, accentColor?: string) => {
-  // Specific purple overrides for requested departments
-  if (categoryName === "Fittings & Accessories") return COLOR_MAP.purple;
-  if (categoryName === "Light Bulbs" || topLevelName === "Lighting") return "bg-purple-200 text-purple-900";
-  
-  // Static mapping based on frontend config accent colors to ensure Tailwind picks up the classes
-  if (accentColor) {
-    const base = accentColor.replace('text-', '').replace('-600', '');
-    return COLOR_MAP[base] || "bg-purple-50 text-purple-700";
-  }
-
-  return "bg-purple-50 text-purple-700";
-};
-
 interface SearchOverlayProps {
   open: boolean;
   onClose: () => void;
@@ -76,15 +40,16 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<UnifiedSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [localCategories, setLocalCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<UnifiedSearchResult[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [bestMatch, setBestMatch] = useState<UnifiedSearchResult | null>(null);
   const [mounted, setMounted] = useState(false);
 
   /* Portal & mount guard */
   useEffect(() => { setMounted(true); }, []);
 
-  /* Focus input when overlay opens */
+  /* Reset state and focus input when overlay status changes */
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 120);
@@ -92,8 +57,10 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     } else {
       document.body.style.overflow = "";
       setQuery("");
-      setResults([]);
-      setExpandedCategory(null);
+      setLocalCategories([]);
+      setProducts([]);
+      setBestMatch(null);
+      setProductsLoading(false);
     }
     return () => { document.body.style.overflow = ""; };
   }, [open]);
@@ -107,119 +74,122 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  /* Debounced live search with race condition prevention and keyword relevance filtering */
+  /* Synchronous local category matching for instant feedback */
   useEffect(() => {
-    if (query.length < 1) { setResults([]); return; }
-    setLoading(true);
-    let active = true;
+    const trimmed = query.trim();
+    if (trimmed.length === 0) {
+      setLocalCategories([]);
+      return;
+    }
+    
+    const lower = trimmed.toLowerCase();
+    const matches: any[] = [];
+
+    navigationCategories.forEach(parent => {
+      const parentMatch = parent.label.toLowerCase().includes(lower) || parent.slug.toLowerCase().includes(lower);
+      if (parentMatch) {
+        matches.push({
+          id: `local-${parent.id}`,
+          name: parent.label,
+          slug: parent.slug,
+          parentName: null,
+          parentSlug: null,
+          route: `/categories/${parent.slug}`,
+          accentColor: parent.accentColor,
+        });
+      }
+      parent.subcategories.forEach(sub => {
+        const subMatch = sub.label.toLowerCase().includes(lower) || sub.slug.toLowerCase().includes(lower);
+        if (subMatch) {
+          matches.push({
+            id: `local-${sub.id}`,
+            name: sub.label,
+            slug: sub.slug,
+            parentName: parent.label,
+            parentSlug: parent.slug,
+            route: `/categories/${parent.slug}?category=${sub.slug}`,
+            accentColor: parent.accentColor,
+          });
+        }
+      });
+    });
+
+    setLocalCategories(matches);
+  }, [query]);
+
+  /* Debounced remote product search */
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setProducts([]);
+      setBestMatch(null);
+      setProductsLoading(false);
+      return;
+    }
+
+    setProductsLoading(true);
 
     const timer = setTimeout(async () => {
-      // 1. Fetch Backend Results (if query is at least 2 chars to save API load)
-      const backendResults = query.length >= 2 ? await searchProductsAction(query) : [];
-      
-      if (!active) return;
+      try {
+        const backendResults = await searchProductsAction(trimmed);
+        
+        // Filter for products only
+        const productResults = backendResults.filter(item => item.type === 'product');
 
-      // 2. Collect Local Category Matches (Always)
-      const localMatches: UnifiedSearchResult[] = [];
-      const lowerQuery = query.toLowerCase();
-      
-      navigationCategories.forEach(parent => {
-        const parentMatch = parent.label.toLowerCase().includes(lowerQuery) || parent.slug.toLowerCase().includes(lowerQuery);
-        if (parentMatch) {
-          localMatches.push({
-            type: 'category',
-            id: `local-${parent.id}`,
-            name: parent.label,
-            slug: parent.slug,
-            parentName: null,
-          });
-        }
-        parent.subcategories.forEach(sub => {
-          const subMatch = sub.label.toLowerCase().includes(lowerQuery) || sub.slug.toLowerCase().includes(lowerQuery);
-          if (subMatch) {
-            localMatches.push({
-              type: 'category',
-              id: `local-${sub.id}`,
-              name: sub.label,
-              slug: sub.slug,
-              parentName: parent.label,
+        // Scoring for Best Match (Exact or high-relevance score >= 90)
+        let highestScore = 0;
+        let bestItem: UnifiedSearchResult | null = null;
+        const q = trimmed.toLowerCase();
+
+        productResults.forEach(item => {
+          const name = item.name.toLowerCase();
+          let score = 0;
+
+          if (name === q) {
+            score = 100;
+          } else if (name.startsWith(q)) {
+            score = 95;
+          } else {
+            const queryWords = q.split(/\s+/).filter(Boolean);
+            const nameWords = name.split(/\s+/).filter(Boolean);
+            let matchCount = 0;
+            queryWords.forEach(qw => {
+              if (nameWords.includes(qw)) {
+                matchCount++;
+              }
             });
+            if (queryWords.length > 0) {
+              const ratio = matchCount / queryWords.length;
+              if (ratio === 1) {
+                score = 90;
+              } else {
+                score = Math.round(ratio * 80);
+              }
+            }
+          }
+
+          if (score > highestScore) {
+            highestScore = score;
+            bestItem = item;
           }
         });
-      });
 
-      // 3. Merge and Deduplicate
-      const seenSlugs = new Set();
-      const combined = [...localMatches, ...backendResults].filter(item => {
-        if (seenSlugs.has(item.slug)) return false;
-        
-        // Strict Category Filter: Only show categories that exist in our frontend config
-        if (item.type === 'category' && !getFrontendCategoryData(item.slug)) {
-          return false;
-        }
-        
-        seenSlugs.add(item.slug);
-        return true;
-      });
-
-      // 4. Score by Multi-Keyword Text Relevance
-      const scoredResults = combined.map(item => {
-        const name = item.name.toLowerCase();
-        const slug = item.slug.toLowerCase();
-        const queryWords = lowerQuery.split(/\s+/).filter(Boolean);
-        let score = 0;
-
-        // Exact match
-        if (name === lowerQuery || slug === lowerQuery) {
-          score += 100;
+        if (highestScore >= 90 && bestItem) {
+          setBestMatch(bestItem);
+          // Filter bestMatch out of the main suggestions to avoid duplication
+          setProducts(productResults.filter(p => p.id !== bestItem!.id));
         } else {
-          // Score by individual word presence
-          let matchesAllWords = true;
-          let wordMatchCount = 0;
-
-          queryWords.forEach(word => {
-            if (name.includes(word) || slug.includes(word)) {
-              score += 20;
-              wordMatchCount++;
-            } else {
-              matchesAllWords = false;
-            }
-          });
-
-          // Bonus if all query keywords are present in the result
-          if (matchesAllWords && queryWords.length > 1) {
-            score += 30;
-          }
-
-          // Bonus if any word in the name starts with a query keyword
-          const nameWords = name.split(/[\s\-]+/).filter(Boolean);
-          queryWords.forEach(qw => {
-            if (nameWords.some(nw => nw.startsWith(qw))) {
-              score += 10;
-            }
-          });
+          setBestMatch(null);
+          setProducts(productResults);
         }
-
-        // Slight priority bias for categories over products for identical scores
-        if (item.type === 'category') score += 5;
-
-        return { ...item, score };
-      });
-
-      // Filter out low relevance/arbitrary products (score of 0 means no query words match)
-      const filtered = scoredResults.filter(item => item.score > 0);
-      const sorted = filtered.sort((a, b) => b.score - a.score);
-
-      if (active) {
-        setResults(sorted);
-        setLoading(false);
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
+      } finally {
+        setProductsLoading(false);
       }
-    }, 150);
+    }, 200);
 
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, [query]);
 
   const handleNavigate = useCallback((href: string) => {
@@ -254,7 +224,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             animate="visible"
             exit="hidden"
           >
-            {/* ── Search bar row ── */}
+            {/* Search bar row */}
             <motion.div variants={panelChildVariants} className="border-b border-zinc-100 px-4 py-4 md:px-6 2xl:px-8">
               <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-4">
                 <Search className="h-5 w-5 shrink-0 text-zinc-400" />
@@ -291,184 +261,234 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 py-6 md:px-6 2xl:px-8">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                 
-                {/* ── Left Column: Search Results ── */}
+                {/* Left Column: Search Results */}
                 <div className="lg:col-span-9 flex flex-col">
-              
-              {/* ── Dynamic Search Results Stream ── */}
-              <AnimatePresence mode="wait">
-                {query.trim().length > 0 ? (
-                  <motion.div
-                    key="search-results"
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                  >
-                    <div className="pb-6">
-                      <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                        {loading ? "Searching..." : "Search Results"}
-                      </p>
+                  <AnimatePresence mode="wait">
+                    {query.trim().length > 0 ? (
+                      <motion.div
+                        key="search-results"
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="pb-6"
+                      >
+                        {/* Instant Categories matching local Config */}
+                        {localCategories.length > 0 && (
+                          <div className="mb-6">
+                            <h4 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                              Categories & Departments
+                            </h4>
+                            <div className="flex flex-col gap-1.5">
+                              {localCategories.slice(0, 5).map((cat) => (
+                                <button
+                                  key={cat.id}
+                                  onClick={() => handleNavigate(cat.route)}
+                                  className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-purple-700 transition-colors border border-zinc-100/50">
+                                      <Tag className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex items-baseline">
+                                      <span className="text-sm font-semibold text-zinc-800 group-hover:text-zinc-950 transition-colors">
+                                        {cat.name}
+                                      </span>
+                                      {cat.parentName && (
+                                        <span className="ml-2 text-xs text-zinc-400">
+                                          in {cat.parentName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                      {loading && (
-                        <div className="flex flex-col gap-2">
-                          {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="flex items-center gap-4 rounded-xl border border-zinc-100 p-3 animate-pulse">
-                              <div className="h-14 w-14 shrink-0 rounded-lg bg-zinc-100" />
-                              <div className="flex-1 space-y-2">
-                                <div className="h-3 w-3/4 rounded bg-zinc-100" />
-                                <div className="h-3 w-1/3 rounded bg-zinc-100" />
+                        {/* Product suggestions */}
+                        <div>
+                          <h4 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                            Product Suggestions
+                          </h4>
+
+                          {productsLoading ? (
+                            <div className="space-y-1.5">
+                              {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="flex items-center justify-between px-4 py-3 border border-zinc-50 rounded-xl animate-pulse bg-zinc-50/50">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 rounded-lg bg-zinc-100" />
+                                    <div className="h-4 w-48 rounded bg-zinc-100" />
+                                  </div>
+                                  <div className="h-4 w-12 rounded bg-zinc-100" />
+                                </div>
+                              ))}
+                            </div>
+                          ) : products.length > 0 ? (
+                            <div className="flex flex-col gap-1.5">
+                              {products.slice(0, 6).map((product) => (
+                                <button
+                                  key={product.id}
+                                  onClick={() => handleNavigate(`/products/${product.slug}`)}
+                                  className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-purple-700 transition-colors border border-zinc-100/50">
+                                      <Search className="h-4 w-4" />
+                                    </div>
+                                    <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-950 truncate transition-colors">
+                                      {product.name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-xs font-bold text-primary">
+                                      {product.price || "View product"}
+                                    </span>
+                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
+                                  </div>
+                                </button>
+                              ))}
+                              {products.length > 6 && (
+                                <button
+                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
+                                  className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-2 w-fit mx-auto"
+                                >
+                                  View all matching products
+                                  <ArrowRight className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            !productsLoading && localCategories.length === 0 && (
+                              <div className="py-16 text-center">
+                                <p className="text-sm font-medium text-zinc-400">
+                                  No results for <span className="font-bold text-zinc-700">"{query}"</span>
+                                </p>
+                                <p className="mt-1 text-xs text-zinc-400">
+                                  Try searching for something else.
+                                </p>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="initial-state"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="flex-1 flex flex-col items-center justify-center text-center py-12 pb-24"
+                      >
+                        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-300 mx-auto">
+                          <Search className="h-7 w-7" />
+                        </div>
+                        <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
+                        <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
+                          Find exactly what you need across our range of 15,000+ premium products and trade accessories.
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Right Column: Persistent Browse Categories OR Best Match */}
+                <div className="lg:col-span-3">
+                  <AnimatePresence mode="wait">
+                    {bestMatch ? (
+                      <motion.div
+                        key="best-match"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                          Best Match
+                        </p>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                          <div className="absolute top-3 left-3 z-10 rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1 border border-purple-200">
+                            <Zap className="h-3 w-3 fill-current" />
+                            Best Match
+                          </div>
+                          <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-zinc-50 mb-4 mt-2">
+                            {bestMatch.imageUrl ? (
+                              <Image
+                                src={bestMatch.imageUrl}
+                                alt={bestMatch.imageAlt || bestMatch.name}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 300px"
+                                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Box className="h-10 w-10 text-zinc-300" />
+                              </div>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-zinc-900 group-hover:text-primary transition-colors line-clamp-2 min-h-[2.5rem] text-sm leading-snug">
+                            {bestMatch.name}
+                          </h4>
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-sm font-extrabold text-primary">
+                              {bestMatch.price || "View Price"}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleNavigate(`/products/${bestMatch.slug}`)}
+                            className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-zinc-950 py-2.5 text-xs font-bold text-white transition-all hover:bg-zinc-800"
+                          >
+                            View Details
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="browse-categories"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                          Browse by Category
+                        </p>
+                        <div className="flex flex-col gap-3">
+                          {navigationCategories.map((category) => (
+                            <div key={category.slug} className="rounded-xl border border-zinc-100 p-4 bg-zinc-50/50">
+                              <button
+                                onClick={() => handleNavigate(`/categories/${category.slug}`)}
+                                className={cn("text-sm font-bold mb-3 transition-opacity hover:opacity-70 text-left w-full", category.accentColor)}
+                              >
+                                {category.label}
+                              </button>
+                              <div className="flex flex-col gap-2">
+                                {category.subcategories.map((sub) => (
+                                  <button
+                                    key={sub.slug}
+                                    onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
+                                    className="flex items-center justify-between text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left"
+                                  >
+                                    {sub.label}
+                                    <ArrowRight className="h-3 w-3 text-zinc-300" />
+                                  </button>
+                                ))}
                               </div>
                             </div>
                           ))}
                         </div>
-                      )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-                      {!loading && results.length > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                        >
-                          <div className="flex flex-col gap-2">
-                            {results.slice(0, 4).map((item) => {
-                              const isCategory = item.type === 'category';
-                              const route = isCategory ? `/categories/${item.slug}` : `/products/${item.slug}`;
-                              
-                              // Frontend Mapping Logic
-                              const frontendData = isCategory ? getFrontendCategoryData(item.slug) : null;
-                              const mappedName = frontendData?.name || item.name;
-                              const parentName = frontendData?.parentName || item.parentName;
-                              const topLevelName = frontendData?.topLevel || "Other";
-                              const badgeColor = getCategoryBadgeColor(topLevelName, mappedName, frontendData?.accentColor);
-
-                              return (
-                                <button
-                                  key={`${item.type}-${item.id}`}
-                                  onClick={() => handleNavigate(route)}
-                                  className="flex items-center gap-4 rounded-xl border border-transparent p-2 text-left transition-all hover:border-zinc-100 hover:bg-zinc-50"
-                                >
-                                  {!isCategory && (
-                                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
-                                      {item.imageUrl ? (
-                                        <Image src={item.imageUrl} alt={item.imageAlt || item.name} fill sizes="56px" className="object-cover" />
-                                      ) : (
-                                        <div className="flex h-full w-full items-center justify-center">
-                                          <Box className="h-5 w-5 text-zinc-300" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  <div className="flex flex-1 flex-col overflow-hidden">
-                                    <span className={cn(
-                                      "truncate text-sm font-semibold",
-                                      isCategory && !parentName ? frontendData?.accentColor : "text-zinc-900"
-                                    )}>
-                                      {mappedName}
-                                    </span>
-                                    {isCategory ? (
-                                      <span className={cn(
-                                        "mt-1 w-fit rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
-                                        parentName ? badgeColor : "bg-zinc-100 text-zinc-600"
-                                      )}>
-                                        {parentName || "Department"}
-                                      </span>
-                                    ) : (
-                                      <span className="mt-0.5 text-xs font-bold text-primary">
-                                        {item.price ?? "View product"}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 mr-2" />
-                                </button>
-                              );
-                            })}
-                          </div>
-                          
-                          {results.length > 4 && (
-                            <button
-                              onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
-                              className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-1 w-fit mx-auto"
-                            >
-                              View all
-                              <ArrowRight className="h-3 w-3" />
-                            </button>
-                          )}
-                        </motion.div>
-                      )}
-
-                      {!loading && results.length === 0 && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="py-20 text-center"
-                        >
-                          <p className="text-sm font-medium text-zinc-400">
-                            No results for <span className="font-bold text-zinc-700">"{query}"</span>
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-400">
-                            Try a different term.
-                          </p>
-                        </motion.div>
-                      )}
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="initial-state"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="flex-1 flex flex-col items-center justify-center text-center py-12 pb-24"
-                  >
-                    <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-300 mx-auto">
-                      <Search className="h-7 w-7" />
-                    </div>
-                    <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
-                    <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
-                      Find exactly what you need across our range of 15,000+ premium products and trade accessories.
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-                {/* ── Right Column: Persistent Browse Categories ── */}
-                <div className="lg:col-span-3">
-              <motion.div variants={panelChildVariants}>
-                <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                  Browse by Category
-                </p>
-                <div className="flex flex-col gap-3">
-                  {navigationCategories.map((category) => (
-                    <div key={category.slug} className="rounded-xl border border-zinc-100 p-4">
-                      <button
-                        onClick={() => handleNavigate(`/categories/${category.slug}`)}
-                        className={cn("text-sm font-bold mb-3 transition-opacity hover:opacity-70", category.accentColor)}
-                      >
-                        {category.label}
-                      </button>
-                      <div className="flex flex-col gap-2">
-                        {category.subcategories.map((sub) => (
-                          <button
-                            key={sub.slug}
-                            onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
-                            className="flex items-center justify-between text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900"
-                          >
-                            {sub.label}
-                            <ArrowRight className="h-3 w-3 text-zinc-300" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                  {/* Shortcut hint */}
+                  <p className="mt-10 text-[10px] text-zinc-400">
+                    Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono font-medium text-zinc-500">Esc</kbd> to close
+                  </p>
                 </div>
-              </motion.div>
-
-              {/* Shortcut hint */}
-              <p className="mt-10 text-[10px] text-zinc-400">
-                Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono font-medium text-zinc-500">Esc</kbd> to close
-              </p>
+              </div>
             </div>
-          </div>
-        </div>
           </motion.div>
         </>
       )}

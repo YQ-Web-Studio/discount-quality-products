@@ -760,7 +760,7 @@ export async function getAllPostSlugs(): Promise<{ slug: string; date: string }[
   return results;
 }
 
-export async function searchProducts(search: string, first: number = 10): Promise<UnifiedSearchResult[]> {
+async function searchProductsInternal(search: string, first: number = 10): Promise<UnifiedSearchResult[]> {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query SearchUnified($search: String, $first: Int) {
@@ -837,20 +837,30 @@ export async function searchProducts(search: string, first: number = 10): Promis
     });
   }
 
-    if (data.products?.nodes) {
-      data.products.nodes.forEach((prod) => {
-        const mappedProd = mapProductData(prod);
-        results.push({
-          type: 'product',
-          id: mappedProd.id,
-          name: mappedProd.name,
-          slug: mappedProd.slug,
-          price: mappedProd.price,
-          imageUrl: mappedProd.image?.sourceUrl || null,
-          imageAlt: mappedProd.image?.altText || null,
-        });
+  if (data.products?.nodes) {
+    data.products.nodes.forEach((prod) => {
+      const mappedProd = mapProductData(prod);
+      results.push({
+        type: 'product',
+        id: mappedProd.id,
+        name: mappedProd.name,
+        slug: mappedProd.slug,
+        price: mappedProd.price,
+        imageUrl: mappedProd.image?.sourceUrl || null,
+        imageAlt: mappedProd.image?.altText || null,
       });
-    }
+    });
+  }
 
   return results;
 }
+
+export const searchProducts = cache(async (search: string, first: number = 10): Promise<UnifiedSearchResult[]> => {
+  const cleanSearch = search.trim().toLowerCase();
+  const cachedFn = unstable_cache(
+    async (s, f) => searchProductsInternal(s, f),
+    ['search-products', cleanSearch, String(first)],
+    { revalidate: 1800, tags: ["wc-products"] }
+  );
+  return cachedFn(search, first);
+});
