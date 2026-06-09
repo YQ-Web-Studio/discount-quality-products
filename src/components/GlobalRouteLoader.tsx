@@ -2,22 +2,48 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+
+const styleContent = `
+  body.route-loading {
+    cursor: wait !important;
+  }
+  body.route-loading a, body.route-loading button {
+    cursor: wait !important;
+  }
+  .link-loading-active {
+    opacity: 0.6 !important;
+    pointer-events: none !important;
+    transition: opacity 150ms ease-in-out !important;
+  }
+`;
 
 export function GlobalRouteLoader() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [visible, setVisible] = useState(false);
 
   // Auto-dismiss the loader when the page pathname or search parameters change
   useEffect(() => {
     setLoading(false);
+    document.body.classList.remove("route-loading");
+    document.querySelectorAll(".link-loading-active").forEach((el) => {
+      el.classList.remove("link-loading-active");
+    });
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    const startLoading = () => setLoading(true);
-    const stopLoading = () => setLoading(false);
+    const startLoading = () => {
+      setLoading(true);
+      document.body.classList.add("route-loading");
+    };
+    const stopLoading = () => {
+      setLoading(false);
+      document.body.classList.remove("route-loading");
+      document.querySelectorAll(".link-loading-active").forEach((el) => {
+        el.classList.remove("link-loading-active");
+      });
+    };
 
     window.addEventListener("trigger-global-loading", startLoading);
     window.addEventListener("stop-global-loading", stopLoading);
@@ -65,7 +91,8 @@ export function GlobalRouteLoader() {
         } catch (_) {}
 
         if (targetUrl !== currentUrl && targetUrl !== "") {
-          setLoading(true);
+          target.classList.add("link-loading-active");
+          startLoading();
         }
       }
     };
@@ -79,47 +106,18 @@ export function GlobalRouteLoader() {
     };
   }, []);
 
-  // Animate the progress bar
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (loading) {
-      setVisible(true);
-      setProgress(10);
-      interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) return prev; // cap at 90% until finished
-          const step = prev < 50 ? 15 : prev < 75 ? 5 : 0.5;
-          return prev + step;
-        });
-      }, 150);
-    } else {
-      setProgress(100);
-      const timer = setTimeout(() => {
-        setVisible(false);
-        setProgress(0);
-      }, 200); // match fade out duration
-      return () => clearTimeout(timer);
-    }
-    return () => clearInterval(interval);
-  }, [loading]);
-
-  if (!visible) return null;
-
   return (
-    <div
-      className="fixed top-0 left-0 right-0 z-[99999] h-1 w-full pointer-events-none transition-opacity duration-200"
-      style={{
-        opacity: progress === 100 ? 0 : 1,
-      }}
-    >
-      <div
-        className="h-full bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-600 shadow-[0_0_8px_#10b981,0_0_4px_#14b8a6] transition-all"
-        style={{
-          width: `${progress}%`,
-          transition: progress === 100 ? "width 150ms ease-out" : "width 300ms cubic-bezier(0.1, 0.8, 0.1, 1)",
-        }}
-      />
-    </div>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styleContent }} />
+      {loading && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/10 backdrop-blur-[1px] pointer-events-auto animate-in fade-in duration-150">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-900/85 text-white backdrop-blur-md shadow-2xl border border-white/10">
+            <Loader2 className="h-8 w-8 animate-spin text-white" />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+
 
