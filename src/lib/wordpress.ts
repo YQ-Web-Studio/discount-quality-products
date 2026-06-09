@@ -188,8 +188,10 @@ async function wpFetch<T>(
   query: string,
   variables: Record<string, any> = {}
 ): Promise<T> {
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+  const timeoutMs = isBuildPhase ? 30000 : 10000; // 30s during build, 10s during runtime
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(WP_GRAPHQL_URL, {
