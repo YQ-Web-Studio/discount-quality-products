@@ -30,6 +30,43 @@ const panelChildVariants: Variants = {
   },
 };
 
+function getSearchTermSuggestions(query: string, products: UnifiedSearchResult[]): string[] {
+  const q = query.toLowerCase().trim();
+  const termsSet = new Set<string>();
+  
+  if (q) {
+    termsSet.add(q);
+  }
+
+  products.forEach(p => {
+    // Clean name of suffix noise like "Issue X", "Vol X", brackets, parentheses, etc.
+    const cleanName = p.name
+      .replace(/\s*[\(\[].*?[\)\]]/g, '') // remove bracketed/parenthesized content
+      .replace(/(?:issue|vol|volume|pack|size|no\.?|part|edition)\s*\d+/gi, '') // remove issue, vol, size etc
+      .replace(/\s+\d+(\s*pcs|\s*pk)?$/gi, '') // remove trailing numbers
+      .replace(/[\s\-\,\.\:]+$/g, '') // remove trailing punctuation
+      .trim();
+
+    if (cleanName.toLowerCase().includes(q)) {
+      termsSet.add(cleanName.toLowerCase());
+    } else {
+      termsSet.add(p.name.toLowerCase());
+    }
+  });
+
+  return Array.from(termsSet).map(term => {
+    // Find matching product name to keep original capitalization where possible
+    const match = products.find(p => p.name.toLowerCase().includes(term));
+    if (match) {
+      const idx = match.name.toLowerCase().indexOf(term);
+      if (idx !== -1) {
+        return match.name.substring(idx, idx + term.length);
+      }
+    }
+    return term.replace(/\b\w/g, c => c.toUpperCase());
+  });
+}
+
 interface SearchOverlayProps {
   open: boolean;
   onClose: () => void;
@@ -38,11 +75,11 @@ interface SearchOverlayProps {
 export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const searchCache = useRef<Record<string, { products: UnifiedSearchResult[], bestMatch: UnifiedSearchResult | null }>>({});
+  const searchCache = useRef<Record<string, { suggestions: string[], bestMatch: UnifiedSearchResult | null }>>({});
 
   const [query, setQuery] = useState("");
   const [localCategories, setLocalCategories] = useState<any[]>([]);
-  const [products, setProducts] = useState<UnifiedSearchResult[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [bestMatch, setBestMatch] = useState<UnifiedSearchResult | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -59,7 +96,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       document.body.style.overflow = "";
       setQuery("");
       setLocalCategories([]);
-      setProducts([]);
+      setSuggestions([]);
       setBestMatch(null);
       setProductsLoading(false);
       searchCache.current = {}; // Clear client cache when overlay closes
@@ -123,7 +160,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   useEffect(() => {
     const trimmed = query.trim().toLowerCase();
     if (trimmed.length < 2) {
-      setProducts([]);
+      setSuggestions([]);
       setBestMatch(null);
       setProductsLoading(false);
       return;
@@ -132,14 +169,14 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     // Serve instantly from client cache if already queried
     if (searchCache.current[trimmed]) {
       const cached = searchCache.current[trimmed];
-      setProducts(cached.products);
+      setSuggestions(cached.suggestions);
       setBestMatch(cached.bestMatch);
       setProductsLoading(false);
       return;
     }
 
     // Clear stale product results immediately for a snappy feel and layout flow
-    setProducts([]);
+    setSuggestions([]);
     setBestMatch(null);
     setProductsLoading(true);
 
@@ -188,22 +225,20 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
         });
 
         let finalBestMatch: UnifiedSearchResult | null = null;
-        let finalProducts = productResults;
-
         if (highestScore >= 90 && bestItem) {
           finalBestMatch = bestItem;
-          // Filter bestMatch out of the main suggestions to avoid duplication
-          finalProducts = productResults.filter(p => p.id !== bestItem!.id);
         }
+
+        const derivedSuggestions = getSearchTermSuggestions(trimmed, productResults);
 
         // Cache results
         searchCache.current[trimmed] = {
-          products: finalProducts,
+          suggestions: derivedSuggestions,
           bestMatch: finalBestMatch
         };
 
         setBestMatch(finalBestMatch);
-        setProducts(finalProducts);
+        setSuggestions(derivedSuggestions);
       } catch (error) {
         console.error("Failed to fetch products:", error);
       } finally {
@@ -332,7 +367,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         {/* Product suggestions */}
                         <div>
                           <h4 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                            Product Suggestions
+                            Search Suggestions
                           </h4>
 
                           {productsLoading ? (
@@ -347,12 +382,12 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                 </div>
                               ))}
                             </div>
-                          ) : products.length > 0 ? (
+                          ) : suggestions.length > 0 ? (
                             <div className="flex flex-col gap-1.5">
-                              {products.slice(0, 4).map((product) => (
+                              {suggestions.slice(0, 4).map((suggestion, idx) => (
                                 <button
-                                  key={product.id}
-                                  onClick={() => handleNavigate(`/products/${product.slug}`)}
+                                  key={`suggestion-${idx}`}
+                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(suggestion)}`)}
                                   className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
@@ -360,18 +395,15 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                       <Search className="h-4 w-4" />
                                     </div>
                                     <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-950 truncate transition-colors">
-                                      {product.name}
+                                      {suggestion}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-xs font-bold text-primary">
-                                      {product.price || "View product"}
-                                    </span>
                                     <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
                                   </div>
                                 </button>
                               ))}
-                              {products.length > 4 && (
+                              {suggestions.length > 4 && (
                                 <button
                                   onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
                                   className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-2 w-fit mx-auto"
