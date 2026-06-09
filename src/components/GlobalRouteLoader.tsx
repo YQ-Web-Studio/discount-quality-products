@@ -111,9 +111,7 @@ export function GlobalRouteLoader() {
       <style dangerouslySetInnerHTML={{ __html: styleContent }} />
       {loading && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/10 backdrop-blur-[1px] pointer-events-auto animate-in fade-in duration-150">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-900/85 text-white backdrop-blur-md shadow-2xl border border-white/10">
-            <Loader2 className="h-8 w-8 animate-spin text-white" />
-          </div>
+          <Loader2 className="h-10 w-10 animate-spin text-emerald-700" />
         </div>
       )}
     </>
