@@ -123,6 +123,19 @@ export async function validateCartTotals(
     }
     const discountAmount = couponResult.discount;
 
+    // Enforce strictly UK shipping at validation level
+    if (address && address.country && address.country.toUpperCase() !== "GB" && address.country !== "United Kingdom") {
+      return {
+        isValid: false,
+        subtotal: 0,
+        discountAmount: 0,
+        vat: 0,
+        shippingCost: 0,
+        finalTotal: 0,
+        error: "Shipping is strictly restricted to the United Kingdom.",
+      };
+    }
+
     // Determine shipping cost dynamically from WooCommerce Store API
     let shippingCost = 0;
     if (address && address.country) {
@@ -130,12 +143,23 @@ export async function validateCartTotals(
         const rates = await fetchWooCommerceShippingRates(items, address);
         const matchedRate = rates.find(r => r.id === shippingMethod) || rates[0];
         if (matchedRate) {
-          shippingCost = matchedRate.price;
+          const label = matchedRate.label.toLowerCase();
+          const price = matchedRate.price;
+          // Format the dynamic WooCommerce table-rate methods to align with pricing requirements
+          if (label.includes("standard delivery")) {
+            shippingCost = price === 0 ? 0 : (price < 5 ? 2.00 : price);
+          } else if (label.includes("first class delivery")) {
+            shippingCost = subtotal >= 50 ? 2.00 : price;
+          } else if (label.includes("courier delivery")) {
+            shippingCost = subtotal >= 50 ? 10.00 : price;
+          } else {
+            shippingCost = price;
+          }
         }
       } catch (err) {
         console.error("Failed to dynamically fetch WooCommerce shipping rates:", err);
         // Fallback standard rate if API fails
-        shippingCost = address.country === "GB" ? 0 : 11.99;
+        shippingCost = 0;
       }
     }
 
@@ -183,15 +207,9 @@ export interface ShippingRate {
  * actual shipping rates for a specific cart items payload and shipping address.
  */
 export async function fetchWooCommerceShippingRates(items: CartItem[], address: ShippingAddress): Promise<ShippingRate[]> {
-  if (address.country && address.country.toUpperCase() === "GB") {
-    return [
-      {
-        id: "standard",
-        label: "Free Delivery",
-        price: 0,
-        eta: "3–5 working days",
-      }
-    ];
+  // Enforce strictly UK shipping
+  if (address.country && address.country.toUpperCase() !== "GB" && address.country !== "United Kingdom") {
+    throw new Error("Shipping is strictly restricted to the United Kingdom.");
   }
 
   const baseUrl = process.env.WOOCOMMERCE_URL || "https://admin.discountproducts.co.uk";

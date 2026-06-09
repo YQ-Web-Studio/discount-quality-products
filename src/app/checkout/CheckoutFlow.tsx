@@ -89,7 +89,7 @@ function Field({
   );
 }
 
-/* ─── Form select field ─── */
+/* ─── Form select field with support for tooltip when disabled ─── */
 function SelectField({
   label,
   id,
@@ -98,6 +98,7 @@ function SelectField({
   options,
   error,
   disabled = false,
+  tooltipText,
 }: {
   label: string;
   id: string;
@@ -106,9 +107,10 @@ function SelectField({
   options: { code: string; name: string }[];
   error?: string;
   disabled?: boolean;
+  tooltipText?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 relative group">
       <label htmlFor={id} className="text-xs font-bold uppercase tracking-widest text-zinc-500">
         {label}
       </label>
@@ -119,8 +121,8 @@ function SelectField({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           className={cn(
-            "h-11 w-full rounded-lg border bg-white px-3 text-sm text-zinc-900 outline-none transition-colors appearance-none cursor-pointer",
-            "focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900",
+            "h-11 w-full rounded-lg border bg-white px-3 text-sm text-zinc-900 outline-none transition-colors appearance-none",
+            disabled ? "bg-zinc-50 border-zinc-200 cursor-not-allowed opacity-80" : "cursor-pointer focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900",
             error ? "border-red-400" : "border-zinc-200"
           )}
         >
@@ -135,6 +137,28 @@ function SelectField({
             <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
           </svg>
         </div>
+
+        {disabled && tooltipText && (
+          <>
+            {/* Transparent overlay to intercept hover/focus events on the disabled select */}
+            <div
+              className="absolute inset-0 cursor-not-allowed rounded-lg"
+              tabIndex={0}
+              aria-label={`${label} field is locked. ${tooltipText}`}
+            />
+            {/* Dynamic CSS Tooltip/Banner */}
+            <div className="absolute bottom-full left-1/2 z-50 mb-2.5 w-72 -translate-x-1/2 scale-95 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-center text-xs font-medium text-zinc-200 shadow-xl opacity-0 transition-all duration-200 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100">
+              <p className="leading-relaxed">
+                For international orders, please contact us directly at{" "}
+                <a href="mailto:sales@fncomputers.com" className="text-amber-400 hover:underline font-semibold">
+                  sales@fncomputers.com
+                </a>
+              </p>
+              {/* Tooltip Arrow */}
+              <div className="absolute top-full left-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 border-r border-b border-zinc-800 bg-zinc-950" />
+            </div>
+          </>
+        )}
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
@@ -714,6 +738,16 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     loadCustomerData();
   }, []);
 
+  // Form Validation Hygiene: catch browser autofill attempting to force international values
+  useEffect(() => {
+    if (form.country !== "GB" && form.country !== "United Kingdom") {
+      setForm((prev) => ({ ...prev, country: "GB" }));
+    }
+    if (form.billingCountry !== "GB" && form.billingCountry !== "United Kingdom") {
+      setForm((prev) => ({ ...prev, billingCountry: "GB" }));
+    }
+  }, [form.country, form.billingCountry]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [shippingRates, setShippingRates] = useState<{ id: string; label: string; price: number; eta: string }[]>([]);
   const [shippingLoading, setShippingLoading] = useState(false);
@@ -801,10 +835,47 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     };
   }, [clientSecret]);
 
+  // Helper to format dynamic WooCommerce table-rate shipping method pricing display
+  const getShippingDisplayPrice = useCallback((rateLabel: string, ratePrice: number) => {
+    const label = rateLabel.toLowerCase();
+    if (label.includes("standard delivery")) {
+      if (ratePrice === 0) return "Free";
+      if (ratePrice < 5) return "£2.00";
+      return `£${ratePrice.toFixed(2)}`;
+    }
+    if (label.includes("first class delivery")) {
+      if (computedSubtotal >= 50) {
+        return "+£2.00";
+      }
+      return `£${ratePrice.toFixed(2)}`;
+    }
+    if (label.includes("courier delivery")) {
+      if (computedSubtotal >= 50) {
+        return "+£10.00";
+      }
+      return `£${ratePrice.toFixed(2)}`;
+    }
+    return ratePrice > 0 ? `£${ratePrice.toFixed(2)}` : "Free";
+  }, [computedSubtotal]);
+
   const shippingCost = useMemo(() => {
     const matched = shippingRates.find((r) => r.id === shipping);
-    return matched ? matched.price : 0;
-  }, [shippingRates, shipping]);
+    if (!matched) return 0;
+
+    const label = matched.label.toLowerCase();
+    const price = matched.price;
+    // Align dynamic WooCommerce shipping cost calculation with formatted displayed prices
+    if (label.includes("standard delivery")) {
+      return price === 0 ? 0 : (price < 5 ? 2.00 : price);
+    }
+    if (label.includes("first class delivery")) {
+      return computedSubtotal >= 50 ? 2.00 : price;
+    }
+    if (label.includes("courier delivery")) {
+      return computedSubtotal >= 50 ? 10.00 : price;
+    }
+    return price;
+  }, [shippingRates, shipping, computedSubtotal]);
 
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -904,6 +975,11 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     else if (form.country === "GB" && !/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.postcode.trim()))
       e.postcode = "Invalid UK postcode";
 
+    // Block non-GB address validation to secure details step
+    if (form.country !== "GB" && form.country !== "United Kingdom") {
+      e.country = "Shipping is strictly restricted to the United Kingdom";
+    }
+
     if (showBillingAddress) {
       if (!form.billingFirstName.trim()) e.billingFirstName = "Required";
       if (!form.billingLastName.trim()) e.billingLastName = "Required";
@@ -912,6 +988,10 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
       if (!form.billingPostcode.trim()) e.billingPostcode = "Required";
       else if (form.billingCountry === "GB" && !/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(form.billingPostcode.trim()))
         e.billingPostcode = "Invalid UK postcode";
+
+      if (form.billingCountry !== "GB" && form.billingCountry !== "United Kingdom") {
+        e.billingCountry = "Shipping is strictly restricted to the United Kingdom";
+      }
     }
 
     setErrors(e);
@@ -1183,6 +1263,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                         onChange={(v) => setForm((f) => ({ ...f, country: v }))}
                         options={COUNTRIES}
                         error={errors.country}
+                        disabled={true}
+                        tooltipText="For international orders, please contact us directly at sales@fncomputers.com"
                       />
                       <Field
                         label="Phone Number (Optional)"
@@ -1237,7 +1319,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               </div>
                             </div>
                             <span className="text-sm font-bold text-zinc-900">
-                              {rate.price > 0 ? `£${rate.price.toFixed(2)}` : "Free"}
+                              {getShippingDisplayPrice(rate.label, rate.price)}
                             </span>
                           </label>
                         ))}
@@ -1334,6 +1416,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           onChange={(v) => setForm((f) => ({ ...f, billingCountry: v }))}
                           options={COUNTRIES}
                           error={errors.billingCountry}
+                          disabled={true}
+                          tooltipText="For international orders, please contact us directly at sales@fncomputers.com"
                         />
                         <Field
                           label="Phone Number (Optional)"

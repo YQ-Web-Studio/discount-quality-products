@@ -20,7 +20,7 @@ export const metadata: Metadata = {
         url: "/images/icon.svg",
         width: 1200,
         height: 630,
-        alt: "Discount Quality Products — 12,000+ Discounted Products",
+        alt: "Discount Quality Products — 15,000+ Discounted Products",
       },
     ],
   },
@@ -73,7 +73,7 @@ export default async function Home() {
               Featured Products
             </h2>
             <p className="max-w-2xl text-lg text-zinc-500">
-              Curated highlights from across our major departments.
+              Highlights from across our major departments.
             </p>
           </div>
           <Link href="/shop" className="flex items-center gap-2 text-sm font-bold text-zinc-900 hover:underline">
