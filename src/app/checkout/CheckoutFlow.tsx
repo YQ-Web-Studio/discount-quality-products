@@ -43,7 +43,7 @@ interface CheckoutLineItem {
   stockQuantity?: number | null;
 }
 
-const checkoutSteps = ["details", "payment"] as const;
+const checkoutSteps = ["details", "delivery", "payment"] as const;
 type CheckoutStep = (typeof checkoutSteps)[number];
 
 /* ─── Form field ─── */
@@ -1036,11 +1036,22 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
 
 
 
-  function goToPaymentStep() {
+  function goToDeliveryStep() {
     if (!validateDetails()) {
       return;
     }
+    setCurrentStep("delivery");
+  }
 
+  function goToPaymentStep() {
+    if (!validateDetails()) {
+      setCurrentStep("details");
+      return;
+    }
+    if (!shipping) {
+      alert("Please select a shipping method before proceeding.");
+      return;
+    }
     setCurrentStep("payment");
   }
 
@@ -1129,6 +1140,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         {checkoutSteps.map((step, index) => {
           const labels: Record<CheckoutStep, string> = {
             details: "Details",
+            delivery: "Delivery",
             payment: "Payment",
           };
           const activeIndex = checkoutSteps.indexOf(currentStep);
@@ -1278,57 +1290,6 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                     </div>
                   </div>
 
-                  {/* Dynamic Shipping Methods Selector */}
-                  <div className="rounded-lg border border-zinc-200 bg-zinc-50/30 p-4 sm:p-5">
-                    <div className="mb-4">
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Shipping Method</h3>
-                    </div>
-                    {shippingLoading ? (
-                      <div className="flex items-center gap-2 py-3 text-sm text-zinc-500">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
-                        <span>Calculating live shipping rates...</span>
-                      </div>
-                    ) : shippingRates.length > 0 ? (
-                      <div className="grid gap-3">
-                        {shippingRates.map((rate) => (
-                          <label
-                            key={rate.id}
-                            className={cn(
-                              "flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors",
-                              shipping === rate.id
-                                ? "border-zinc-900 bg-zinc-50"
-                                : "border-zinc-200 hover:border-zinc-300 bg-white"
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                name="shipping_method"
-                                value={rate.id}
-                                checked={shipping === rate.id}
-                                onChange={() => setShipping(rate.id)}
-                                className="h-4 w-4 border-zinc-300 text-zinc-900 focus:ring-zinc-900 cursor-pointer"
-                              />
-                              <div className="flex flex-col">
-                                <span className="text-sm font-semibold text-zinc-900">
-                                  {rate.label}
-                                </span>
-                                <span className="text-xs text-zinc-500">
-                                  {rate.eta}
-                                </span>
-                              </div>
-                            </div>
-                            <span className="text-sm font-bold text-zinc-900">
-                              {getShippingDisplayPrice(rate.label, rate.price)}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-zinc-500">Please select your country and enter a valid address to calculate shipping rates.</p>
-                    )}
-                  </div>
-
                   {/* Checkbox toggler */}
                   <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
                     <input
@@ -1433,6 +1394,87 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                   )}
                 </div>
                 <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={goToDeliveryStep}
+                    className="inline-flex w-full justify-center sm:w-auto items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    Continue to delivery
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {currentStep === "delivery" && (
+              <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 relative">
+                <div className="mb-5">
+                  <h2 className="text-lg font-bold text-zinc-900 mb-1">Delivery Option</h2>
+                  <p className="text-xs text-zinc-500">
+                    Select your preferred shipping method.
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Dynamic Shipping Methods Selector */}
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50/30 p-4 sm:p-5">
+                    <div className="mb-4">
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Shipping Method</h3>
+                    </div>
+                    {shippingLoading ? (
+                      <div className="flex items-center gap-2 py-3 text-sm text-zinc-500">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
+                        <span>Calculating live shipping rates...</span>
+                      </div>
+                    ) : shippingRates.length > 0 ? (
+                      <div className="grid gap-3">
+                        {shippingRates.map((rate) => (
+                          <label
+                            key={rate.id}
+                            className={cn(
+                              "flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors",
+                              shipping === rate.id
+                                ? "border-zinc-900 bg-zinc-50"
+                                : "border-zinc-200 hover:border-zinc-300 bg-white"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="radio"
+                                name="shipping_method"
+                                value={rate.id}
+                                checked={shipping === rate.id}
+                                onChange={() => setShipping(rate.id)}
+                                className="h-4 w-4 border-zinc-300 text-zinc-900 focus:ring-zinc-900 cursor-pointer"
+                              />
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-zinc-900">
+                                  {rate.label}
+                                </span>
+                                <span className="text-xs text-zinc-500">
+                                  {rate.eta}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-zinc-900">
+                              {getShippingDisplayPrice(rate.label, rate.price)}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-500">Please select your country and enter a valid address to calculate shipping rates.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between">
+                  <button
+                    onClick={() => setCurrentStep("details")}
+                    className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    Return to details
+                  </button>
                   <button
                     onClick={goToPaymentStep}
                     className="inline-flex w-full justify-center sm:w-auto items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -1632,11 +1674,11 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
 
                   <div className="border-t border-zinc-100 bg-zinc-50/50 p-4 flex items-center justify-between">
                     <button
-                      onClick={() => setCurrentStep("details")}
+                      onClick={() => setCurrentStep("delivery")}
                       className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
                     >
                       <ArrowLeft className="h-3 w-3" />
-                      Return to details
+                      Return to delivery
                     </button>
                     <div className="flex items-center gap-2">
                       <Lock className="h-3 w-3 text-zinc-400" />
