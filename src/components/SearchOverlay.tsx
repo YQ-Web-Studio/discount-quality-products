@@ -75,6 +75,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const searchCache = useRef<Record<string, { suggestions: string[], bestMatch: UnifiedSearchResult | null }>>({});
+  const hasEverLoadedRef = useRef(false); // true after first successful backend response this session
 
   const [inputValue, setInputValue] = useState("");
   const [query, setQuery] = useState("");
@@ -101,6 +102,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       setBestMatch(null);
       setProductsLoading(false);
       searchCache.current = {}; // Clear client cache when overlay closes
+      hasEverLoadedRef.current = false; // Reset so skeleton shows on next open
     }
     return () => { document.body.style.overflow = ""; };
   }, [open]);
@@ -114,11 +116,11 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  /* Debounce input text value to set query state */
+  /* Debounce input → query. 30ms is enough to batch paste/auto-repeat; AbortController handles stale requests */
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuery(inputValue);
-    }, 120);
+    }, 30);
     return () => clearTimeout(timer);
   }, [inputValue]);
 
@@ -252,6 +254,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
         setBestMatch(finalBestMatch);
         setSuggestions(derivedSuggestions);
+        hasEverLoadedRef.current = true; // mark that results have loaded at least once
       } catch (error: any) {
         if (error?.name === 'AbortError') return; // request was cancelled — ignore
         console.error("Failed to fetch products:", error);
@@ -389,7 +392,29 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             Search Suggestions
                           </h4>
 
-                           {productsLoading && suggestions.length === 0 ? (
+                          {/* Top line: always instant, never skeletonised */}
+                          {inputValue.trim().length >= 2 && (
+                            <button
+                              onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
+                              className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50 mb-1.5"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
+                                  <Search className="h-4 w-4" />
+                                </div>
+                                <span className="text-sm font-semibold text-zinc-900 truncate transition-colors">
+                                  {inputValue.trim()}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">Search term</span>
+                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
+                              </div>
+                            </button>
+                          )}
+
+                          {/* Skeleton: only on first cold load (no results ever received yet) */}
+                          {productsLoading && !hasEverLoadedRef.current && suggestions.length === 0 ? (
                             <div className="space-y-1.5">
                               {[1, 2, 3, 4].map((i) => (
                                 <div key={i} className="flex items-center justify-between px-4 py-3 border border-zinc-50 rounded-xl animate-pulse bg-zinc-50/50">
@@ -401,30 +426,11 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                 </div>
                               ))}
                             </div>
-                          ) : (suggestions.length > 0 || inputValue.trim().length >= 2) ? (
+                          ) : suggestions.length > 0 ? (
                             <div className="flex flex-col gap-1.5">
-                              {/* Exact query match suggestion (updates instantly with inputValue) */}
-                              {inputValue.trim().length >= 2 && (
-                                <button
-                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
-                                  className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
-                                >
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
-                                      <Search className="h-4 w-4" />
-                                    </div>
-                                    <span className="text-sm font-semibold text-zinc-900 truncate transition-colors">
-                                      {inputValue.trim()}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">Search term</span>
-                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
-                                  </div>
-                                </button>
-                              )}
+                              {/* Exact query match suggestion (updates instantly with inputValue) — already rendered above as top line */}
 
-                              {/* Other suggestions from the backend (sliced to 5 to make 6 total suggestions) */}
+                              {/* Other suggestions from the backend (sliced to 5) */}
                               {suggestions
                                 .filter(s => s.toLowerCase() !== inputValue.trim().toLowerCase())
                                 .slice(0, 5)

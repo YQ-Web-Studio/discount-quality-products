@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const results = await searchProducts(q, 12);
+    const results = await searchProducts(q, 8);
     return NextResponse.json(results, {
       status: 200,
       headers: {
