@@ -9,7 +9,6 @@ const nextConfig = {
   },
 
   images: {
-    unoptimized: true,
     remotePatterns: [
       // ── New Active Live Subdomain ──────────────────────────────────
       {
@@ -22,6 +21,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'pub-8d1174ef87b14259ae896366fb94672b.r2.dev',
         pathname: '/wp-content/uploads/**',
+      },
+      // ── Cloudflare Workers Proxy ──────────────────────────────────
+      {
+        protocol: 'https',
+        hostname: 'dqp-image-proxy.yusufq2004.workers.dev',
       },
       // ── Local Development ──────────────────────────────────────────
       {

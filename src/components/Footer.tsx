@@ -94,7 +94,7 @@ export function Footer() {
                 </li>
               ))}
             </ul>
-            <div className="flex flex-col gap-2 text-[10px] font-medium uppercase tracking-widest text-zinc-400 border-t border-zinc-200 pt-6 opacity-80">
+            <div className="flex flex-col gap-2 text-[10px] font-medium uppercase tracking-widest text-zinc-600 border-t border-zinc-200 pt-6">
               <p>VAT: GB 150696600</p>
               <p>Company No: 07596933</p>
             </div>
@@ -102,7 +102,7 @@ export function Footer() {
         </div>
 
         {/* Bottom Bar (Merged) */}
-        <div className="mt-16 pt-8 border-t border-zinc-200 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-[11px] font-medium uppercase tracking-widest text-zinc-400">
+        <div className="mt-16 pt-8 border-t border-zinc-200 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-[11px] font-medium uppercase tracking-widest text-zinc-600">
           <p>
             &copy; {currentYear} Discount Quality Products. All rights reserved.
           </p>

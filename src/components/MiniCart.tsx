@@ -84,7 +84,7 @@ export function MiniCart() {
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-zinc-400">
               <Package className="h-12 w-12 opacity-30" strokeWidth={1} />
-              <p className="text-sm font-medium">Your basket is empty</p>
+              <p className="text-sm font-medium text-zinc-600">Your basket is empty</p>
               <button
                 onClick={close}
                 className="mt-2 text-xs font-semibold text-primary underline-offset-2 hover:underline"

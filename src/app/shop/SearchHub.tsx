@@ -247,7 +247,7 @@ function ProductCard({ product }: { product: MappedProduct }) {
       <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${product.name}`} />
 
       <div className="flex flex-col pt-5">
-        <h3 className="text-sm font-medium text-zinc-900 line-clamp-2">{product.name}</h3>
+        <h2 className="text-sm font-medium text-zinc-900 line-clamp-2">{product.name}</h2>
         <p className="mt-2 text-base font-bold tracking-tight text-zinc-900">{displayPrice}</p>
       </div>
     </div>
@@ -565,13 +565,15 @@ export function ProductGridSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8">
       {Array.from({ length: 24 }).map((_, idx) => (
-        <div key={idx} className="flex flex-col space-y-4">
+        <div key={idx} className="flex flex-col">
           <div className="aspect-square w-full rounded-xl bg-zinc-100 animate-pulse" />
-          <div className="space-y-2">
-            <div className="h-4 w-5/6 rounded bg-zinc-200 animate-pulse" />
-            <div className="h-4 w-2/3 rounded bg-zinc-200 animate-pulse" />
+          <div className="flex flex-col pt-5">
+            <div className="space-y-2">
+              <div className="h-4 w-5/6 rounded bg-zinc-200 animate-pulse" />
+              <div className="h-4 w-2/3 rounded bg-zinc-200 animate-pulse" />
+            </div>
+            <div className="mt-2.5 h-4 w-16 rounded bg-zinc-300 animate-pulse" />
           </div>
-          <div className="h-5 w-16 rounded bg-zinc-300 animate-pulse" />
         </div>
       ))}
     </div>

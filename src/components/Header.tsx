@@ -47,7 +47,7 @@ export function Header() {
       )}
     >
       {/* Top Utility Bar */}
-      <div className="bg-primary/85 backdrop-blur-md py-1.5 text-primary-foreground">
+      <div className="bg-primary py-1.5 text-primary-foreground">
         <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center justify-between px-4 md:px-6 xl:px-10 text-[11px] font-medium uppercase tracking-wider sm:text-xs">
           <span className="flex items-center gap-2">
             <Truck className="h-3.5 w-3.5 text-primary-foreground/90 shrink-0" />

@@ -188,9 +188,9 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           </span>
         )}
         
-        <h3 className="text-sm font-medium text-zinc-900 line-clamp-2">
+        <h2 className="text-sm font-medium text-zinc-900 line-clamp-2">
           {product.name}
-        </h3>
+        </h2>
 
         <p className="mt-2 text-base font-bold tracking-tight text-zinc-900">
           {displayPrice}

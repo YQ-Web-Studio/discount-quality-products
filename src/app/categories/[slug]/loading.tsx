@@ -44,17 +44,19 @@ export default function CategoryLoading() {
           {/* Product grid skeleton */}
           <div className="flex-1 flex flex-col py-8 pl-6 lg:pl-12">
             <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8">
-              {Array.from({ length: 12 }).map((_, idx) => (
-                <div key={idx} className="flex flex-col space-y-4">
+              {Array.from({ length: 24 }).map((_, idx) => (
+                <div key={idx} className="flex flex-col">
                   {/* Image placeholder */}
                   <div className="aspect-square w-full rounded-xl bg-zinc-100 animate-pulse" />
-                  {/* Title lines */}
-                  <div className="space-y-2">
-                    <div className="h-4 w-5/6 rounded bg-zinc-200 animate-pulse" />
-                    <div className="h-4 w-2/3 rounded bg-zinc-200 animate-pulse" />
+                  {/* Text lines */}
+                  <div className="flex flex-col pt-5">
+                    <div className="space-y-2">
+                      <div className="h-4 w-5/6 rounded bg-zinc-200 animate-pulse" />
+                      <div className="h-4 w-2/3 rounded bg-zinc-200 animate-pulse" />
+                    </div>
+                    {/* Price */}
+                    <div className="mt-2.5 h-4 w-16 rounded bg-zinc-300 animate-pulse" />
                   </div>
-                  {/* Price */}
-                  <div className="h-5 w-16 rounded bg-zinc-300 animate-pulse" />
                 </div>
               ))}
             </div>
