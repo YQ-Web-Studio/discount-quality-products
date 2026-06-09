@@ -81,7 +81,7 @@ export async function generateMetadata(
 // ─── Trust signals rendered below the CTA ─────────────────────────────────────
 const trustItems = [
   { icon: ShieldCheck, label: 'Secure Checkout' },
-  { icon: Truck, label: 'International Shipping' },
+  { icon: Truck, label: 'Free UK Delivery over £5' },
   { icon: RotateCcw, label: '30-Day Returns' },
 ];
 
@@ -255,6 +255,29 @@ export default async function ProductPage(props: ProductPageProps) {
                 manageStock={product.manageStock}
                 stockQuantity={product.stockQuantity}
               />
+
+              {/* Dynamic Shipping Information Component */}
+              <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50/50 p-3.5 text-xs">
+                {(() => {
+                  const priceValue = product.price
+                    ? parseFloat(product.price.replace(/[^0-9.-]+/g, ''))
+                    : 0;
+                  if (priceValue < 5) {
+                    return (
+                      <p className="text-zinc-600 font-medium leading-relaxed">
+                        Standard Delivery: <span className="font-bold text-zinc-900">£2.00</span> (or <span className="font-bold text-[#15803d]">FREE</span> when your basket total reaches £5)
+                      </p>
+                    );
+                  } else {
+                    return (
+                      <div className="flex items-center gap-2 text-[#15803d] font-bold">
+                        <Truck className="h-4 w-4 shrink-0 text-[#15803d]" />
+                        <span>✓ Eligible for FREE UK Standard Delivery</span>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-t border-zinc-100 pt-8">
                 {trustItems.map(({ icon: Icon, label }) => (

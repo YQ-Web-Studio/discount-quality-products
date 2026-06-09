@@ -3,8 +3,8 @@ import { Truck, ShieldCheck, RotateCcw, Award } from "lucide-react";
 const signals = [
   {
     icon: Truck,
-    title: "Worldwide Shipping",
-    description: "Fast International Delivery",
+    title: "Free UK Delivery",
+    description: "On all orders over £5",
   },
   {
     icon: ShieldCheck,

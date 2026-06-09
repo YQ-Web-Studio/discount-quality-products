@@ -27,7 +27,7 @@ const childVariants: Variants = {
 };
 
 const trustSignals = [
-  { icon: Truck, title: "Worldwide Shipping", desc: "Fast International Delivery" },
+  { icon: Truck, title: "Free UK Delivery", desc: "On all orders over £5" },
   { icon: ShieldCheck, title: "Secure Payments", desc: "Fully encrypted checkout" },
   { icon: RotateCcw, title: "Hassle-Free Returns", desc: "30-day money back" },
 ];

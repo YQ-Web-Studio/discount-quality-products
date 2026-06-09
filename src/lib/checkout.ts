@@ -310,7 +310,7 @@ export async function fetchWooCommerceShippingRates(items: CartItem[], address: 
         } else if (lowerLabel.includes("first class")) {
           eta = "1–2 working days";
         } else if (lowerLabel.includes("courier")) {
-          eta = "Next working day";
+          eta = "1-2 Working Days";
         } else {
           eta = "3–5 working days";
         }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { SearchCommand } from "./SearchCommand";
-import { ShoppingCart, Mail, Menu, X, ChevronDown, User, Heart } from "lucide-react";
+import { ShoppingCart, Mail, Menu, X, ChevronDown, User, Heart, Truck } from "lucide-react";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -50,9 +50,9 @@ export function Header() {
       <div className="bg-primary/85 backdrop-blur-md py-1.5 text-primary-foreground">
         <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center justify-between px-4 md:px-6 xl:px-10 text-[11px] font-medium uppercase tracking-wider sm:text-xs">
           <span className="flex items-center gap-2">
-            <Mail className="h-3 w-3" />
-            <span className="hidden sm:inline">International Shipping Available</span>
-            <span className="sm:hidden">Intl Shipping</span>
+            <Truck className="h-3.5 w-3.5 text-primary-foreground/90 shrink-0" />
+            <span className="hidden sm:inline">Free UK Delivery on orders over £5</span>
+            <span className="sm:hidden">Free UK Delivery over £5</span>
           </span>
           <span className="text-primary-foreground/80 hidden sm:block">Professional • Reliable • High-Value</span>
         </div>
