@@ -15,7 +15,7 @@ export async function sendEmail({
   to,
   subject,
   react,
-  from = 'Discount Quality Products <notifications@send.yqwebstudio.com>',
+  from = 'Discount Quality Products <noreply@mail.discountproducts.co.uk>',
   replyTo = 'sales@fncomputers.com',
 }: SendEmailParams) {
   if (!process.env.RESEND_API_KEY) {
