@@ -33,10 +33,6 @@ const panelChildVariants: Variants = {
 function getSearchTermSuggestions(query: string, products: UnifiedSearchResult[]): string[] {
   const q = query.toLowerCase().trim();
   const termsSet = new Set<string>();
-  
-  if (q) {
-    termsSet.add(q);
-  }
 
   products.forEach(p => {
     // Clean name of suffix noise like "Issue X", "Vol X", brackets, parentheses, etc.
@@ -48,9 +44,13 @@ function getSearchTermSuggestions(query: string, products: UnifiedSearchResult[]
       .trim();
 
     if (cleanName.toLowerCase().includes(q)) {
-      termsSet.add(cleanName.toLowerCase());
+      if (cleanName.toLowerCase() !== q) {
+        termsSet.add(cleanName.toLowerCase());
+      }
     } else {
-      termsSet.add(p.name.toLowerCase());
+      if (p.name.toLowerCase() !== q) {
+        termsSet.add(p.name.toLowerCase());
+      }
     }
   });
 
@@ -402,28 +402,56 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                 </div>
                               ))}
                             </div>
-                          ) : suggestions.length > 0 ? (
+                          ) : (suggestions.length > 0 || inputValue.trim().length >= 2) ? (
                             <div className="flex flex-col gap-1.5">
-                              {suggestions.slice(0, 6).map((suggestion, idx) => (
+                              {/* Exact query match suggestion (updates instantly with inputValue) */}
+                              {inputValue.trim().length >= 2 && (
                                 <button
-                                  key={`suggestion-${idx}`}
-                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(suggestion)}`)}
+                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
                                   className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
                                       <Search className="h-4 w-4" />
                                     </div>
-                                    <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-950 truncate transition-colors">
-                                      {suggestion}
+                                    <span className="text-sm font-semibold text-zinc-900 truncate transition-colors">
+                                      {inputValue.trim()}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">Search term</span>
                                     <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
                                   </div>
                                 </button>
-                              ))}
-                              {suggestions.length > 6 && (
+                              )}
+
+                              {/* Other suggestions from the backend (sliced to 5 to make 6 total suggestions) */}
+                              {suggestions
+                                .filter(s => s.toLowerCase() !== inputValue.trim().toLowerCase())
+                                .slice(0, 5)
+                                .map((suggestion, idx) => (
+                                  <button
+                                    key={`suggestion-${idx}`}
+                                    onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(suggestion)}`)}
+                                    className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
+                                        <Search className="h-4 w-4" />
+                                      </div>
+                                      <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-950 truncate transition-colors">
+                                        {suggestion}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
+                                    </div>
+                                  </button>
+                                ))
+                              }
+
+                              {/* View all button */}
+                              {suggestions.length > 5 && (
                                 <button
                                   onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
                                   className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-2 w-fit mx-auto"
