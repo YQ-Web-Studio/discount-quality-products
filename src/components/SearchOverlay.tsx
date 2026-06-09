@@ -185,9 +185,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       return;
     }
 
-    // Clear stale product results immediately for a snappy feel and layout flow
-    setSuggestions([]);
-    setBestMatch(null);
+    // Set loading state (stale suggestions and bestMatch stay on screen to prevent layout flashing)
     setProductsLoading(true);
 
     let active = true;
@@ -392,7 +390,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             Search Suggestions
                           </h4>
 
-                          {productsLoading ? (
+                           {productsLoading && suggestions.length === 0 ? (
                             <div className="space-y-1.5">
                               {[1, 2, 3, 4].map((i) => (
                                 <div key={i} className="flex items-center justify-between px-4 py-3 border border-zinc-50 rounded-xl animate-pulse bg-zinc-50/50">
@@ -406,7 +404,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             </div>
                           ) : suggestions.length > 0 ? (
                             <div className="flex flex-col gap-1.5">
-                              {suggestions.slice(0, 4).map((suggestion, idx) => (
+                              {suggestions.slice(0, 6).map((suggestion, idx) => (
                                 <button
                                   key={`suggestion-${idx}`}
                                   onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(suggestion)}`)}
@@ -425,7 +423,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                   </div>
                                 </button>
                               ))}
-                              {suggestions.length > 4 && (
+                              {suggestions.length > 6 && (
                                 <button
                                   onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
                                   className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-2 w-fit mx-auto"
