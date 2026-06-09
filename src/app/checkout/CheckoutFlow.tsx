@@ -168,6 +168,7 @@ function SelectField({
 /* ─── Order summary sidebar ─── */
 function OrderSummary({
   shippingCost,
+  selectedShippingLabel,
   items,
   subtotal,
   onUpdateQuantity,
@@ -183,6 +184,7 @@ function OrderSummary({
   couponLoading
 }: {
   shippingCost: number;
+  selectedShippingLabel?: string;
   items: CheckoutLineItem[];
   subtotal: number;
   onUpdateQuantity: (id: string, qty: number) => void;
@@ -199,8 +201,8 @@ function OrderSummary({
 }) {
   const isMounted = useIsMounted();
   const netTotal = subtotal - discountAmount;
-  const vatIncluded = netTotal / 6;
   const total = netTotal + shippingCost;
+  const vatIncluded = total / 6;
 
   if (!isMounted) {
     return (
@@ -288,7 +290,7 @@ function OrderSummary({
           </div>
         )}
         <div className="flex justify-between text-xs text-zinc-500">
-          <span>Shipping</span>
+          <span>Shipping{selectedShippingLabel ? ` (${selectedShippingLabel})` : ""}</span>
           <span>{shippingCost > 0 ? `£${shippingCost.toFixed(2)}` : "Free"}</span>
         </div>
         <div className="border-t border-zinc-100 pt-2 flex justify-between text-sm font-bold text-zinc-900">
@@ -876,6 +878,11 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     }
     return price;
   }, [shippingRates, shipping, computedSubtotal]);
+
+  const selectedShippingLabel = useMemo(() => {
+    const matched = shippingRates.find((r) => r.id === shipping);
+    return matched ? matched.label : "";
+  }, [shippingRates, shipping]);
 
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -1696,6 +1703,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
           <div className="lg:sticky lg:top-24">
             <OrderSummary
               shippingCost={shippingCost}
+              selectedShippingLabel={selectedShippingLabel}
               items={computedItems}
               subtotal={computedSubtotal}
               onUpdateQuantity={handleUpdateQuantity}

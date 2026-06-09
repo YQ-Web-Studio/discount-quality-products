@@ -165,11 +165,10 @@ export async function validateCartTotals(
 
     // Apply discount to subtotal before computing final total
     const netSubtotal = subtotal - discountAmount;
-    // Prices from WooCommerce are VAT-inclusive.
-    // Extract the VAT portion: netSubtotal / 6 (equivalent to 20/120).
-    const vat = netSubtotal / 6;
-    // The total charged to the customer is net subtotal + shipping (VAT is already inside the price).
     const finalTotal = netSubtotal + shippingCost;
+    // Prices from WooCommerce are VAT-inclusive.
+    // Extract the VAT portion: finalTotal / 6 (equivalent to 20/120) since both items and shipping carry VAT.
+    const vat = finalTotal / 6;
 
     return {
       isValid: true,
