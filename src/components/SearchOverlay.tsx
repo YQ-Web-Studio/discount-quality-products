@@ -8,7 +8,6 @@ import { Search, X, ArrowRight, Zap, Box, Tag } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
-import { searchProductsAction } from "@/lib/actions";
 import { UnifiedSearchResult } from "@/lib/wordpress";
 
 const panelContainerVariants: Variants = {
@@ -166,7 +165,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     setLocalCategories(matches);
   }, [query]);
 
-  /* Remote product search */
+  /* Remote product search — uses fetch + AbortController so stale requests cancel instantly */
   useEffect(() => {
     const trimmed = query.trim().toLowerCase();
     if (trimmed.length < 2) {
@@ -185,16 +184,19 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       return;
     }
 
-    // Set loading state (stale suggestions and bestMatch stay on screen to prevent layout flashing)
+    // Stale suggestions stay on screen; only show loading if nothing cached yet
     setProductsLoading(true);
 
-    let active = true;
+    const controller = new AbortController();
 
     const fetchResults = async () => {
       try {
-        const backendResults = await searchProductsAction(trimmed);
-        if (!active) return;
-        
+        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+        const backendResults: UnifiedSearchResult[] = await res.json();
+
         // Filter for products only
         const productResults = backendResults.filter(item => item.type === 'product');
 
@@ -242,29 +244,26 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
         const derivedSuggestions = getSearchTermSuggestions(trimmed, productResults);
 
-        // Cache results
+        // Cache results for instant backspace/repeat
         searchCache.current[trimmed] = {
           suggestions: derivedSuggestions,
           bestMatch: finalBestMatch
         };
 
-        if (active) {
-          setBestMatch(finalBestMatch);
-          setSuggestions(derivedSuggestions);
-        }
-      } catch (error) {
+        setBestMatch(finalBestMatch);
+        setSuggestions(derivedSuggestions);
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return; // request was cancelled — ignore
         console.error("Failed to fetch products:", error);
       } finally {
-        if (active) {
-          setProductsLoading(false);
-        }
+        setProductsLoading(false);
       }
     };
 
     fetchResults();
 
     return () => {
-      active = false;
+      controller.abort(); // cancel any in-flight request when query changes
     };
   }, [query]);
 
@@ -341,7 +340,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                 {/* Left Column: Search Results */}
                 <div className="lg:col-span-9 flex flex-col">
                   <AnimatePresence mode="wait">
-                    {query.trim().length > 0 ? (
+                    {inputValue.trim().length > 0 ? (
                       <motion.div
                         key="search-results"
                         initial={{ opacity: 0, x: -10 }}
