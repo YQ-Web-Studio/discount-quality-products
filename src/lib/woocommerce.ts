@@ -243,8 +243,7 @@ async function fetchProductsInternal(
         ...authHeader,
         "Content-Type": "application/json",
       },
-      // Do not use fetch cache because headers are dynamic.
-      cache: "no-store",
+      next: { revalidate: 1800 },
     });
 
     if (!response.ok) {
@@ -291,7 +290,7 @@ export const fetchWooCommerceProducts = async (params: any = {}) => {
   const cachedFn = unstable_cache(
     async (p) => fetchProductsInternal(p),
     ["wc-products", String(categoryId), String(page), String(perPage), String(searchQ), String(orderby), String(order), String(minPrice), String(maxPrice), paParamsString],
-    { revalidate: 3600, tags: ["wc-products"] }
+    { revalidate: 1800, tags: ["wc-products"] }
   );
   return cachedFn(params);
 };

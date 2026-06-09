@@ -1,9 +1,7 @@
-import { Suspense } from "react";
 import SearchHub from "./SearchHub";
 import type { Metadata } from "next";
 import { fetchWooCommerceProducts, getCategories } from "@/lib/woocommerce";
 import { productMatchesAttributeFilters } from "./filterAttributes";
-import { stringifyFilterParams } from "./filterUrl";
 
 type SearchPageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -33,18 +31,18 @@ type ProductQueryParams = {
 };
 
 async function fetchAllCandidateProducts(params: ProductQueryParams) {
-  const firstPage = await fetchWooCommerceProducts({ ...params, page: 1, per_page: 100 });
+  // Ensure strict query pagination ceiling parameter of exactly 24 items
+  const firstPage = await fetchWooCommerceProducts({ ...params, page: 1, per_page: 24 });
   if (firstPage.totalPages <= 1) return firstPage;
 
-  // HARD CAP: Limit parallel fetching to a maximum of 3 pages (300 products).
-  // Fetching the entire catalogue dynamically causes insanely long load times.
+  // HARD CAP: Limit parallel fetching to a maximum of 3 pages (72 products).
   const maxPages = Math.min(firstPage.totalPages, 3);
 
   if (maxPages <= 1) return firstPage;
 
   const remainingPages = await Promise.all(
     Array.from({ length: maxPages - 1 }, (_, index) =>
-      fetchWooCommerceProducts({ ...params, page: index + 2, per_page: 100 })
+      fetchWooCommerceProducts({ ...params, page: index + 2, per_page: 24 })
     )
   );
 
@@ -55,6 +53,37 @@ async function fetchAllCandidateProducts(params: ProductQueryParams) {
     ],
     total: firstPage.total,
     totalPages: firstPage.totalPages,
+  };
+}
+
+async function getProductsData(
+  productParams: ProductQueryParams,
+  filterProductParams: ProductQueryParams,
+  hasAttributeFilters: boolean,
+  paParams: Record<string, string>,
+  page: number
+) {
+  const [response, filterResponse] = await Promise.all([
+    hasAttributeFilters
+      ? fetchAllCandidateProducts(productParams)
+      : fetchWooCommerceProducts(productParams),
+    fetchAllCandidateProducts(filterProductParams),
+  ]);
+
+  const strictProducts = hasAttributeFilters
+    ? response.products.filter((product) => productMatchesAttributeFilters(product, paParams))
+    : response.products;
+  const visibleProducts = hasAttributeFilters
+    ? strictProducts.slice((page - 1) * 24, page * 24)
+    : strictProducts;
+  const visibleTotal = hasAttributeFilters ? strictProducts.length : response.total;
+  const visibleTotalPages = hasAttributeFilters ? Math.ceil(strictProducts.length / 24) : response.totalPages;
+
+  return {
+    products: visibleProducts,
+    filterProducts: filterResponse.products,
+    total: visibleTotal,
+    totalPages: visibleTotalPages,
   };
 }
 
@@ -77,7 +106,6 @@ export async function generateMetadata({
 
   const baseUrl = "https://discountqualityproducts.co.uk/shop";
   
-  // Clean canonical builder to prevent indexing of dynamic facets
   const getCleanCanonicalUrl = (pageNum: number) => {
     const p = new URLSearchParams();
     if (category) p.set("category", category);
@@ -108,10 +136,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   console.log('[Shop] Filtering by:', { category: categorySlug, subcategory: subcategorySlug });
 
-  // Await dynamically fetched categories
   const initialCategories = await getCategories();
 
-  // Logic: If subcategory exists, use it. Otherwise use category.
   const activeSlug = subcategorySlug || categorySlug;
 
   let activeCategoryId: string | undefined = undefined;
@@ -124,7 +150,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       if (/^\d+$/.test(part)) {
         resolvedIds.push(parseInt(part, 10));
       } else {
-        // Find by slug
         for (const cat of initialCategories) {
           if (cat.slug === part) {
             resolvedIds.push(cat.id);
@@ -152,7 +177,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const minPrice = typeof params.min_price === "string" ? params.min_price : undefined;
   const maxPrice = typeof params.max_price === "string" ? params.max_price : undefined;
 
-  // Extract all pa_ parameters for dynamic filtering
   const paParams: Record<string, string> = {};
   for (const key of Object.keys(params)) {
     if (key.startsWith("pa_")) {
@@ -164,12 +188,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   const hasAttributeFilters = Object.keys(paParams).length > 0;
 
-  // Attribute filters are applied locally so imported composite terms such as
-  // "Dimmable||Filament" can still match clean single-term selections.
   const productParams: ProductQueryParams = {
     search: searchQ,
     page: hasAttributeFilters ? 1 : page,
-    per_page: hasAttributeFilters ? 100 : 24,
+    per_page: 24, // Strict pagination parameter ceiling
     category: activeCategoryId,
     orderby,
     order,
@@ -180,70 +202,27 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const filterProductParams: ProductQueryParams = {
     search: searchQ,
     page: 1,
-    per_page: 100,
+    per_page: 24, // Strict pagination parameter ceiling
     category: activeCategoryId,
     min_price: minPrice,
     max_price: maxPrice,
   };
 
-  const [response, filterResponse] = await Promise.all([
-    hasAttributeFilters
-      ? fetchAllCandidateProducts(productParams)
-      : fetchWooCommerceProducts(productParams),
-    fetchAllCandidateProducts(filterProductParams),
-  ]);
-
-  const strictProducts = hasAttributeFilters
-    ? response.products.filter((product) => productMatchesAttributeFilters(product, paParams))
-    : response.products;
-  const visibleProducts = hasAttributeFilters
-    ? strictProducts.slice((page - 1) * 24, page * 24)
-    : strictProducts;
-  const visibleTotal = hasAttributeFilters ? strictProducts.length : response.total;
-  const visibleTotalPages = hasAttributeFilters ? Math.ceil(strictProducts.length / 24) : response.totalPages;
-
-  const baseUrl = "https://discountqualityproducts.co.uk/shop";
-  const searchParamsObj = new URLSearchParams();
-  if (categorySlug) searchParamsObj.set("category", categorySlug);
-  if (subcategorySlug) searchParamsObj.set("subcategory", subcategorySlug);
-  if (searchQ) searchParamsObj.set("q", searchQ);
-  if (orderby) searchParamsObj.set("orderby", orderby);
-  if (order) searchParamsObj.set("order", order);
-  if (minPrice) searchParamsObj.set("min_price", minPrice);
-  if (maxPrice) searchParamsObj.set("max_price", maxPrice);
-  
-  Object.entries(paParams).forEach(([k, v]) => searchParamsObj.set(k, v));
-  
-  const getUrlForPage = (pageNum: number) => {
-    const p = new URLSearchParams(searchParamsObj);
-    if (pageNum > 1) p.set("page", pageNum.toString());
-    const qs = stringifyFilterParams(p);
-    return qs ? `${baseUrl}?${qs}` : baseUrl;
-  };
+  const productsPromise = getProductsData(
+    productParams,
+    filterProductParams,
+    hasAttributeFilters,
+    paParams,
+    page
+  );
 
   return (
-    <>
-      {page > 1 && <link rel="prev" href={getUrlForPage(page - 1)} />}
-      {page < visibleTotalPages && <link rel="next" href={getUrlForPage(page + 1)} />}
-      <Suspense
-        fallback={
-          <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
-            <div className="animate-pulse text-sm font-medium text-zinc-500">Searching...</div>
-          </div>
-        }
-      >
-      <SearchHub
-        initialCategories={initialCategories}
-        initialCategory={activeCategoryId}
-        initialQuery={searchQ}
-        products={visibleProducts}
-        filterProducts={filterResponse.products}
-        total={visibleTotal}
-        totalPages={visibleTotalPages}
-        currentPage={page}
-      />
-    </Suspense>
-    </>
+    <SearchHub
+      initialCategories={initialCategories}
+      initialCategory={activeCategoryId}
+      initialQuery={searchQ}
+      productsPromise={productsPromise}
+      currentPage={page}
+    />
   );
 }

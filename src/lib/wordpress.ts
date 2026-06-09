@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { navigationCategories } from "./navigationConfig";
 
 
@@ -433,7 +434,7 @@ export async function getLatestProducts(first: number = 6): Promise<Product[]> {
   return data.products.nodes.map(mapProductData);
 }
 
-export async function getProductBySlug(slug: string): Promise<Product | null> {
+export const getProductBySlug = cache(async (slug: string): Promise<Product | null> => {
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query GetProductBySlug($slug: ID!) {
@@ -462,7 +463,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   };
 
   return mapProductData(product);
-}
+});
 
 export async function getProductSlugs(first: number = 50): Promise<string[]> {
   const query = `
@@ -567,7 +568,7 @@ export interface WpPost {
  * Fetches a single WordPress post by its slug.
  * Returns null if the post does not exist.
  */
-export async function getPostBySlug(slug: string): Promise<WpPost | null> {
+export const getPostBySlug = cache(async (slug: string): Promise<WpPost | null> => {
   const query = `
     query GetPostBySlug($slug: ID!) {
       post(id: $slug, idType: SLUG) {
@@ -610,7 +611,7 @@ export async function getPostBySlug(slug: string): Promise<WpPost | null> {
   } catch {
     return null;
   }
-}
+});
 
 /**
  * Fetches a paginated list of published WordPress posts for the guides index.

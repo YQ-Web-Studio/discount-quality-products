@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useMemo, useCallback, useRef, useEffect, useTransition } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, useTransition, Suspense, use } from "react";
 import type { MouseEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -366,26 +366,253 @@ function CategorySidebar({
   );
 }
 
-/* ─── Main SearchHub ─── */
+export type ProductDataResolved = {
+  products: MappedProduct[];
+  filterProducts: MappedProduct[];
+  total: number;
+  totalPages: number;
+};
+
+/* ─── Resolver components to enable Suspense and Streaming ─── */
+function ProductCount({ productsPromise }: { productsPromise: Promise<ProductDataResolved> }) {
+  const { total } = use(productsPromise);
+  return (
+    <p className="mt-0.5 text-sm text-zinc-500 animate-in fade-in duration-200">
+      {total} product{total !== 1 ? "s" : ""} found
+    </p>
+  );
+}
+
+function FilterModalWrapper({ productsPromise }: { productsPromise: Promise<ProductDataResolved> }) {
+  const { products, filterProducts } = use(productsPromise);
+  return <FilterModal products={filterProducts && filterProducts.length > 0 ? filterProducts : products} />;
+}
+
+function TopPagination({
+  productsPromise,
+  currentPage,
+  handlePageChange,
+}: {
+  productsPromise: Promise<ProductDataResolved>;
+  currentPage: number;
+  handlePageChange: (p: number) => void;
+}) {
+  const { totalPages } = use(productsPromise);
+  if (totalPages <= 1) return null;
+  return (
+    <div className="lg:absolute lg:right-0 lg:top-1/2 lg:-translate-y-[calc(50%+4px)] shrink-0 mt-2 lg:mt-0">
+      <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} position="top" />
+    </div>
+  );
+}
+
+function HeadLinks({
+  productsPromise,
+  currentPage,
+  searchParams,
+  baseSlug,
+}: {
+  productsPromise: Promise<ProductDataResolved>;
+  currentPage: number;
+  searchParams: URLSearchParams;
+  baseSlug: string;
+}) {
+  const { totalPages } = use(productsPromise);
+  
+  const getUrlForPage = (pageNum: number) => {
+    const p = new URLSearchParams(searchParams.toString());
+    setPageParam(p, pageNum);
+    return `https://discountqualityproducts.co.uk${buildCategoryUrl(baseSlug, p)}`;
+  };
+
+  return (
+    <>
+      {currentPage > 1 && <link rel="prev" href={getUrlForPage(currentPage - 1)} />}
+      {currentPage < totalPages && <link rel="next" href={getUrlForPage(currentPage + 1)} />}
+    </>
+  );
+}
+
+function ProductGridAndPagination({
+  productsPromise,
+  currentPage,
+  handlePageChange,
+  router,
+  handleClearAll,
+  baseSlug,
+}: {
+  productsPromise: Promise<ProductDataResolved>;
+  currentPage: number;
+  handlePageChange: (p: number) => void;
+  router: any;
+  handleClearAll: () => void;
+  baseSlug: string;
+}) {
+  const { products, totalPages } = use(productsPromise);
+
+  if (products.length > 0) {
+    return (
+      <>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8 animate-in fade-in duration-300">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+
+        <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} position="bottom" />
+      </>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+      <div className="rounded-full bg-zinc-50 p-6 mb-4">
+        <Search className="h-10 w-10 text-zinc-300" />
+      </div>
+      <h3 className="text-xl font-bold text-zinc-900 mb-2">
+        No products found
+      </h3>
+      <p className="text-sm text-zinc-500 max-w-md">
+        We couldn&apos;t categorise any products matching your current filters in this category. Try adjusting your filters.
+      </p>
+      <button
+        onClick={() => { handleClearAll(); router.push(`/categories/${baseSlug}`); }}
+        className="mt-6 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 shadow-xl cursor-pointer"
+      >
+        Clear Filters
+      </button>
+    </div>
+  );
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  onPageChange,
+  position
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+  position: 'top' | 'bottom';
+}) {
+  if (totalPages <= 1) return null;
+  
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxNeighbours = 3;
+    if (totalPages <= 9) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    const startNeighbours = Math.max(2, currentPage - maxNeighbours);
+    const endNeighbours = Math.min(totalPages - 1, currentPage + maxNeighbours);
+    if (startNeighbours > 2) {
+      pages.push("...");
+    }
+    for (let i = startNeighbours; i <= endNeighbours; i++) {
+      pages.push(i);
+    }
+    if (endNeighbours < totalPages - 1) {
+      pages.push("...");
+    }
+    pages.push(totalPages);
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
+  return (
+    <div className={cn(
+      "flex flex-wrap items-center justify-center gap-y-2 gap-x-6",
+      position === 'top' ? "" : "mt-auto pt-4"
+    )}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage <= 1}
+          className="flex h-9 items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          aria-label="Previous Page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Prev</span>
+        </button>
+
+        <div className="flex items-center gap-1">
+          {pageNumbers.map((p, idx) => {
+            if (p === "...") {
+              return (
+                <span key={`ellipses-${idx}`} className="px-2 text-xs text-zinc-400 font-bold select-none">
+                  ...
+                </span>
+              );
+            }
+            const isCurrent = p === currentPage;
+            return (
+              <button
+                key={`page-${p}`}
+                onClick={() => onPageChange(p as number)}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all border border-transparent",
+                  isCurrent 
+                    ? "bg-primary text-white shadow-sm scale-105" 
+                    : "text-zinc-500 hover:text-primary hover:bg-zinc-50"
+                )}
+                aria-current={isCurrent ? "page" : undefined}
+                aria-label={`Go to page ${p}`}
+              >
+                {p}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          className="flex h-9 items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          aria-label="Next Page"
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ProductGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8">
+      {Array.from({ length: 24 }).map((_, idx) => (
+        <div key={idx} className="flex flex-col space-y-4">
+          <div className="aspect-square w-full rounded-xl bg-zinc-100 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-4 w-5/6 rounded bg-zinc-200 animate-pulse" />
+            <div className="h-4 w-2/3 rounded bg-zinc-200 animate-pulse" />
+          </div>
+          <div className="h-5 w-16 rounded bg-zinc-300 animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main CategoryHub ─── */
 export default function CategoryHub({
   baseSlug,
   initialCategories = [],
   initialCategory,
   initialQuery,
-  products = [],
-  filterProducts,
-  total = 0,
-  totalPages = 0,
+  productsPromise,
   currentPage = 1,
 }: {
   baseSlug: string;
   initialCategories?: DynamicNavCategory[];
   initialCategory?: string;
   initialQuery?: string;
-  products?: MappedProduct[];
-  filterProducts?: MappedProduct[];
-  total?: number;
-  totalPages?: number;
+  productsPromise: Promise<ProductDataResolved>;
   currentPage?: number;
 }) {
   const router = useRouter();
@@ -593,100 +820,14 @@ export default function CategoryHub({
     });
   }, [router, searchParams]);
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
+  const handlePageChange = useCallback((newPage: number) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const params = new URLSearchParams(searchParams.toString());
     setPageParam(params, newPage);
     startTransition(() => {
       router.push(buildCategoryUrl(baseSlug, params), { scroll: false });
     });
-  }
-
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxNeighbours = 3; // Show 3 pages on each side of active page for generous options
-    if (totalPages <= 9) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-      return pages;
-    }
-    pages.push(1);
-    const startNeighbours = Math.max(2, currentPage - maxNeighbours);
-    const endNeighbours = Math.min(totalPages - 1, currentPage + maxNeighbours);
-    if (startNeighbours > 2) {
-      pages.push("...");
-    }
-    for (let i = startNeighbours; i <= endNeighbours; i++) {
-      pages.push(i);
-    }
-    if (endNeighbours < totalPages - 1) {
-      pages.push("...");
-    }
-    pages.push(totalPages);
-    return pages;
-  };
-
-  const renderPagination = (position: 'top' | 'bottom') => {
-    if (totalPages <= 1) return null;
-    const pageNumbers = getPageNumbers();
-    return (
-      <div className={cn(
-        "flex flex-wrap items-center justify-center gap-y-2 gap-x-6",
-        position === 'top' ? "" : "mt-auto pt-4"
-      )}>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage <= 1}
-            className="flex h-9 items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            aria-label="Previous Page"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Prev</span>
-          </button>
-
-          <div className="flex items-center gap-1">
-            {pageNumbers.map((p, idx) => {
-              if (p === "...") {
-                return (
-                  <span key={`ellipses-${idx}`} className="px-2 text-xs text-zinc-400 font-bold select-none">
-                    ...
-                  </span>
-                );
-              }
-              const isCurrent = p === currentPage;
-              return (
-                <button
-                  key={`page-${p}`}
-                  onClick={() => handlePageChange(p as number)}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all border border-transparent",
-                    isCurrent 
-                      ? "bg-primary text-white shadow-sm scale-105" 
-                      : "text-zinc-500 hover:text-primary hover:bg-zinc-50"
-                  )}
-                  aria-current={isCurrent ? "page" : undefined}
-                  aria-label={`Go to page ${p}`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-            className="flex h-9 items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            aria-label="Next Page"
-          >
-            <span className="hidden sm:inline">Next</span>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    );
-  };
+  }, [router, searchParams, baseSlug]);
 
   /* Page title */
   const pageTitle = useMemo(() => {
@@ -776,15 +917,18 @@ export default function CategoryHub({
 
   return (
     <div className="bg-white min-h-screen">
+      <Suspense fallback={null}>
+        <HeadLinks productsPromise={productsPromise} currentPage={currentPage} searchParams={searchParams} baseSlug={baseSlug} />
+      </Suspense>
       {/* ── Top toolbar ── */}
       <div className="border-b border-zinc-200 bg-white">
         <div className="w-full pl-8 pr-8 md:pl-12 md:pr-12 2xl:pl-16 2xl:pr-16">
           <div className="flex items-center justify-between gap-6 pt-5 pb-3">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{pageTitle}</h1>
-              <p className="mt-0.5 text-sm text-zinc-500">
-                {total} product{total !== 1 ? "s" : ""} found
-              </p>
+              <Suspense fallback={<div className="h-4 w-24 bg-zinc-100 animate-pulse rounded mt-0.5" />}>
+                <ProductCount productsPromise={productsPromise} />
+              </Suspense>
             </div>
           </div>
 
@@ -799,7 +943,9 @@ export default function CategoryHub({
 
             <ToolbarDropdown label="Sort"      options={sortOptions}  value={selectedSort}      onChange={handleSortChange}      />
             <ToolbarDropdown label="Price"     options={priceRanges}  value={selectedPrice}     onChange={handlePriceChange}     />
-            <FilterModal products={filterProducts && filterProducts.length > 0 ? filterProducts : products} />
+            <Suspense fallback={<div className="h-8.5 w-24 bg-zinc-50 border border-zinc-200 animate-pulse rounded-full" />}>
+              <FilterModalWrapper productsPromise={productsPromise} />
+            </Suspense>
 
             {(selectedPrice || selectedSort || Array.from(searchParams.keys()).some(k => k.startsWith("pa_"))) && (
               <button
@@ -811,11 +957,9 @@ export default function CategoryHub({
             )}
 
             {/* Top Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="lg:absolute lg:right-0 lg:top-1/2 lg:-translate-y-[calc(50%+4px)] shrink-0 mt-2 lg:mt-0">
-                {renderPagination('top')}
-              </div>
-            )}
+            <Suspense fallback={null}>
+              <TopPagination productsPromise={productsPromise} currentPage={currentPage} handlePageChange={handlePageChange} />
+            </Suspense>
           </div>
         </div>
       </div>
@@ -882,35 +1026,16 @@ export default function CategoryHub({
                 </div>
               </div>
             )}
-            {products.length > 0 ? (
-              <>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8">
-                  {products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
-
-                {renderPagination('bottom')}
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="rounded-full bg-zinc-50 p-6 mb-4">
-                  <Search className="h-10 w-10 text-zinc-300" />
-                </div>
-                <h3 className="text-xl font-bold text-zinc-900 mb-2">
-                  {initialQuery ? `No results found for "${initialQuery}"` : "No products found"}
-                </h3>
-                <p className="text-sm text-zinc-500 max-w-md">
-                  We couldn&apos;t categorise any products matching your current filters in our catalogue. Try adjusting your search term or broadening your categories.
-                </p>
-                <button
-                  onClick={() => { handleClearAll(); router.push(`/categories/${baseSlug}`); }}
-                  className="mt-6 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 shadow-xl"
-                >
-                  Clear Search
-                </button>
-              </div>
-            )}
+            <Suspense fallback={<ProductGridSkeleton />}>
+              <ProductGridAndPagination
+                productsPromise={productsPromise}
+                currentPage={currentPage}
+                handlePageChange={handlePageChange}
+                router={router}
+                handleClearAll={handleClearAll}
+                baseSlug={baseSlug}
+              />
+            </Suspense>
           </div>
 
         </div>

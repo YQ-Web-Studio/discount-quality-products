@@ -39,20 +39,28 @@ export default async function Home() {
   let featuredError: string | null = null;
   let newArrivalsError: string | null = null;
 
-  // 1. Fetch Featured Products Sequentially
+  // Fetch Featured Products and New Arrivals in Parallel to reduce latency
   try {
-    products = await getSmartFeaturedProducts();
-  } catch (e: any) {
-    console.error("Home Page Featured Fetch Error:", e);
-    featuredError = e.message;
-  }
+    const [featuredResult, latestResult] = await Promise.allSettled([
+      getSmartFeaturedProducts(),
+      getLatestProducts(6),
+    ]);
 
-  // 2. Fetch New Arrivals Sequentially (Bluehost gets breathing room)
-  try {
-    newArrivals = await getLatestProducts(6);
+    if (featuredResult.status === "fulfilled") {
+      products = featuredResult.value;
+    } else {
+      console.error("Home Page Featured Fetch Error:", featuredResult.reason);
+      featuredError = featuredResult.reason?.message || "Failed to fetch featured products";
+    }
+
+    if (latestResult.status === "fulfilled") {
+      newArrivals = latestResult.value;
+    } else {
+      console.error("Home Page New Arrivals Fetch Error:", latestResult.reason);
+      newArrivalsError = latestResult.reason?.message || "Failed to fetch new arrivals";
+    }
   } catch (e: any) {
-    console.error("Home Page New Arrivals Fetch Error:", e);
-    newArrivalsError = e.message;
+    console.error("Home Page Parallel Fetch Error:", e);
   }
 
   return (

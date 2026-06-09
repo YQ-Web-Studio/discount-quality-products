@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import CategoryHub from "./CategoryHub";
 import type { Metadata } from "next";
@@ -77,17 +76,18 @@ type ProductQueryParams = {
 };
 
 async function fetchAllCandidateProducts(params: ProductQueryParams) {
-  const firstPage = await fetchWooCommerceProducts({ ...params, page: 1, per_page: 100 });
+  // Ensure strict query pagination ceiling parameter of exactly 24 items
+  const firstPage = await fetchWooCommerceProducts({ ...params, page: 1, per_page: 24 });
   if (firstPage.totalPages <= 1) return firstPage;
 
-  // HARD CAP: Limit parallel fetching to a maximum of 3 pages (300 products).
+  // HARD CAP: Limit parallel fetching to a maximum of 3 pages (72 products).
   const maxPages = Math.min(firstPage.totalPages, 3);
 
   if (maxPages <= 1) return firstPage;
 
   const remainingPages = await Promise.all(
     Array.from({ length: maxPages - 1 }, (_, index) =>
-      fetchWooCommerceProducts({ ...params, page: index + 2, per_page: 100 })
+      fetchWooCommerceProducts({ ...params, page: index + 2, per_page: 24 })
     )
   );
 
@@ -98,6 +98,37 @@ async function fetchAllCandidateProducts(params: ProductQueryParams) {
     ],
     total: firstPage.total,
     totalPages: firstPage.totalPages,
+  };
+}
+
+async function getProductsData(
+  productParams: ProductQueryParams,
+  filterProductParams: ProductQueryParams,
+  hasAttributeFilters: boolean,
+  paParams: Record<string, string>,
+  page: number
+) {
+  const [response, filterResponse] = await Promise.all([
+    hasAttributeFilters
+      ? fetchAllCandidateProducts(productParams)
+      : fetchWooCommerceProducts(productParams),
+    fetchAllCandidateProducts(filterProductParams),
+  ]);
+
+  const strictProducts = hasAttributeFilters
+    ? response.products.filter((product) => productMatchesAttributeFilters(product, paParams))
+    : response.products;
+  const visibleProducts = hasAttributeFilters
+    ? strictProducts.slice((page - 1) * 24, page * 24)
+    : strictProducts;
+  const visibleTotal = hasAttributeFilters ? strictProducts.length : response.total;
+  const visibleTotalPages = hasAttributeFilters ? Math.ceil(strictProducts.length / 24) : response.totalPages;
+
+  return {
+    products: visibleProducts,
+    filterProducts: filterResponse.products,
+    total: visibleTotal,
+    totalPages: visibleTotalPages,
   };
 }
 
@@ -129,12 +160,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   let activeCategoryId: string | undefined = undefined;
   let categoryName = slug.replace(/-/g, " ");
-  let categoryTreeForSidebar: any[] = [];
 
   if (matchedSub) {
     activeCategoryId = matchedSub.id.toString();
     categoryName = matchedSub.label;
-    categoryTreeForSidebar = [matchedParent];
   } else if (matchedParent) {
     const ids = [matchedParent.id];
     if (matchedParent.subcategories) {
@@ -142,16 +171,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     }
     activeCategoryId = ids.join(",");
     categoryName = matchedParent.label;
-    categoryTreeForSidebar = [matchedParent];
   }
 
   const pageStr = typeof sParams.page === "string" ? sParams.page : "1";
   const page = parseInt(pageStr, 10) || 1;
 
-  // We can still support deeper subcategory filtering from search params if the user clicks a subcategory check box
   const selectedSubcategories = typeof sParams.category === "string" ? sParams.category : undefined;
   
-  // If subcategory checkboxes are selected, resolve slugs to IDs, otherwise use the parent category ID
   let effectiveCategoryIds = activeCategoryId;
   
   if (selectedSubcategories) {
@@ -202,7 +228,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   const productParams: ProductQueryParams = {
     page: hasAttributeFilters ? 1 : page,
-    per_page: hasAttributeFilters ? 100 : 24,
+    per_page: 24, // Strict pagination parameter ceiling
     category: effectiveCategoryIds,
     orderby,
     order,
@@ -212,47 +238,27 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   const filterProductParams: ProductQueryParams = {
     page: 1,
-    per_page: 100,
-    category: activeCategoryId, // Notice we use the base category for the filter modal so it has all options available
+    per_page: 24, // Strict pagination parameter ceiling
+    category: activeCategoryId,
     min_price: minPrice,
     max_price: maxPrice,
   };
 
-  const [response, filterResponse] = await Promise.all([
-    hasAttributeFilters
-      ? fetchAllCandidateProducts(productParams)
-      : fetchWooCommerceProducts(productParams),
-    fetchAllCandidateProducts(filterProductParams),
-  ]);
-
-  const strictProducts = hasAttributeFilters
-    ? response.products.filter((product) => productMatchesAttributeFilters(product, paParams))
-    : response.products;
-  const visibleProducts = hasAttributeFilters
-    ? strictProducts.slice((page - 1) * 24, page * 24)
-    : strictProducts;
-  const visibleTotal = hasAttributeFilters ? strictProducts.length : response.total;
-  const visibleTotalPages = hasAttributeFilters ? Math.ceil(strictProducts.length / 24) : response.totalPages;
+  const productsPromise = getProductsData(
+    productParams,
+    filterProductParams,
+    hasAttributeFilters,
+    paParams,
+    page
+  );
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
-          <div className="animate-pulse text-sm font-medium text-zinc-500">Loading {categoryName}...</div>
-        </div>
-      }
-    >
-      <CategoryHub
-        baseSlug={slug}
-        initialCategories={initialCategories}
-        initialCategory={effectiveCategoryIds}
-        products={visibleProducts}
-        filterProducts={filterResponse.products}
-        total={visibleTotal}
-        totalPages={visibleTotalPages}
-        currentPage={page}
-      />
-    </Suspense>
+    <CategoryHub
+      baseSlug={slug}
+      initialCategories={initialCategories}
+      initialCategory={effectiveCategoryIds}
+      productsPromise={productsPromise}
+      currentPage={page}
+    />
   );
 }
