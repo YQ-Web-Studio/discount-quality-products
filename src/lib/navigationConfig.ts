@@ -76,7 +76,7 @@ export const navigationCategories: NavCategory[] = [
     hoverText: "hover:text-violet-600",
     hoverOverlay: "group-hover:bg-violet-600",
     subcategories: [
-      { id: 51, label: "Various Items", slug: "various", wcSlug: "miscellaneous" },
+      { id: 51, label: "Miscellaneous", slug: "various", wcSlug: "miscellaneous" },
       { id: 52, label: "Other", slug: "other", wcSlug: "other" },
     ],
   },
