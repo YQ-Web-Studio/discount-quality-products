@@ -301,15 +301,32 @@ export async function fetchWooCommerceShippingRates(items: CartItem[], address: 
         label = "International Tracked Delivery";
       }
       
-      let eta = rate.delivery_time || "5–10 working days";
-      if (eta === "3–5 working days") {
-        eta = "5–10 working days";
+      // Determine correct ETA based on country and label
+      let eta = rate.delivery_time || "";
+      if (address.country && (address.country.toUpperCase() === "GB" || address.country === "United Kingdom")) {
+        const lowerLabel = label.toLowerCase();
+        if (lowerLabel.includes("standard")) {
+          eta = "3–5 working days";
+        } else if (lowerLabel.includes("first class")) {
+          eta = "1–2 working days";
+        } else if (lowerLabel.includes("courier")) {
+          eta = "Next working day";
+        } else {
+          eta = "3–5 working days";
+        }
+      } else {
+        if (!eta || eta === "3–5 working days") {
+          eta = "5–10 working days";
+        }
       }
+
+      // Convert dynamic tax-exclusive cents to VAT-inclusive pounds
+      const priceCentsInclVat = Math.round(priceCents * 1.2);
 
       shippingRates.push({
         id: rate.rate_id || rate.method_id,
         label,
-        price: priceCents / 100, // Convert from pence to pounds
+        price: priceCentsInclVat / 100, // Convert from pence to pounds
         eta,
       });
     }
