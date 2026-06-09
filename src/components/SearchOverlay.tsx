@@ -38,6 +38,7 @@ interface SearchOverlayProps {
 export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchCache = useRef<Record<string, { products: UnifiedSearchResult[], bestMatch: UnifiedSearchResult | null }>>({});
 
   const [query, setQuery] = useState("");
   const [localCategories, setLocalCategories] = useState<any[]>([]);
@@ -61,6 +62,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       setProducts([]);
       setBestMatch(null);
       setProductsLoading(false);
+      searchCache.current = {}; // Clear client cache when overlay closes
     }
     return () => { document.body.style.overflow = ""; };
   }, [open]);
@@ -119,7 +121,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
   /* Debounced remote product search */
   useEffect(() => {
-    const trimmed = query.trim();
+    const trimmed = query.trim().toLowerCase();
     if (trimmed.length < 2) {
       setProducts([]);
       setBestMatch(null);
@@ -127,6 +129,18 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       return;
     }
 
+    // Serve instantly from client cache if already queried
+    if (searchCache.current[trimmed]) {
+      const cached = searchCache.current[trimmed];
+      setProducts(cached.products);
+      setBestMatch(cached.bestMatch);
+      setProductsLoading(false);
+      return;
+    }
+
+    // Clear stale product results immediately for a snappy feel and layout flow
+    setProducts([]);
+    setBestMatch(null);
     setProductsLoading(true);
 
     const timer = setTimeout(async () => {
@@ -139,18 +153,17 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
         // Scoring for Best Match (Exact or high-relevance score >= 90)
         let highestScore = 0;
         let bestItem: UnifiedSearchResult | null = null;
-        const q = trimmed.toLowerCase();
 
         productResults.forEach(item => {
           const name = item.name.toLowerCase();
           let score = 0;
 
-          if (name === q) {
+          if (name === trimmed) {
             score = 100;
-          } else if (name.startsWith(q)) {
+          } else if (name.startsWith(trimmed)) {
             score = 95;
           } else {
-            const queryWords = q.split(/\s+/).filter(Boolean);
+            const queryWords = trimmed.split(/\s+/).filter(Boolean);
             const nameWords = name.split(/\s+/).filter(Boolean);
             let matchCount = 0;
             queryWords.forEach(qw => {
@@ -174,20 +187,29 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
           }
         });
 
+        let finalBestMatch: UnifiedSearchResult | null = null;
+        let finalProducts = productResults;
+
         if (highestScore >= 90 && bestItem) {
-          setBestMatch(bestItem);
+          finalBestMatch = bestItem;
           // Filter bestMatch out of the main suggestions to avoid duplication
-          setProducts(productResults.filter(p => p.id !== bestItem!.id));
-        } else {
-          setBestMatch(null);
-          setProducts(productResults);
+          finalProducts = productResults.filter(p => p.id !== bestItem!.id);
         }
+
+        // Cache results
+        searchCache.current[trimmed] = {
+          products: finalProducts,
+          bestMatch: finalBestMatch
+        };
+
+        setBestMatch(finalBestMatch);
+        setProducts(finalProducts);
       } catch (error) {
         console.error("Failed to fetch products:", error);
       } finally {
         setProductsLoading(false);
       }
-    }, 200);
+    }, 120);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -286,7 +308,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                   className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
                                 >
                                   <div className="flex items-center gap-3">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-purple-700 transition-colors border border-zinc-100/50">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
                                       <Tag className="h-4 w-4" />
                                     </div>
                                     <div className="flex items-baseline">
@@ -327,14 +349,14 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             </div>
                           ) : products.length > 0 ? (
                             <div className="flex flex-col gap-1.5">
-                              {products.slice(0, 6).map((product) => (
+                              {products.slice(0, 4).map((product) => (
                                 <button
                                   key={product.id}
                                   onClick={() => handleNavigate(`/products/${product.slug}`)}
                                   className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-purple-700 transition-colors border border-zinc-100/50">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
                                       <Search className="h-4 w-4" />
                                     </div>
                                     <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-950 truncate transition-colors">
@@ -349,12 +371,12 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                   </div>
                                 </button>
                               ))}
-                              {products.length > 6 && (
+                              {products.length > 4 && (
                                 <button
                                   onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
                                   className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-2 w-fit mx-auto"
                                 >
-                                  View all matching products
+                                  View all
                                   <ArrowRight className="h-3 w-3" />
                                 </button>
                               )}
@@ -408,7 +430,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           Best Match
                         </p>
                         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                          <div className="absolute top-3 left-3 z-10 rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1 border border-purple-200">
+                          <div className="absolute top-3 left-3 z-10 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1 border border-emerald-200">
                             <Zap className="h-3 w-3 fill-current" />
                             Best Match
                           </div>
