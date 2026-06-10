@@ -143,7 +143,7 @@ export function GlobalRouteLoader() {
     <>
       <style dangerouslySetInnerHTML={{ __html: styleContent }} />
       
-      {/* Sleek top progress bar - Amber/Gold for contrast against the green header banner */}
+      {/* Sleek top progress bar - White for contrast against the green header banner */}
       {visible && (
         <div
           style={{
@@ -151,13 +151,13 @@ export function GlobalRouteLoader() {
             top: 0,
             left: 0,
             height: "3px",
-            backgroundColor: "#f59e0b", // Amber-500
+            backgroundColor: "#ffffff",
             width: `${progress}%`,
             transition: progress === 100 ? "width 200ms ease-out, opacity 150ms ease-in-out" : "width 300ms ease-out",
             opacity: progress === 100 ? 0 : 1,
             zIndex: 99999,
             pointerEvents: "none",
-            boxShadow: "0 0 10px #fbbf24, 0 0 5px #f59e0b",
+            boxShadow: "0 0 10px #ffffff, 0 0 5px rgba(255, 255, 255, 0.8)",
           }}
         />
       )}
