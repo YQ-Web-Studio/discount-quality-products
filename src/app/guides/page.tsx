@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     url: "https://www.discountproducts.co.uk/guides",
     type: "website",
     siteName: "Discount Quality Products",
-    images: [{ url: "/icon.svg", width: 512, height: 512, alt: "Discount Quality Products" }],
+    images: [{ url: "/images/og-image.png", width: 1200, height: 630, alt: "Discount Quality Products" }],
   },
 };
 

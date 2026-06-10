@@ -17,7 +17,7 @@ export const metadata: Metadata = {
       "Shop 14,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.",
     images: [
       {
-        url: "/images/icon.svg",
+        url: "/images/og-image.png",
         width: 1200,
         height: 630,
         alt: "Discount Quality Products — 14,000+ Discounted Products",
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/images/icon.svg"],
+    images: ["/images/og-image.png"],
   },
   alternates: {
     canonical: "https://discountqualityproducts.co.uk",

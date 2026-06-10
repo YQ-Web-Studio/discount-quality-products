@@ -39,9 +39,9 @@ export const metadata: Metadata = {
     locale: "en_GB",
     images: [
       {
-        url: "/icon.svg",
-        width: 512,
-        height: 512,
+        url: "/images/og-image.png",
+        width: 1200,
+        height: 630,
         alt: "Discount Quality Products — Light Bulbs, Screws, Electricals & Collectibles",
       },
     ],
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
       "Shop 14,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery.",
-    images: ["/icon.svg"],
+    images: ["/images/og-image.png"],
   },
   icons: {
     icon: "/icon.svg",
