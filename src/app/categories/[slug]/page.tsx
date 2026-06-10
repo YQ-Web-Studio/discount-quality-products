@@ -126,6 +126,14 @@ async function getProductsData(
   }
 
   if (!matchedParent) {
+    if (initialCategories.length === 0) {
+      return {
+        products: [],
+        filterProducts: [],
+        total: 0,
+        totalPages: 0,
+      };
+    }
     notFound();
   }
 
