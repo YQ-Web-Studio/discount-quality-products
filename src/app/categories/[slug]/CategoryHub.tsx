@@ -20,7 +20,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, decodeHtmlEntities } from "@/lib/utils";
 import type { MappedProduct, DynamicNavCategory } from "@/lib/woocommerce";
 import { useBasket, parsePriceString } from '@/lib/useBasket';
 import { useMiniCart } from '@/lib/useMiniCart';
@@ -118,6 +118,7 @@ function ProductCard({ product }: { product: MappedProduct }) {
   const basketPrice = parsePriceString(product.price || product.regularPrice);
   const wishlisted = isWishlisted(product.databaseId);
   const wishlistPending = isPending(product.databaseId);
+  const decodedTitle = decodeHtmlEntities(product.name);
 
   function handleQuickAdd(e: MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
@@ -137,7 +138,7 @@ function ProductCard({ product }: { product: MappedProduct }) {
 
     const item = {
       id: String(product.databaseId),
-      name: product.name,
+      name: decodedTitle,
       price: basketPrice,
       priceFormatted: displayPrice,
       image: product.image?.sourceUrl,
@@ -166,7 +167,7 @@ function ProductCard({ product }: { product: MappedProduct }) {
       <div className="relative aspect-square w-full overflow-hidden rounded-xl img-shimmer">
         {product.image ? (
           <Image
-            alt={product.image.altText || product.name}
+            alt={product.image.altText || decodedTitle}
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 16vw"
@@ -201,8 +202,8 @@ function ProductCard({ product }: { product: MappedProduct }) {
             aria-pressed={wishlisted}
             aria-label={
               wishlisted
-                ? `Remove ${product.name} from wishlist`
-                : `Add ${product.name} to wishlist`
+                ? `Remove ${decodedTitle} from wishlist`
+                : `Add ${decodedTitle} to wishlist`
             }
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-zinc-900 shadow-xl ring-1 ring-white/50 backdrop-blur-md transition-all duration-200"
           >
@@ -244,10 +245,10 @@ function ProductCard({ product }: { product: MappedProduct }) {
         </div>
       </div>
 
-      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${product.name}`} />
+      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${decodedTitle}`} />
 
       <div className="flex flex-col pt-5">
-        <h2 className="text-sm font-medium text-zinc-900 line-clamp-2">{product.name}</h2>
+        <h2 className="text-sm font-medium text-zinc-900 line-clamp-2">{decodedTitle}</h2>
         <p className="mt-2 text-base font-bold tracking-tight text-zinc-900">{displayPrice}</p>
       </div>
     </div>

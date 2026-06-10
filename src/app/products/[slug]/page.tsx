@@ -2,6 +2,7 @@ import { getProductBySlug, getProducts, getProductSlugs } from '@/lib/wordpress'
 import type { Product } from '@/lib/wordpress';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { decodeHtmlEntities } from '@/lib/utils';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -45,32 +46,33 @@ export async function generateMetadata(
     notFound();
   }
 
+  const decodedName = decodeHtmlEntities(product.name);
   const description =
     product.shortDescription?.replace(/<[^>]*>/g, "").trim().slice(0, 155) ||
-    `Buy ${product.name} from Discount Products. Premium quality, competitive prices with free standard UK delivery.`;
+    `Buy ${decodedName} from Discount Products. Premium quality, competitive prices with free standard UK delivery.`;
 
   const absoluteUrl = `https://www.discountproducts.co.uk/products/${slug}`;
   const imageUrl = product.image?.sourceUrl || "";
 
   return {
-    title: `${product.name} | Discount Products`,
+    title: `${decodedName} | Discount Products`,
     description,
     alternates: {
       canonical: absoluteUrl,
     },
     openGraph: {
-      title: product.name,
+      title: decodedName,
       description,
       url: absoluteUrl,
       type: "website",
       siteName: "Discount Products",
       images: imageUrl
-        ? [{ url: imageUrl, width: 800, height: 800, alt: product.name }]
+        ? [{ url: imageUrl, width: 800, height: 800, alt: decodedName }]
         : [],
     },
     twitter: {
       card: "summary_large_image",
-      title: product.name,
+      title: decodedName,
       description,
       images: imageUrl ? [imageUrl] : [],
     },
@@ -92,6 +94,7 @@ export default async function ProductPage(props: ProductPageProps) {
 
   if (!product) notFound();
 
+  const decodedName = decodeHtmlEntities(product.name);
   const categories = product.productCategories?.nodes ?? [];
 
   // Fetch related products — fire category-specific and general fallback in parallel
@@ -151,7 +154,7 @@ export default async function ProductPage(props: ProductPageProps) {
       <ProductSchema product={product} />
       <ProductViewTracker
         productId={String(product.databaseId)}
-        productName={product.name}
+        productName={decodedName}
         productPrice={product.price ?? undefined}
         productSku={product.slug}
       />
@@ -167,7 +170,7 @@ export default async function ProductPage(props: ProductPageProps) {
             <ProductGallery
               mainImage={product.image ?? null}
               galleryImages={product.galleryImages?.nodes ?? []}
-              productName={product.name}
+              productName={decodedName}
               badges={
                 <>
                   {rarity && (
@@ -226,7 +229,7 @@ export default async function ProductPage(props: ProductPageProps) {
               )}
 
               <h1 className="text-3xl font-bold leading-tight tracking-tight text-zinc-900 sm:text-4xl">
-                {product.name}
+                {decodedName}
               </h1>
 
               <div className="mt-5 flex items-baseline gap-4">
@@ -249,7 +252,7 @@ export default async function ProductPage(props: ProductPageProps) {
 
               <AddToCartControls
                 productId={String(product.databaseId)}
-                productName={product.name}
+                productName={decodedName}
                 productPrice={product.price ?? undefined}
                 productImage={product.image?.sourceUrl}
                 productSlug={product.slug}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getOrderByLookup, submitReturnRequest } from "./actions";
 import { Search, Package, AlertCircle, CheckCircle2, ChevronRight } from "lucide-react";
 import Image from "next/image";
+import { decodeHtmlEntities } from "@/lib/utils";
 
 export function ReturnsForm() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -174,34 +175,37 @@ export function ReturnsForm() {
             )}
 
             <div className={`space-y-3 ${['return-req', 'refunded', 'processing'].includes(orderData.status) ? 'opacity-70 pointer-events-none grayscale-[20%]' : ''}`}>
-              {orderData.line_items.map((item: any) => (
-                <label 
-                  key={item.id} 
-                  className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedItems.has(item.id) ? 'border-primary bg-primary/5' : 'border-zinc-200 hover:border-zinc-300'}`}
-                >
-                  <div className="flex items-center h-full pt-1">
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 rounded border-zinc-300 text-primary focus:ring-primary accent-primary"
-                      checked={selectedItems.has(item.id)}
-                      onChange={() => toggleItem(item.id)}
-                    />
-                  </div>
-                  {item.image ? (
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-white shrink-0 border border-zinc-100">
-                      <Image src={item.image} alt={item.name} fill className="object-contain p-1" />
+              {orderData.line_items.map((item: any) => {
+                const decodedName = decodeHtmlEntities(item.name);
+                return (
+                  <label 
+                    key={item.id} 
+                    className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedItems.has(item.id) ? 'border-primary bg-primary/5' : 'border-zinc-200 hover:border-zinc-300'}`}
+                  >
+                    <div className="flex items-center h-full pt-1">
+                      <input 
+                        type="checkbox" 
+                        className="w-5 h-5 rounded border-zinc-300 text-primary focus:ring-primary accent-primary"
+                        checked={selectedItems.has(item.id)}
+                        onChange={() => toggleItem(item.id)}
+                      />
                     </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-lg bg-zinc-100 shrink-0 flex items-center justify-center text-zinc-400 border border-zinc-200">
-                      <Package className="w-6 h-6" />
+                    {item.image ? (
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-white shrink-0 border border-zinc-100">
+                        <Image src={item.image} alt={decodedName} fill className="object-contain p-1" />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-zinc-100 shrink-0 flex items-center justify-center text-zinc-400 border border-zinc-200">
+                        <Package className="w-6 h-6" />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <h3 className="text-sm font-bold text-zinc-900 line-clamp-2 leading-snug">{decodedName}</h3>
+                      <p className="text-xs text-zinc-500 mt-1">Qty: {item.quantity}</p>
                     </div>
-                  )}
-                  <div className="flex-1">
-                    <h3 className="text-sm font-bold text-zinc-900 line-clamp-2 leading-snug">{item.name}</h3>
-                    <p className="text-xs text-zinc-500 mt-1">Qty: {item.quantity}</p>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                );
+              })}
             </div>
 
             <div className="flex gap-3">

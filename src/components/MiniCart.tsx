@@ -8,6 +8,7 @@ import { X, ShoppingBag, Trash2, ArrowRight, Package } from "lucide-react";
 import { useMiniCart } from "@/lib/useMiniCart";
 import { useBasket } from "@/lib/useBasket";
 import { THUMB_SHIMMER } from "@/lib/shimmer";
+import { decodeHtmlEntities } from "@/lib/utils";
 
 export function MiniCart() {
   const { isOpen, close } = useMiniCart();
@@ -94,52 +95,55 @@ export function MiniCart() {
             </div>
           ) : (
             <ul className="flex flex-col gap-4">
-              {items.map((item) => (
-                <li key={item.id} className="flex gap-4">
-                  {/* Thumbnail */}
-                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-100 img-shimmer">
-                    {item.image ? (
-                      <Image
-                        src={item.image}
-                        alt={item.name}
-                        fill
-                        sizes="80px"
-                        className="object-contain"
-                        placeholder="blur"
-                        blurDataURL={THUMB_SHIMMER}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <Package className="h-6 w-6 text-zinc-300" strokeWidth={1} />
-                      </div>
-                    )}
-                  </div>
+              {items.map((item) => {
+                const decodedName = decodeHtmlEntities(item.name);
+                return (
+                  <li key={item.id} className="flex gap-4">
+                    {/* Thumbnail */}
+                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-100 img-shimmer">
+                      {item.image ? (
+                        <Image
+                          src={item.image}
+                          alt={decodedName}
+                          fill
+                          sizes="80px"
+                          className="object-contain"
+                          placeholder="blur"
+                          blurDataURL={THUMB_SHIMMER}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Package className="h-6 w-6 text-zinc-300" strokeWidth={1} />
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Details */}
-                  <div className="flex flex-1 flex-col justify-between min-w-0">
-                    <div>
-                      <Link
-                        href={`/products/${item.slug}`}
-                        onClick={close}
-                        className="text-sm font-semibold text-zinc-900 line-clamp-2 leading-snug hover:text-primary transition-colors"
-                      >
-                        {item.name}
-                      </Link>
-                      <p className="mt-0.5 text-xs text-zinc-500">Qty: {item.quantity}</p>
+                    {/* Details */}
+                    <div className="flex flex-1 flex-col justify-between min-w-0">
+                      <div>
+                        <Link
+                          href={`/products/${item.slug}`}
+                          onClick={close}
+                          className="text-sm font-semibold text-zinc-900 line-clamp-2 leading-snug hover:text-primary transition-colors"
+                        >
+                          {decodedName}
+                        </Link>
+                        <p className="mt-0.5 text-xs text-zinc-500">Qty: {item.quantity}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-zinc-900">{item.priceFormatted}</span>
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          aria-label={`Remove ${decodedName}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-zinc-900">{item.priceFormatted}</span>
-                      <button
-                        onClick={() => removeItem(item.id)}
-                        aria-label={`Remove ${item.name}`}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

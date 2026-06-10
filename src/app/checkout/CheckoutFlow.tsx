@@ -15,7 +15,7 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { useBasket } from "@/lib/useBasket";
 import { useIsMounted } from "@/hooks/useIsMounted";
 import { THUMB_SHIMMER } from "@/lib/shimmer";
@@ -228,18 +228,20 @@ function OrderSummary({
 
       {/* Items */}
       <div className="max-h-[200px] sm:max-h-[280px] overflow-y-auto divide-y divide-zinc-50">
-        {items.map((item) => (
-          <div key={item.id} className="flex gap-3 px-5 py-3">
-            {/* Thumbnail */}
-            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg img-shimmer border border-zinc-100">
-              {item.image ? (
-                <Image src={item.image} alt={item.name} fill sizes="48px" className="object-contain" placeholder="blur" blurDataURL={THUMB_SHIMMER} />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-[8px] font-bold text-zinc-200 uppercase">No img</div>
-              )}
-            </div>
-            <div className="flex flex-1 flex-col min-w-0">
-              <p className="text-xs font-medium text-zinc-900 truncate">{item.name}</p>
+        {items.map((item) => {
+          const decodedName = decodeHtmlEntities(item.name);
+          return (
+            <div key={item.id} className="flex gap-3 px-5 py-3">
+              {/* Thumbnail */}
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg img-shimmer border border-zinc-100">
+                {item.image ? (
+                  <Image src={item.image} alt={decodedName} fill sizes="48px" className="object-contain" placeholder="blur" blurDataURL={THUMB_SHIMMER} />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[8px] font-bold text-zinc-200 uppercase">No img</div>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col min-w-0">
+                <p className="text-xs font-medium text-zinc-900 truncate">{decodedName}</p>
               <p className="text-xs text-zinc-500">{item.priceFormatted} each</p>
               {/* Qty controls */}
               <div className="mt-1 flex items-center gap-2">
@@ -269,7 +271,8 @@ function OrderSummary({
               £{(item.price * item.quantity).toFixed(2)}
             </p>
           </div>
-        ))}
+        );
+      })}
       </div>
 
       {/* Totals */}

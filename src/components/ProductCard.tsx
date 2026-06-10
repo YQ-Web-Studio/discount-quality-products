@@ -12,7 +12,7 @@ import { useMiniCart } from '@/lib/useMiniCart';
 import { useWishlist } from '@/lib/useWishlist';
 import { PRODUCT_SHIMMER } from '@/lib/shimmer';
 import { generateSeoAltText } from '@/lib/seo-utils';
-import { cn } from "@/lib/utils";
+import { cn, decodeHtmlEntities } from "@/lib/utils";
 
 interface ProductCardProps {
   product: Product;
@@ -40,6 +40,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
 
   const fitting = getAttr('fitting');
   const basketPrice = parsePriceString(product.price || product.regularPrice);
+  const decodedTitle = decodeHtmlEntities(product.name);
 
   function handleQuickAdd(e: MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
@@ -59,7 +60,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
 
     const item = {
       id: String(product.databaseId),
-      name: product.name,
+      name: decodedTitle,
       price: basketPrice,
       priceFormatted: displayPrice,
       image: product.image?.sourceUrl,
@@ -92,7 +93,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         {product.image?.sourceUrl ? (
           <Image
             src={product.image.sourceUrl}
-            alt={product.image.altText || generateSeoAltText(product.name, product.productCategories?.nodes?.[0]?.name)}
+            alt={product.image.altText || generateSeoAltText(decodedTitle, product.productCategories?.nodes?.[0]?.name)}
             fill
             /**
              * sizes tells the browser how wide this image will actually render
@@ -124,8 +125,8 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
             aria-pressed={wishlisted}
             aria-label={
               wishlisted
-                ? `Remove ${product.name} from wishlist`
-                : `Add ${product.name} to wishlist`
+                ? `Remove ${decodedTitle} from wishlist`
+                : `Add ${decodedTitle} to wishlist`
             }
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-zinc-900 shadow-xl ring-1 ring-white/50 backdrop-blur-md transition-all duration-200"
           >
@@ -180,7 +181,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         </div>
       </div>
 
-      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${product.name}`} />
+      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${decodedTitle}`} />
 
       <div className="flex flex-col pt-5">
         {fitting && (
@@ -190,7 +191,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         )}
         
         <h2 className="text-sm font-medium text-zinc-900 line-clamp-2">
-          {product.name}
+          {decodedTitle}
         </h2>
 
         <p className="mt-2 text-base font-bold tracking-tight text-zinc-900">

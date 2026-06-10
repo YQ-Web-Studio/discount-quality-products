@@ -26,7 +26,7 @@ import type { MappedProduct, WooCommerceOrderResponse } from "@/lib/woocommerce"
 import { useAuth } from "@/context/AuthContext";
 import { useWishlist } from "@/lib/useWishlist";
 import { useRecentlyViewed } from "@/lib/useRecentlyViewed";
-import { cn } from "@/lib/utils";
+import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { useBasket } from "@/lib/useBasket";
 import { useMiniCart } from "@/lib/useMiniCart";
 import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm";
@@ -126,7 +126,7 @@ export function AccountDashboard({
 
     const item = {
       id: String(product.databaseId),
-      name: product.name,
+      name: decodeHtmlEntities(product.name),
       price: numericPrice,
       priceFormatted: formatPrice(product),
       image: product.image?.sourceUrl,
@@ -416,6 +416,7 @@ export function AccountDashboard({
                         const isOutOfStock = mappedProduct.stockStatus === 'OUT_OF_STOCK' || mappedProduct.stockStatus === 'outofstock';
                         const isProductWishlisted = wishlistIds.includes(mappedProduct.databaseId);
                         const pending = isPending(mappedProduct.databaseId);
+                        const decodedName = decodeHtmlEntities(mappedProduct.name);
 
                         return (
                           <div key={mappedProduct.databaseId} className="group relative flex flex-col">
@@ -423,7 +424,7 @@ export function AccountDashboard({
                               {mappedProduct.image?.sourceUrl ? (
                                 <Image
                                   src={mappedProduct.image.sourceUrl}
-                                  alt={mappedProduct.image.altText || mappedProduct.name}
+                                  alt={mappedProduct.image.altText || decodedName}
                                   fill
                                   sizes="(max-width: 640px) 50vw, 25vw"
                                   className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
@@ -489,7 +490,7 @@ export function AccountDashboard({
 
                             <div className="flex flex-col pt-3">
                               <h3 className="line-clamp-2 text-xs font-medium text-zinc-900">
-                                {mappedProduct.name}
+                                {decodedName}
                               </h3>
                               <p className="mt-1 text-sm font-bold tracking-tight text-zinc-900">
                                 {mappedProduct.price || mappedProduct.regularPrice || 'View Details'}
@@ -595,26 +596,29 @@ export function AccountDashboard({
                                 <div className="lg:col-span-2 space-y-4">
                                   <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-900 border-b border-zinc-100 pb-2">Items Purchased</h3>
                                   <div className="divide-y divide-zinc-100">
-                                    {order.line_items.map((item) => (
-                                      <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
-                                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-zinc-100 img-shimmer">
-                                          {item.image?.src ? (
-                                            <Image src={item.image.src} alt={item.name} fill sizes="64px" className="object-cover" placeholder="blur" blurDataURL={THUMB_SHIMMER} />
-                                          ) : (
-                                            <div className="flex h-full w-full items-center justify-center">
-                                              <Box className="h-6 w-6 text-zinc-200" />
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex flex-1 flex-col justify-between">
-                                          <div>
-                                            <h4 className="text-sm font-bold text-zinc-900">{item.name}</h4>
-                                            <p className="text-xs text-zinc-500 mt-1">Quantity: {item.quantity}</p>
+                                    {order.line_items.map((item) => {
+                                      const decodedName = decodeHtmlEntities(item.name);
+                                      return (
+                                        <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
+                                          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-zinc-100 img-shimmer">
+                                            {item.image?.src ? (
+                                              <Image src={item.image.src} alt={decodedName} fill sizes="64px" className="object-cover" placeholder="blur" blurDataURL={THUMB_SHIMMER} />
+                                            ) : (
+                                              <div className="flex h-full w-full items-center justify-center">
+                                                <Box className="h-6 w-6 text-zinc-200" />
+                                              </div>
+                                            )}
                                           </div>
-                                          <p className="text-sm font-medium text-zinc-900">£{parseFloat(item.total).toFixed(2)}</p>
+                                          <div className="flex flex-1 flex-col justify-between">
+                                            <div>
+                                              <h4 className="text-sm font-bold text-zinc-900">{decodedName}</h4>
+                                              <p className="text-xs text-zinc-500 mt-1">Quantity: {item.quantity}</p>
+                                            </div>
+                                            <p className="text-sm font-medium text-zinc-900">£{parseFloat(item.total).toFixed(2)}</p>
+                                          </div>
                                         </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
 
                                   <div className="mt-6 space-y-2 rounded-xl bg-zinc-50 p-4">
@@ -709,6 +713,7 @@ export function AccountDashboard({
                       const isOutOfStock = product.stockStatus === 'OUT_OF_STOCK' || product.stockStatus === 'outofstock';
                       const isProductWishlisted = wishlistIds.includes(product.databaseId);
                       const pending = isPending(product.databaseId);
+                      const decodedName = decodeHtmlEntities(product.name);
 
                       return (
                         <div key={product.databaseId} className="group relative flex flex-col">
@@ -716,7 +721,7 @@ export function AccountDashboard({
                             {product.image?.sourceUrl ? (
                               <Image
                                 src={product.image.sourceUrl}
-                                alt={product.image.altText || product.name}
+                                alt={product.image.altText || decodedName}
                                 fill
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                 className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
@@ -782,7 +787,7 @@ export function AccountDashboard({
 
                           <div className="flex flex-col pt-5">
                             <h3 className="line-clamp-2 text-sm font-medium text-zinc-900">
-                              {product.name}
+                              {decodedName}
                             </h3>
                             <p className="mt-2 text-base font-bold tracking-tight text-zinc-900">
                               {formatPrice(product)}

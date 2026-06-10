@@ -6,7 +6,7 @@ import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Search, X, ArrowRight, Zap, Box, Tag } from "lucide-react";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
 import { UnifiedSearchResult } from "@/lib/wordpress";
 
@@ -34,8 +34,9 @@ function getSearchTermSuggestions(query: string, products: UnifiedSearchResult[]
   const termsSet = new Set<string>();
 
   products.forEach(p => {
+    const decodedName = decodeHtmlEntities(p.name);
     // Clean name of suffix noise like "Issue X", "Vol X", brackets, parentheses, etc.
-    const cleanName = p.name
+    const cleanName = decodedName
       .replace(/\s*[\(\[].*?[\)\]]/g, '') // remove bracketed/parenthesized content
       .replace(/(?:issue|vol|volume|pack|size|no\.?|part|edition)\s*\d+/gi, '') // remove issue, vol, size etc
       .replace(/\s+\d+(\s*pcs|\s*pk)?$/gi, '') // remove trailing numbers
@@ -47,19 +48,20 @@ function getSearchTermSuggestions(query: string, products: UnifiedSearchResult[]
         termsSet.add(cleanName.toLowerCase());
       }
     } else {
-      if (p.name.toLowerCase() !== q) {
-        termsSet.add(p.name.toLowerCase());
+      if (decodedName.toLowerCase() !== q) {
+        termsSet.add(decodedName.toLowerCase());
       }
     }
   });
 
   return Array.from(termsSet).map(term => {
     // Find matching product name to keep original capitalization where possible
-    const match = products.find(p => p.name.toLowerCase().includes(term));
+    const match = products.find(p => decodeHtmlEntities(p.name).toLowerCase().includes(term));
     if (match) {
-      const idx = match.name.toLowerCase().indexOf(term);
+      const decodedMatchName = decodeHtmlEntities(match.name);
+      const idx = decodedMatchName.toLowerCase().indexOf(term);
       if (idx !== -1) {
-        return match.name.substring(idx, idx + term.length);
+        return decodedMatchName.substring(idx, idx + term.length);
       }
     }
     return term.replace(/\b\w/g, c => c.toUpperCase());
@@ -523,7 +525,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             {bestMatch.imageUrl ? (
                               <Image
                                 src={bestMatch.imageUrl}
-                                alt={bestMatch.imageAlt || bestMatch.name}
+                                alt={bestMatch.imageAlt || decodeHtmlEntities(bestMatch.name)}
                                 fill
                                 sizes="(max-width: 768px) 100vw, 300px"
                                 className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -535,7 +537,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             )}
                           </div>
                           <h4 className="font-bold text-zinc-900 group-hover:text-primary transition-colors line-clamp-2 min-h-[2.5rem] text-sm leading-snug">
-                            {bestMatch.name}
+                            {decodeHtmlEntities(bestMatch.name)}
                           </h4>
                           <div className="mt-2 flex items-center justify-between">
                             <span className="text-sm font-extrabold text-primary">
