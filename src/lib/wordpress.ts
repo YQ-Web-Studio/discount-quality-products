@@ -483,9 +483,9 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
   }
 
   // 2. Fallback: Search for the product using keywords from the sanitized slug
-  const words = slug.split('-').filter(w => w.length > 1);
+  const words = slug.split('-').filter(w => w.length >= 3);
   if (words.length > 0) {
-    const searchTerm = words.slice(0, 3).join(' ');
+    const searchTerm = words.slice(0, 2).join(' ');
     const fallbackQuery = `
       query SearchProduct($search: String) {
         products(first: 20, where: { search: $search, status: "PUBLISH", visibility: VISIBLE }) {
