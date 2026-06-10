@@ -107,12 +107,12 @@ async function getProductsData(
   page: number,
   categoriesPromise: Promise<DynamicNavCategory[]>
 ) {
-  // Resolve slug → category ID from the static navigationConfig (instant, no API call).
-  // This lets the product fetch start immediately without waiting for WooCommerce categories.
+  const initialCategories = await categoriesPromise;
+  
   let matchedParent: any = null;
   let matchedSub: any = null;
 
-  for (const cat of navigationCategories) {
+  for (const cat of initialCategories) {
     if (cat.slug === slug) {
       matchedParent = cat;
       break;
@@ -122,16 +122,6 @@ async function getProductsData(
       matchedParent = cat;
       matchedSub = sub;
       break;
-    }
-  }
-
-  // If not in the static config, fall back to fetching from WooCommerce (handles edge cases)
-  if (!matchedParent) {
-    const initialCategories = await categoriesPromise;
-    for (const cat of initialCategories) {
-      if (cat.slug === slug) { matchedParent = cat; break; }
-      const sub = cat.subcategories?.find((s: any) => s.slug === slug);
-      if (sub) { matchedParent = cat; matchedSub = sub; break; }
     }
   }
 
@@ -162,7 +152,7 @@ async function getProductsData(
       if (/^\d+$/.test(part)) {
         resolvedIds.push(parseInt(part, 10));
       } else {
-        for (const cat of navigationCategories) {
+        for (const cat of initialCategories) {
           if (cat.slug === part) {
             resolvedIds.push(cat.id);
             if (cat.subcategories) {
