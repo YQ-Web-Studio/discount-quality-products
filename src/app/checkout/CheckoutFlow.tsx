@@ -26,7 +26,7 @@ import { COUNTRIES } from "@/lib/countries";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
-const REQUIRE_TEST_PASSCODE = true; // Set to false to disable this passcode check entirely
+const REQUIRE_TEST_PASSCODE = false; // Set to false to disable this passcode check entirely
 const TEST_PASSCODE = "DQPTEST2026"; // Enter this passcode to unlock testing checkout
 
 
