@@ -58,7 +58,7 @@ export default function ShippingPage() {
               2. Shipping Rates & Delivery Estimates
             </h2>
             <p className="text-base text-zinc-600 leading-relaxed mb-6">
-              We primarily serve customers within the United Kingdom.
+              We primarily serve customers within the United Kingdom. Shipping charges for your order will be calculated and displayed at checkout.
             </p>
             <div className="rounded-xl border border-zinc-200 overflow-hidden">
               <div className="grid grid-cols-3 bg-zinc-50 border-b border-zinc-200 px-5 py-3 text-xs font-bold uppercase tracking-wider text-zinc-500">
@@ -66,18 +66,47 @@ export default function ShippingPage() {
                 <span>Estimate</span>
                 <span>Cost</span>
               </div>
-              <div className="grid grid-cols-3 items-center px-5 py-4">
+              <div className="grid grid-cols-3 items-center px-5 py-4 border-b border-zinc-100">
                 <span className="text-sm font-semibold text-zinc-900">Standard Delivery</span>
                 <span className="text-sm text-zinc-600">3–5 business days</span>
-                <span className="text-sm font-bold text-emerald-600">FREE</span>
+                <span className="text-sm font-bold text-zinc-900">£2.00 <span className="text-xs text-emerald-600 font-semibold">(FREE on orders over £5)</span></span>
+              </div>
+              <div className="grid grid-cols-3 items-center px-5 py-4 border-b border-zinc-100">
+                <span className="text-sm font-semibold text-zinc-900">First Class Delivery</span>
+                <span className="text-sm text-zinc-600">1–2 business days</span>
+                <span className="text-sm font-bold text-zinc-900">£2.00</span>
+              </div>
+              <div className="grid grid-cols-3 items-center px-5 py-4">
+                <span className="text-sm font-semibold text-zinc-900">Courier Delivery</span>
+                <span className="text-sm text-zinc-600">1–2 business days</span>
+                <span className="text-sm font-bold text-zinc-900">£10.00</span>
               </div>
             </div>
-            <p className="mt-3 text-xs text-zinc-400">UK Mainland only. No minimum spend required for free delivery.</p>
+            <p className="mt-3 text-xs text-zinc-400">UK Mainland only. Rates are configured dynamically based on basket total.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-bold text-zinc-900 mb-3">
-              3. Shipment Confirmation & Order Tracking
+              3. International Shipping
+            </h2>
+            <p className="text-base text-zinc-600 leading-relaxed">
+              We restrict checkout shipping options strictly to the United Kingdom. For international order inquiries, please contact us directly at{' '}
+              <a
+                href="mailto:sales@fncomputers.com"
+                className="text-primary hover:underline font-semibold"
+              >
+                sales@fncomputers.com
+              </a>{' '}
+              or via our{' '}
+              <Link href="/contact" className="text-primary hover:underline font-semibold">
+                Contact Page
+              </Link>.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-bold text-zinc-900 mb-3">
+              4. Shipment Confirmation & Order Tracking
             </h2>
             <p className="text-base text-zinc-600 leading-relaxed">
               You will receive a Shipment Confirmation email once your order has shipped containing
@@ -86,7 +115,7 @@ export default function ShippingPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-bold text-zinc-900 mb-3">4. Customs, Duties, and Taxes</h2>
+            <h2 className="text-lg font-bold text-zinc-900 mb-3">5. Customs, Duties, and Taxes</h2>
             <p className="text-base text-zinc-600 leading-relaxed">
               Discount Quality Products is not responsible for any customs and taxes applied to your
               order. All fees imposed during or after shipping are the responsibility of the customer.
@@ -94,7 +123,7 @@ export default function ShippingPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-bold text-zinc-900 mb-3">5. Damages</h2>
+            <h2 className="text-lg font-bold text-zinc-900 mb-3">6. Damages</h2>
             <p className="text-base text-zinc-600 leading-relaxed">
               If you receive your order damaged, please contact our support team immediately at{' '}
               <a

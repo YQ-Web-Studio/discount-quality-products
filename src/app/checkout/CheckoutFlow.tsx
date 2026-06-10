@@ -152,7 +152,11 @@ function SelectField({
                 For international orders, please contact us directly at{" "}
                 <a href="mailto:sales@fncomputers.com" className="text-[#15803d] hover:underline font-semibold">
                   sales@fncomputers.com
-                </a>
+                </a>{" "}
+                or via our{" "}
+                <a href="/contact" className="text-[#15803d] hover:underline font-semibold">
+                  Contact Page
+                </a>.
               </p>
               {/* Tooltip Arrow */}
               <div className="absolute top-full left-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 border-r border-b border-zinc-800 bg-zinc-950" />
