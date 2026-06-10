@@ -61,9 +61,13 @@ export default function RefundsPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               To exercise your right to cancel, you must inform us of your decision by a clear
               statement via email at{' '}
-              <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline">
+              <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
                 sales@fncomputers.com
               </a>{' '}
+              or through our{' '}
+              <Link href="/contact" className="text-primary hover:underline font-semibold">
+                Contact Page
+              </Link>{' '}
               before the 14-day period expires.
             </p>
           </section>

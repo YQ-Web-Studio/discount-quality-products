@@ -67,19 +67,34 @@ export default function ShippingPage() {
                 <span>Cost</span>
               </div>
               <div className="grid grid-cols-3 items-center px-5 py-4 border-b border-zinc-100">
-                <span className="text-sm font-semibold text-zinc-900">Standard Delivery</span>
+                <div>
+                  <span className="text-sm font-semibold text-zinc-900 block">Standard Delivery</span>
+                  <span className="text-[11px] text-zinc-400">Base shipping rate</span>
+                </div>
                 <span className="text-sm text-zinc-600">3–5 business days</span>
-                <span className="text-sm font-bold text-zinc-900">£2.00 <span className="text-xs text-emerald-600 font-semibold">(FREE on orders over £5)</span></span>
+                <span className="text-sm font-bold text-zinc-900">
+                  £2.00 <span className="text-xs text-emerald-600 font-semibold block sm:inline sm:ml-1">(FREE on orders over £5)</span>
+                </span>
               </div>
               <div className="grid grid-cols-3 items-center px-5 py-4 border-b border-zinc-100">
-                <span className="text-sm font-semibold text-zinc-900">First Class Delivery</span>
+                <div>
+                  <span className="text-sm font-semibold text-zinc-900 block">First Class Delivery</span>
+                  <span className="text-[11px] text-zinc-400">Upgrade (+£2.00 surcharge)</span>
+                </div>
                 <span className="text-sm text-zinc-600">1–2 business days</span>
-                <span className="text-sm font-bold text-zinc-900">£2.00</span>
+                <span className="text-sm font-bold text-zinc-900">
+                  +£2.00 <span className="text-xs text-zinc-500 font-normal block sm:inline sm:ml-1">(£4.00 if under £5; £2.00 if £5+)</span>
+                </span>
               </div>
               <div className="grid grid-cols-3 items-center px-5 py-4">
-                <span className="text-sm font-semibold text-zinc-900">Courier Delivery</span>
+                <div>
+                  <span className="text-sm font-semibold text-zinc-900 block">Courier Delivery</span>
+                  <span className="text-[11px] text-zinc-400">Upgrade (+£10.00 surcharge)</span>
+                </div>
                 <span className="text-sm text-zinc-600">1–2 business days</span>
-                <span className="text-sm font-bold text-zinc-900">£10.00</span>
+                <span className="text-sm font-bold text-zinc-900">
+                  +£10.00 <span className="text-xs text-zinc-500 font-normal block sm:inline sm:ml-1">(£12.00 if under £5; £10.00 if £5+)</span>
+                </span>
               </div>
             </div>
             <p className="mt-3 text-xs text-zinc-400">UK Mainland only. Rates are configured dynamically based on basket total.</p>
@@ -106,11 +121,10 @@ export default function ShippingPage() {
 
           <section>
             <h2 className="text-lg font-bold text-zinc-900 mb-3">
-              4. Shipment Confirmation & Order Tracking
+              4. Shipment Confirmation
             </h2>
             <p className="text-base text-zinc-600 leading-relaxed">
-              You will receive a Shipment Confirmation email once your order has shipped containing
-              your tracking number(s). The tracking number will be active within 24 hours.
+              You will receive a Shipment Confirmation email once your order has been dispatched from our warehouse.
             </p>
           </section>
 
@@ -128,10 +142,14 @@ export default function ShippingPage() {
               If you receive your order damaged, please contact our support team immediately at{' '}
               <a
                 href="mailto:sales@fncomputers.com"
-                className="text-primary hover:underline"
+                className="text-primary hover:underline font-semibold"
               >
                 sales@fncomputers.com
               </a>{' '}
+              or via our{' '}
+              <Link href="/contact" className="text-primary hover:underline font-semibold">
+                Contact Page
+              </Link>{' '}
               to file a claim. Please save all packaging materials and damaged goods before filing a
               claim.
             </p>

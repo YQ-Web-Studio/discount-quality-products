@@ -36,7 +36,18 @@ const sections = [
   },
   {
     title: '7. Your Rights (GDPR & UK Data Protection Act)',
-    body: 'If you are a UK or European resident, you have the right to access personal information we hold about you and to ask that your personal information be corrected, updated, or deleted. If you would like to exercise this right, please contact us at sales@fncomputers.com.',
+    body: (
+      <>
+        If you are a UK or European resident, you have the right to access personal information we hold about you and to ask that your personal information be corrected, updated, or deleted. If you would like to exercise this right, please contact us at{' '}
+        <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
+          sales@fncomputers.com
+        </a>{' '}
+        or via our{' '}
+        <Link href="/contact" className="text-primary hover:underline font-semibold">
+          Contact Page
+        </Link>.
+      </>
+    ),
   },
   {
     title: '8. Data Retention',
@@ -44,7 +55,18 @@ const sections = [
   },
   {
     title: '9. Contact Us',
-    body: 'For more information about our privacy practices, please contact us by email at sales@fncomputers.com.',
+    body: (
+      <>
+        For more information about our privacy practices, please contact us by email at{' '}
+        <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
+          sales@fncomputers.com
+        </a>{' '}
+        or via our{' '}
+        <Link href="/contact" className="text-primary hover:underline font-semibold">
+          Contact Page
+        </Link>.
+      </>
+    ),
   },
 ];
 
@@ -87,7 +109,7 @@ export default function PrivacyPage() {
           {sections.map((section) => (
             <section key={section.title}>
               <h2 className="text-lg font-bold text-zinc-900 mb-3">{section.title}</h2>
-              <p className="text-base text-zinc-600 leading-relaxed">{section.body}</p>
+              <div className="text-base text-zinc-600 leading-relaxed">{section.body}</div>
             </section>
           ))}
         </div>

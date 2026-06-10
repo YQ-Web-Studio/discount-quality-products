@@ -147,11 +147,11 @@ export async function validateCartTotals(
           const price = matchedRate.price;
           // Format the dynamic WooCommerce table-rate methods to align with pricing requirements
           if (label.includes("standard delivery")) {
-            shippingCost = price === 0 ? 0 : (price < 5 ? 2.00 : price);
+            shippingCost = subtotal >= 5 ? 0 : 2.00;
           } else if (label.includes("first class delivery")) {
-            shippingCost = subtotal >= 50 ? 2.00 : price;
+            shippingCost = subtotal >= 5 ? 2.00 : 4.00;
           } else if (label.includes("courier delivery")) {
-            shippingCost = subtotal >= 50 ? 10.00 : price;
+            shippingCost = subtotal >= 5 ? 10.00 : 12.00;
           } else {
             shippingCost = price;
           }

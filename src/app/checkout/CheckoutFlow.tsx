@@ -845,21 +845,14 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   const getShippingDisplayPrice = useCallback((rateLabel: string, ratePrice: number) => {
     const label = rateLabel.toLowerCase();
     if (label.includes("standard delivery")) {
-      if (ratePrice === 0) return "Free";
-      if (ratePrice < 5) return "£2.00";
-      return `£${ratePrice.toFixed(2)}`;
+      if (ratePrice === 0 || computedSubtotal >= 5) return "Free";
+      return "£2.00";
     }
     if (label.includes("first class delivery")) {
-      if (computedSubtotal >= 50) {
-        return "+£2.00";
-      }
-      return `£${ratePrice.toFixed(2)}`;
+      return "+£2.00";
     }
     if (label.includes("courier delivery")) {
-      if (computedSubtotal >= 50) {
-        return "+£10.00";
-      }
-      return `£${ratePrice.toFixed(2)}`;
+      return "+£10.00";
     }
     return ratePrice > 0 ? `£${ratePrice.toFixed(2)}` : "Free";
   }, [computedSubtotal]);
@@ -872,13 +865,13 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     const price = matched.price;
     // Align dynamic WooCommerce shipping cost calculation with formatted displayed prices
     if (label.includes("standard delivery")) {
-      return price === 0 ? 0 : (price < 5 ? 2.00 : price);
+      return computedSubtotal >= 5 ? 0 : 2.00;
     }
     if (label.includes("first class delivery")) {
-      return computedSubtotal >= 50 ? 2.00 : price;
+      return computedSubtotal >= 5 ? 2.00 : 4.00;
     }
     if (label.includes("courier delivery")) {
-      return computedSubtotal >= 50 ? 10.00 : price;
+      return computedSubtotal >= 5 ? 10.00 : 12.00;
     }
     return price;
   }, [shippingRates, shipping, computedSubtotal]);
