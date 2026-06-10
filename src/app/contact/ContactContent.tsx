@@ -246,11 +246,7 @@ export default function ContactContent() {
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-2">
                       <div className="shrink-0 scale-90 origin-left">
                         <Turnstile 
-                          siteKey={
-                            process.env.NODE_ENV === 'development' 
-                              ? "1x00000000000000000000AA" // Cloudflare testing key for localhost
-                              : (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "1x00000000000000000000AA")
-                          } 
+                          siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} 
                           options={{ theme: "light" }}
                           onSuccess={() => setTurnstilePassed(true)}
                           onError={() => setTurnstilePassed(false)}

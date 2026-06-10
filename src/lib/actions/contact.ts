@@ -1,7 +1,6 @@
 "use server";
 
 import sanitizeHtml from "sanitize-html";
-
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_to_pass_build");
@@ -39,9 +38,11 @@ export async function submitContactForm(formData: FormData) {
     return { status: "error", message: "Security verification failed. Please try again." };
   }
 
-  const SECRET_KEY = process.env.NODE_ENV === 'development'
-    ? "1x0000000000000000000000000000000AA"
-    : (process.env.TURNSTILE_SECRET_KEY || "1x0000000000000000000000000000000AA");
+  const SECRET_KEY = process.env.TURNSTILE_SECRET_KEY;
+  if (!SECRET_KEY) {
+    console.error("TURNSTILE_SECRET_KEY is not defined in server environment variables.");
+    return { status: "error", message: "Security verification system is misconfigured. Please contact support." };
+  }
   try {
     const cfResponse = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
