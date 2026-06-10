@@ -1,10 +1,8 @@
 import { getProductBySlug, getProducts, getSmartFeaturedProducts, getLatestProducts } from '@/lib/wordpress';
 import type { Product } from '@/lib/wordpress';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { decodeHtmlEntities } from '@/lib/utils';
 import {
-  ArrowLeft,
   ShieldCheck,
   Truck,
   RotateCcw,
@@ -21,6 +19,7 @@ import { RecentlyViewedTracker } from '@/components/RecentlyViewedTracker';
 import { Breadcrumbs } from '@/components/navigation/Breadcrumbs';
 import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
+import { BackButton } from '@/components/ui/BackButton';
 import type { Metadata } from 'next';
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -157,14 +156,7 @@ export default async function ProductPage(props: ProductPageProps) {
   return (
     <div className="min-h-screen bg-white">
       <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-8 pt-8 md:px-12 2xl:px-16">
-        <Link
-          href="/#products"
-          id="pdp-back-link"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 w-fit"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to catalogue
-        </Link>
+        <BackButton />
       </div>
 
       <RecentlyViewedTracker product={product} />
