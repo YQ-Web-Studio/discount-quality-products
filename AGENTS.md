@@ -38,16 +38,56 @@ export async function generateStaticParams() {
 }
 ```
 
-The reason this exists: pre-rendering ALL 14,000+ products would make builds take hours.
+The reason: pre-rendering ALL 14,000+ products would make builds take hours.
 We only pre-render the ~12 products on the homepage. All others use ISR (on-demand + cached).
 
-## 2. Shop/category pages: do NOT add a second `fetchAllCandidateProducts` call for filter data
+## 2. Category/shop pages CANNOT be pre-rendered — this is a Next.js architectural constraint
+
+`/categories/[slug]/page.tsx` and `/shop/page.tsx` are `ƒ Dynamic` and MUST stay that way.
+This is NOT a bug. It is a hard Next.js constraint:
+
+> In Next.js App Router, if ANY server component in a route reads `searchParams`,
+> the ENTIRE route is marked dynamic (never pre-rendered), regardless of
+> `generateStaticParams`.
+
+Both pages handle filtering, pagination, and sorting via searchParams → always dynamic.
+Do NOT attempt to "fix" this by removing searchParams handling — that breaks filtering.
+
+What IS already optimised for these pages:
+- `loading.tsx` skeleton streams to the browser IMMEDIATELY (instant visual feedback)
+- Category slug → WooCommerce ID resolution uses `navigationCategories` (instant, no API call)
+- `/shop` with no category filter: products fetch IMMEDIATELY without waiting for categories
+- Only 1 WooCommerce API call per page load (not 2–6 as before)
+
+## 3. `generateStaticParams` in `/categories/[slug]/page.tsx` MUST use `navigationCategories`
+
+❌ WRONG — calls WooCommerce API at build time, times out on slow Bluehost server:
+```ts
+export async function generateStaticParams() {
+  const cats = await getCategories(); // WooCommerce API — TIMES OUT during build!
+  return cats.map(c => ({ slug: c.slug }));
+}
+```
+
+✅ CORRECT — instant, zero API calls, build always succeeds:
+```ts
+export function generateStaticParams() {
+  const slugs: { slug: string }[] = [];
+  navigationCategories.forEach(cat => {
+    slugs.push({ slug: cat.slug });
+    cat.subcategories?.forEach(sub => slugs.push({ slug: sub.slug }));
+  });
+  return slugs;
+}
+```
+
+## 4. Shop/category pages: do NOT add a second `fetchAllCandidateProducts` call for filter data
 
 The filter modal reuses the main product response when no attribute filters are active.
 Adding a parallel `fetchAllCandidateProducts(filterProductParams)` at all times burns up to
 3 extra WooCommerce API calls per page load. The current code handles this correctly.
 
-## 3. `wpFetch` timeout must be dynamic
+## 5. `wpFetch` timeout must be dynamic
 
 During build: 30s (WordPress is slow, build must not fail)
 During runtime: 10s (fail fast so users don't wait forever)
