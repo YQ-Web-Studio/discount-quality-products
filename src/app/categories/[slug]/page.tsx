@@ -201,12 +201,18 @@ async function getProductsData(
     max_price: maxPrice,
   };
 
-  const [response, filterResponse] = await Promise.all([
-    hasAttributeFilters
-      ? fetchAllCandidateProducts(productParams)
-      : fetchWooCommerceProducts(productParams),
-    fetchAllCandidateProducts(filterProductParams),
-  ]);
+  // Only do the second (filter) fetch when attribute filters are active.
+  // Without attribute filters the main response already has everything the
+  // filter modal needs, so we reuse the same promise — no extra API calls.
+  const mainResponse = hasAttributeFilters
+    ? fetchAllCandidateProducts(productParams)
+    : fetchWooCommerceProducts(productParams);
+
+  const filterFetchResponse = hasAttributeFilters
+    ? fetchAllCandidateProducts(filterProductParams)
+    : mainResponse;
+
+  const [response, filterResponse] = await Promise.all([mainResponse, filterFetchResponse]);
 
   const strictProducts = hasAttributeFilters
     ? response.products.filter((product) => productMatchesAttributeFilters(product, paParams))

@@ -1,4 +1,4 @@
-import { getProductBySlug, getProducts, getProductSlugs } from '@/lib/wordpress';
+import { getProductBySlug, getProducts, getSmartFeaturedProducts, getLatestProducts } from '@/lib/wordpress';
 import type { Product } from '@/lib/wordpress';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -23,12 +23,31 @@ import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import type { Metadata } from 'next';
 export const revalidate = 3600;
-export const dynamicParams = true; 
+export const dynamicParams = true;
 
 export async function generateStaticParams() {
-  // Returns an empty array so Vercel builds the framework instantly 
-  // without pre-compiling 25,000 slugs at build time.
-  return []; 
+  // Pre-render the products shown on the homepage (featured + new arrivals).
+  // These are the PDPs users click first — pre-rendering them makes navigation instant.
+  // All other PDPs are generated on-demand (ISR) and cached after first visit.
+  try {
+    const [featuredProducts, newArrivals] = await Promise.allSettled([
+      getSmartFeaturedProducts(),
+      getLatestProducts(6),
+    ]);
+
+    const slugSet = new Set<string>();
+
+    if (featuredProducts.status === 'fulfilled') {
+      featuredProducts.value.forEach(p => slugSet.add(p.slug));
+    }
+    if (newArrivals.status === 'fulfilled') {
+      newArrivals.value.forEach(p => slugSet.add(p.slug));
+    }
+
+    return Array.from(slugSet).map(slug => ({ slug }));
+  } catch {
+    return [];
+  }
 }
 
 // ─── Per-page metadata ─────────────────────────────────────────────────────────
@@ -98,21 +117,18 @@ export default async function ProductPage(props: ProductPageProps) {
   const decodedName = decodeHtmlEntities(product.name);
   const categories = product.productCategories?.nodes ?? [];
 
-  // Fetch related products — fire category-specific and general fallback in parallel
-  // so we never wait for them sequentially
+  // Fetch related products from the same category (one fetch, no wasted parallel request).
+  // Results are cached by unstable_cache so repeat visits are instant.
   let relatedProducts: Product[] = [];
   if (categories[0]) {
-    const [categoryRelated, generalFallback] = await Promise.all([
-      getProducts(10, null, categories[0].slug),
-      getProducts(10), // pre-fetch fallback in parallel — costs nothing if not needed
-    ]);
-
+    const categoryRelated = await getProducts(10, null, categories[0].slug);
     relatedProducts = categoryRelated.products
       .filter(p => p.databaseId !== product.databaseId)
       .slice(0, 5);
 
-    // Use fallback only if category gave zero results
+    // Fallback to general products if category had no results
     if (relatedProducts.length === 0) {
+      const generalFallback = await getProducts(6);
       relatedProducts = generalFallback.products
         .filter(p => p.databaseId !== product.databaseId)
         .slice(0, 5);
