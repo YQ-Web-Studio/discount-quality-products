@@ -468,16 +468,67 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
     }
   `;
 
-  const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug });
-  if (!data.product) return null;
+  // 1. Try to fetch by exact slug first
+  try {
+    const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug });
+    if (data.product) {
+      const product = {
+        ...data.product,
+        galleryImages: data.product.allGalleryImages ?? data.product.galleryImages,
+      };
+      return mapProductData(product);
+    }
+  } catch (error) {
+    console.warn(`Direct product slug fetch failed for "${slug}":`, error);
+  }
 
-  // Merge allGalleryImages back under the standard galleryImages key for the rest of the app.
-  const product = {
-    ...data.product,
-    galleryImages: data.product.allGalleryImages ?? data.product.galleryImages,
-  };
+  // 2. Fallback: Search for the product using keywords from the sanitized slug
+  const words = slug.split('-').filter(w => w.length > 1);
+  if (words.length > 0) {
+    const searchTerm = words.slice(0, 3).join(' ');
+    const fallbackQuery = `
+      query SearchProduct($search: String) {
+        products(first: 20, where: { search: $search, status: "PUBLISH", visibility: VISIBLE }) {
+          nodes {
+            slug
+          }
+        }
+      }
+    `;
 
-  return mapProductData(product);
+    try {
+      const searchData = await wpFetch<{ products: { nodes: { slug: string }[] } }>(fallbackQuery, { search: searchTerm });
+      const candidates = searchData.products?.nodes || [];
+
+      const sanitize = (s: string) => {
+        const decoded = decodeURIComponent(s);
+        let clean = decoded
+          .toLowerCase()
+          .replace(/[\u201C\u201D\u2018\u2019"'`’‘]/g, '')
+          .replace(/[^a-z0-9+/|-]/g, '-')
+          .replace(/-+/g, '-');
+        return clean.replace(/-+$/, '');
+      };
+
+      const targetSanitized = sanitize(slug);
+      const matchingCandidate = candidates.find(c => sanitize(c.slug) === targetSanitized);
+
+      if (matchingCandidate) {
+        const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug: matchingCandidate.slug });
+        if (data.product) {
+          const product = {
+            ...data.product,
+            galleryImages: data.product.allGalleryImages ?? data.product.galleryImages,
+          };
+          return mapProductData(product);
+        }
+      }
+    } catch (fallbackError) {
+      console.error(`Fallback search failed for slug "${slug}":`, fallbackError);
+    }
+  }
+
+  return null;
 }
 
 export const getProductBySlug = cache(async (slug: string): Promise<Product | null> => {
