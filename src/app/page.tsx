@@ -10,17 +10,17 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
   description:
-    "Shop 15,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. Free UK delivery.",
+    "Shop 14,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. Free UK delivery.",
   openGraph: {
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      "Shop 15,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.",
+      "Shop 14,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.",
     images: [
       {
         url: "/images/icon.svg",
         width: 1200,
         height: 630,
-        alt: "Discount Quality Products — 15,000+ Discounted Products",
+        alt: "Discount Quality Products — 14,000+ Discounted Products",
       },
     ],
   },
