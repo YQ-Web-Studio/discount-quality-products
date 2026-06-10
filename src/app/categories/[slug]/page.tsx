@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { fetchWooCommerceProducts, getCategories, type DynamicNavCategory } from "@/lib/woocommerce";
 import { productMatchesAttributeFilters } from "../../shop/filterAttributes";
 import { Suspense } from "react";
+import { navigationCategories } from "@/lib/navigationConfig";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -13,37 +14,34 @@ type CategoryPageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export async function generateStaticParams() {
-  const initialCategories = await getCategories();
+/**
+ * Use the hardcoded navigationCategories config — no WooCommerce API call needed.
+ * The previous approach called getCategories() (WooCommerce REST API) which timed out
+ * during builds on the slow Bluehost server, leaving all category pages as ƒ Dynamic.
+ * Now every category + subcategory slug is pre-rendered as ● SSG at build time.
+ */
+export function generateStaticParams() {
   const slugs: { slug: string }[] = [];
-  
-  initialCategories.forEach((cat) => {
+  navigationCategories.forEach((cat) => {
     if (cat.slug) slugs.push({ slug: cat.slug });
     cat.subcategories?.forEach((sub) => {
       if (sub.slug) slugs.push({ slug: sub.slug });
     });
   });
-  
   return slugs;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const initialCategories = await getCategories();
-  
+
+  // Resolve name from static config first (instant) — no API call needed for known categories
   let name = slug.replace(/-/g, " ");
-  for (const cat of initialCategories) {
-    if (cat.slug === slug) {
-      name = cat.label;
-      break;
-    }
+  for (const cat of navigationCategories) {
+    if (cat.slug === slug) { name = cat.label; break; }
     const sub = cat.subcategories?.find(s => s.slug === slug);
-    if (sub) {
-      name = sub.label;
-      break;
-    }
+    if (sub) { name = sub.label; break; }
   }
-  
+
   return {
     title: `${name} | Discount Quality Products`,
     description: `Browse ${name} — professional grade hardware, collectibles, and more at Discount Quality Products.`,
@@ -109,12 +107,12 @@ async function getProductsData(
   page: number,
   categoriesPromise: Promise<DynamicNavCategory[]>
 ) {
-  const initialCategories = await categoriesPromise;
-  
+  // Resolve slug → category ID from the static navigationConfig (instant, no API call).
+  // This lets the product fetch start immediately without waiting for WooCommerce categories.
   let matchedParent: any = null;
   let matchedSub: any = null;
 
-  for (const cat of initialCategories) {
+  for (const cat of navigationCategories) {
     if (cat.slug === slug) {
       matchedParent = cat;
       break;
@@ -124,6 +122,16 @@ async function getProductsData(
       matchedParent = cat;
       matchedSub = sub;
       break;
+    }
+  }
+
+  // If not in the static config, fall back to fetching from WooCommerce (handles edge cases)
+  if (!matchedParent) {
+    const initialCategories = await categoriesPromise;
+    for (const cat of initialCategories) {
+      if (cat.slug === slug) { matchedParent = cat; break; }
+      const sub = cat.subcategories?.find((s: any) => s.slug === slug);
+      if (sub) { matchedParent = cat; matchedSub = sub; break; }
     }
   }
 
@@ -154,7 +162,7 @@ async function getProductsData(
       if (/^\d+$/.test(part)) {
         resolvedIds.push(parseInt(part, 10));
       } else {
-        for (const cat of initialCategories) {
+        for (const cat of navigationCategories) {
           if (cat.slug === part) {
             resolvedIds.push(cat.id);
             if (cat.subcategories) {
@@ -231,10 +239,28 @@ async function getProductsData(
   };
 }
 
-export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
+/**
+ * Sync page shell — not async, reads no dynamic APIs directly.
+ * This allows Next.js to serve pre-rendered static HTML (from generateStaticParams)
+ * for /categories/[slug] with no query params. Requests with filters/pagination
+ * still stream dynamically via the CategoryPageContent server component below.
+ */
+export default function CategoryPage({ params, searchParams }: CategoryPageProps) {
+  return (
+    <Suspense fallback={<CategoryHubSkeleton />}>
+      <CategoryPageContent params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+/**
+ * Async server component — runs inside the Suspense boundary.
+ * Awaits searchParams and fetches data. Streams in after the static shell.
+ */
+async function CategoryPageContent({ params, searchParams }: CategoryPageProps) {
   const { slug } = await params;
   const sParams = await searchParams;
-  
+
   const pageStr = typeof sParams.page === "string" ? sParams.page : "1";
   const page = parseInt(pageStr, 10) || 1;
 
@@ -248,24 +274,15 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   }
 
   const categoriesPromise = getCategories();
-
-  const productsPromise = getProductsData(
-    slug,
-    sParams,
-    paParams,
-    page,
-    categoriesPromise
-  );
+  const productsPromise = getProductsData(slug, sParams, paParams, page, categoriesPromise);
 
   return (
-    <Suspense fallback={<CategoryHubSkeleton />}>
-      <CategoryHub
-        baseSlug={slug}
-        categoriesPromise={categoriesPromise}
-        categorySlug={typeof sParams.category === "string" ? sParams.category : undefined}
-        productsPromise={productsPromise}
-        currentPage={page}
-      />
-    </Suspense>
+    <CategoryHub
+      baseSlug={slug}
+      categoriesPromise={categoriesPromise}
+      categorySlug={typeof sParams.category === "string" ? sParams.category : undefined}
+      productsPromise={productsPromise}
+      currentPage={page}
+    />
   );
 }

@@ -69,11 +69,14 @@ async function getProductsData(
   page: number,
   categoriesPromise: Promise<DynamicNavCategory[]>
 ) {
-  const initialCategories = await categoriesPromise;
   const activeSlug = subcategorySlug || categorySlug;
   let activeCategoryId: string | undefined = undefined;
 
+  // Only await categories when we actually need to resolve a category slug → ID.
+  // For /shop with no category filter (the most common case), we skip this wait entirely
+  // so the products fetch starts immediately rather than sequentially after categories.
   if (activeSlug) {
+    const initialCategories = await categoriesPromise;
     const slugParts = activeSlug.split(",");
     const resolvedIds: number[] = [];
 
