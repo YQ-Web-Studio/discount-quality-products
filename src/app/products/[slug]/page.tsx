@@ -59,19 +59,16 @@ export async function generateMetadata(
   props: ProductPageProps
 ): Promise<Metadata> {
   const { slug } = await props.params;
-  const product = await getProductBySlug(slug);
 
-  if (!product) {
-    notFound();
-  }
+  // Format slug to a readable title (e.g. "harry-potter-coin" -> "Harry Potter Coin")
+  const decodedName = slug
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 
-  const decodedName = decodeHtmlEntities(product.name);
-  const description =
-    product.shortDescription?.replace(/<[^>]*>/g, "").trim().slice(0, 155) ||
-    `Buy ${decodedName} from Discount Products. Premium quality, competitive prices with free standard UK delivery.`;
-
+  const description = `Buy ${decodedName} from Discount Products. Premium quality, competitive prices with free standard UK delivery.`;
   const absoluteUrl = `https://www.discountproducts.co.uk/products/${slug}`;
-  const imageUrl = product.image?.sourceUrl || "";
+  const imageUrl = "/images/og-image.png"; // Fallback to main OG image for instant resolution
 
   return {
     title: `${decodedName} | Discount Products`,
@@ -85,15 +82,13 @@ export async function generateMetadata(
       url: absoluteUrl,
       type: "website",
       siteName: "Discount Products",
-      images: imageUrl
-        ? [{ url: imageUrl, width: 800, height: 800, alt: decodedName }]
-        : [],
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: decodedName }],
     },
     twitter: {
       card: "summary_large_image",
       title: decodedName,
       description,
-      images: imageUrl ? [imageUrl] : [],
+      images: [imageUrl],
     },
   };
 }
