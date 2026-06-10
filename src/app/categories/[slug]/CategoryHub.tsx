@@ -669,7 +669,7 @@ export default function CategoryHub({
   const [isPending, startTransition] = useTransition();
 
   // Resolve activeCategoryId and initialCategory from initialCategories + slugs
-  const activeSlug = subcategorySlug || categorySlug;
+  const activeSlug = subcategorySlug || categorySlug || baseSlug;
   const initialCategory = useMemo(() => {
     if (!activeSlug) return "";
     const slugParts = activeSlug.split(",");
