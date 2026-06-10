@@ -8,11 +8,7 @@ export function BackButton() {
 
   const handleBack = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (typeof window !== 'undefined' && document.referrer && document.referrer.includes(window.location.host)) {
-      router.back();
-    } else {
-      router.push('/');
-    }
+    router.back();
   };
 
   return (

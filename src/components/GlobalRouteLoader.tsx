@@ -91,8 +91,17 @@ export function GlobalRouteLoader() {
         } catch (_) {}
 
         if (targetUrl !== currentUrl && targetUrl !== "") {
-          target.classList.add("link-loading-active");
-          startLoading();
+          const hasSkeleton =
+            targetUrl.startsWith("/products/") ||
+            targetUrl.startsWith("/shop") ||
+            targetUrl.startsWith("/categories/") ||
+            targetUrl === "/" ||
+            targetUrl === "";
+
+          if (!hasSkeleton) {
+            target.classList.add("link-loading-active");
+            startLoading();
+          }
         }
       }
     };
