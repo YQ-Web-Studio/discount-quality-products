@@ -1,7 +1,8 @@
-import SearchHub from "./SearchHub";
+import SearchHub, { SearchHubSkeleton } from "./SearchHub";
 import type { Metadata } from "next";
-import { fetchWooCommerceProducts, getCategories } from "@/lib/woocommerce";
+import { fetchWooCommerceProducts, getCategories, type DynamicNavCategory } from "@/lib/woocommerce";
 import { productMatchesAttributeFilters } from "./filterAttributes";
+import { Suspense } from "react";
 
 type SearchPageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -57,12 +58,73 @@ async function fetchAllCandidateProducts(params: ProductQueryParams) {
 }
 
 async function getProductsData(
-  productParams: ProductQueryParams,
-  filterProductParams: ProductQueryParams,
-  hasAttributeFilters: boolean,
+  categorySlug: string | undefined,
+  subcategorySlug: string | undefined,
+  searchQ: string | undefined,
+  orderby: WooOrderBy | undefined,
+  order: WooOrder | undefined,
+  minPrice: string | undefined,
+  maxPrice: string | undefined,
   paParams: Record<string, string>,
-  page: number
+  page: number,
+  categoriesPromise: Promise<DynamicNavCategory[]>
 ) {
+  const initialCategories = await categoriesPromise;
+  const activeSlug = subcategorySlug || categorySlug;
+  let activeCategoryId: string | undefined = undefined;
+
+  if (activeSlug) {
+    const slugParts = activeSlug.split(",");
+    const resolvedIds: number[] = [];
+
+    for (const part of slugParts) {
+      if (/^\d+$/.test(part)) {
+        resolvedIds.push(parseInt(part, 10));
+      } else {
+        for (const cat of initialCategories) {
+          if (cat.slug === part) {
+            resolvedIds.push(cat.id);
+            if (cat.subcategories) {
+              cat.subcategories.forEach((sub: any) => resolvedIds.push(sub.id));
+            }
+            break;
+          }
+          const sub = cat.subcategories?.find((s: any) => s.slug === part);
+          if (sub) {
+            resolvedIds.push(sub.id);
+            break;
+          }
+        }
+      }
+    }
+
+    if (resolvedIds.length > 0) {
+      activeCategoryId = resolvedIds.join(",");
+    }
+  }
+
+  const hasAttributeFilters = Object.keys(paParams).length > 0;
+
+  const productParams: ProductQueryParams = {
+    search: searchQ,
+    page: hasAttributeFilters ? 1 : page,
+    per_page: 24, // Strict pagination parameter ceiling
+    category: activeCategoryId,
+    orderby,
+    order,
+    min_price: minPrice,
+    max_price: maxPrice,
+  };
+
+  const filterProductParams: ProductQueryParams = {
+    search: searchQ,
+    page: 1,
+    per_page: 24, // Strict pagination parameter ceiling
+    category: activeCategoryId,
+    min_price: minPrice,
+    max_price: maxPrice,
+  };
+
   const [response, filterResponse] = await Promise.all([
     hasAttributeFilters
       ? fetchAllCandidateProducts(productParams)
@@ -134,44 +196,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const pageStr = typeof params.page === "string" ? params.page : "1";
   const page = parseInt(pageStr, 10) || 1;
 
-
-
-  const initialCategories = await getCategories();
-
-  const activeSlug = subcategorySlug || categorySlug;
-
-  let activeCategoryId: string | undefined = undefined;
-
-  if (activeSlug) {
-    const slugParts = activeSlug.split(",");
-    const resolvedIds: number[] = [];
-
-    for (const part of slugParts) {
-      if (/^\d+$/.test(part)) {
-        resolvedIds.push(parseInt(part, 10));
-      } else {
-        for (const cat of initialCategories) {
-          if (cat.slug === part) {
-            resolvedIds.push(cat.id);
-            if (cat.subcategories) {
-              cat.subcategories.forEach(sub => resolvedIds.push(sub.id));
-            }
-            break;
-          }
-          const sub = cat.subcategories?.find(s => s.slug === part);
-          if (sub) {
-            resolvedIds.push(sub.id);
-            break;
-          }
-        }
-      }
-    }
-
-    if (resolvedIds.length > 0) {
-      activeCategoryId = resolvedIds.join(",");
-    }
-  }
-
   const orderby = parseWooOrderBy(params.orderby);
   const order = parseWooOrder(params.order);
   const minPrice = typeof params.min_price === "string" ? params.min_price : undefined;
@@ -186,43 +210,31 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     }
   }
 
-  const hasAttributeFilters = Object.keys(paParams).length > 0;
-
-  const productParams: ProductQueryParams = {
-    search: searchQ,
-    page: hasAttributeFilters ? 1 : page,
-    per_page: 24, // Strict pagination parameter ceiling
-    category: activeCategoryId,
-    orderby,
-    order,
-    min_price: minPrice,
-    max_price: maxPrice,
-  };
-
-  const filterProductParams: ProductQueryParams = {
-    search: searchQ,
-    page: 1,
-    per_page: 24, // Strict pagination parameter ceiling
-    category: activeCategoryId,
-    min_price: minPrice,
-    max_price: maxPrice,
-  };
+  const categoriesPromise = getCategories();
 
   const productsPromise = getProductsData(
-    productParams,
-    filterProductParams,
-    hasAttributeFilters,
+    categorySlug,
+    subcategorySlug,
+    searchQ,
+    orderby,
+    order,
+    minPrice,
+    maxPrice,
     paParams,
-    page
+    page,
+    categoriesPromise
   );
 
   return (
-    <SearchHub
-      initialCategories={initialCategories}
-      initialCategory={activeCategoryId}
-      initialQuery={searchQ}
-      productsPromise={productsPromise}
-      currentPage={page}
-    />
+    <Suspense fallback={<SearchHubSkeleton />}>
+      <SearchHub
+        categoriesPromise={categoriesPromise}
+        categorySlug={categorySlug}
+        subcategorySlug={subcategorySlug}
+        initialQuery={searchQ}
+        productsPromise={productsPromise}
+        currentPage={page}
+      />
+    </Suspense>
   );
 }

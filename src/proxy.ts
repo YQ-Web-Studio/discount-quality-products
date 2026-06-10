@@ -6,8 +6,27 @@ export function proxy(request: NextRequest) {
   const url = request.nextUrl.clone();
   const path = url.pathname;
 
+  // 1. Decode percent-encoded and double percent-encoded character strings in path
+  let decodedPath = path;
+  try {
+    let prevPath = "";
+    while (decodedPath !== prevPath) {
+      prevPath = decodedPath;
+      decodedPath = decodeURIComponent(decodedPath);
+    }
+  } catch (err) {
+    decodedPath = path;
+  }
+
+  // If path changed due to percent-encoding, 301 redirect to normalized path
+  if (decodedPath !== path) {
+    const destinationUrl = new URL(decodedPath, request.url);
+    destinationUrl.search = url.search;
+    return NextResponse.redirect(destinationUrl, 301);
+  }
+
   // Pattern match for product detail page requests: /products/[slug]
-  const productMatch = path.match(/^\/products\/([^/]+)$/);
+  const productMatch = decodedPath.match(/^\/products\/([^/]+)$/);
   if (productMatch) {
     const slug = productMatch[1];
     const discontinuedRule = DISCONTINUED_PRODUCTS_REGISTRY[slug];

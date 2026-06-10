@@ -21,38 +21,20 @@ import { Breadcrumbs } from '@/components/navigation/Breadcrumbs';
 import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import type { Metadata } from 'next';
-export const revalidate = 3600;
-export const dynamicParams = true;
+export const dynamicParams = true; 
 
+export async function generateStaticParams() {
+  // Returns an empty array so Vercel builds the framework instantly 
+  // without pre-compiling 25,000 slugs at build time.
+  return []; 
+}
+
+// ─── Per-page metadata ─────────────────────────────────────────────────────────
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export async function generateStaticParams() {
-  // Pre-render PDPs for the products shown on the homepage (featured + new arrivals).
-  // These are the most-clicked pages and should always be instant.
-  // dynamicParams=true above means all other PDPs still work via ISR.
-  try {
-    const { getSmartFeaturedProducts, getLatestProducts } = await import('@/lib/wordpress');
-    const [featured, latest] = await Promise.all([
-      getSmartFeaturedProducts().catch(() => [] as Product[]),
-      getLatestProducts(12).catch(() => [] as Product[]),
-    ]);
-    const slugs = new Set([
-      ...featured.map((p) => p.slug),
-      ...latest.map((p) => p.slug),
-    ]);
-    return Array.from(slugs)
-      .filter(Boolean)
-      .map((slug) => ({ slug }));
-  } catch {
-    // If WordPress is unreachable at build time, fall back to on-demand ISR for all pages
-    return [];
-  }
-}
-
-// ─── Per-page metadata ─────────────────────────────────────────────────────────
 export async function generateMetadata(
   props: ProductPageProps
 ): Promise<Metadata> {

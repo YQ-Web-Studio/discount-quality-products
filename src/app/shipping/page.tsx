@@ -46,7 +46,7 @@ export default function ShippingPage() {
           <section>
             <h2 className="text-lg font-bold text-zinc-900 mb-3">1. Shipment Processing Time</h2>
             <p className="text-base text-zinc-600 leading-relaxed">
-              All orders are processed same-day or within 1 business day. Orders are not shipped or delivered
+              All orders are processed within 1–2 business days. Orders are not shipped or delivered
               on weekends or public holidays. If we are experiencing a high volume of orders,
               shipments may be delayed by a few days. If there will be a significant delay in
               shipment of your order, we will contact you via email or telephone.

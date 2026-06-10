@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import CategoryHub from "./CategoryHub";
+import CategoryHub, { CategoryHubSkeleton } from "./CategoryHub";
 import type { Metadata } from "next";
-import { fetchWooCommerceProducts, getCategories } from "@/lib/woocommerce";
+import { fetchWooCommerceProducts, getCategories, type DynamicNavCategory } from "@/lib/woocommerce";
 import { productMatchesAttributeFilters } from "../../shop/filterAttributes";
+import { Suspense } from "react";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -102,12 +103,104 @@ async function fetchAllCandidateProducts(params: ProductQueryParams) {
 }
 
 async function getProductsData(
-  productParams: ProductQueryParams,
-  filterProductParams: ProductQueryParams,
-  hasAttributeFilters: boolean,
+  slug: string,
+  sParams: any,
   paParams: Record<string, string>,
-  page: number
+  page: number,
+  categoriesPromise: Promise<DynamicNavCategory[]>
 ) {
+  const initialCategories = await categoriesPromise;
+  
+  let matchedParent: any = null;
+  let matchedSub: any = null;
+
+  for (const cat of initialCategories) {
+    if (cat.slug === slug) {
+      matchedParent = cat;
+      break;
+    }
+    const sub = cat.subcategories?.find((s: any) => s.slug === slug);
+    if (sub) {
+      matchedParent = cat;
+      matchedSub = sub;
+      break;
+    }
+  }
+
+  if (!matchedParent) {
+    notFound();
+  }
+
+  let activeCategoryId: string | undefined = undefined;
+
+  if (matchedSub) {
+    activeCategoryId = matchedSub.id.toString();
+  } else if (matchedParent) {
+    const ids = [matchedParent.id];
+    if (matchedParent.subcategories) {
+      matchedParent.subcategories.forEach((s: any) => ids.push(s.id));
+    }
+    activeCategoryId = ids.join(",");
+  }
+
+  const selectedSubcategories = typeof sParams.category === "string" ? sParams.category : undefined;
+  let effectiveCategoryIds = activeCategoryId;
+  
+  if (selectedSubcategories) {
+    const slugParts = selectedSubcategories.split(",");
+    const resolvedIds: number[] = [];
+    
+    for (const part of slugParts) {
+      if (/^\d+$/.test(part)) {
+        resolvedIds.push(parseInt(part, 10));
+      } else {
+        for (const cat of initialCategories) {
+          if (cat.slug === part) {
+            resolvedIds.push(cat.id);
+            if (cat.subcategories) {
+              cat.subcategories.forEach((sub: any) => resolvedIds.push(sub.id));
+            }
+            break;
+          }
+          const sub = cat.subcategories?.find((s: any) => s.slug === part);
+          if (sub) {
+            resolvedIds.push(sub.id);
+            break;
+          }
+        }
+      }
+    }
+    
+    if (resolvedIds.length > 0) {
+      effectiveCategoryIds = resolvedIds.join(",");
+    }
+  }
+
+  const orderby = parseWooOrderBy(sParams.orderby);
+  const order = parseWooOrder(sParams.order);
+  const minPrice = typeof sParams.min_price === "string" ? sParams.min_price : undefined;
+  const maxPrice = typeof sParams.max_price === "string" ? sParams.max_price : undefined;
+
+  const hasAttributeFilters = Object.keys(paParams).length > 0;
+
+  const productParams: ProductQueryParams = {
+    page: hasAttributeFilters ? 1 : page,
+    per_page: 24, // Strict pagination parameter ceiling
+    category: effectiveCategoryIds,
+    orderby,
+    order,
+    min_price: minPrice,
+    max_price: maxPrice,
+  };
+
+  const filterProductParams: ProductQueryParams = {
+    page: 1,
+    per_page: 24, // Strict pagination parameter ceiling
+    category: activeCategoryId,
+    min_price: minPrice,
+    max_price: maxPrice,
+  };
+
   const [response, filterResponse] = await Promise.all([
     hasAttributeFilters
       ? fetchAllCandidateProducts(productParams)
@@ -136,84 +229,8 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const { slug } = await params;
   const sParams = await searchParams;
   
-  const initialCategories = await getCategories();
-  
-  let matchedParent: any = null;
-  let matchedSub: any = null;
-
-  for (const cat of initialCategories) {
-    if (cat.slug === slug) {
-      matchedParent = cat;
-      break;
-    }
-    const sub = cat.subcategories?.find(s => s.slug === slug);
-    if (sub) {
-      matchedParent = cat;
-      matchedSub = sub;
-      break;
-    }
-  }
-
-  if (!matchedParent) {
-    notFound();
-  }
-
-  let activeCategoryId: string | undefined = undefined;
-  let categoryName = slug.replace(/-/g, " ");
-
-  if (matchedSub) {
-    activeCategoryId = matchedSub.id.toString();
-    categoryName = matchedSub.label;
-  } else if (matchedParent) {
-    const ids = [matchedParent.id];
-    if (matchedParent.subcategories) {
-      matchedParent.subcategories.forEach((s: any) => ids.push(s.id));
-    }
-    activeCategoryId = ids.join(",");
-    categoryName = matchedParent.label;
-  }
-
   const pageStr = typeof sParams.page === "string" ? sParams.page : "1";
   const page = parseInt(pageStr, 10) || 1;
-
-  const selectedSubcategories = typeof sParams.category === "string" ? sParams.category : undefined;
-  
-  let effectiveCategoryIds = activeCategoryId;
-  
-  if (selectedSubcategories) {
-    const slugParts = selectedSubcategories.split(",");
-    const resolvedIds: number[] = [];
-    
-    for (const part of slugParts) {
-      if (/^\d+$/.test(part)) {
-        resolvedIds.push(parseInt(part, 10));
-      } else {
-        for (const cat of initialCategories) {
-          if (cat.slug === part) {
-            resolvedIds.push(cat.id);
-            if (cat.subcategories) {
-              cat.subcategories.forEach(sub => resolvedIds.push(sub.id));
-            }
-            break;
-          }
-          const sub = cat.subcategories?.find(s => s.slug === part);
-          if (sub) {
-            resolvedIds.push(sub.id);
-            break;
-          }
-        }
-      }
-    }
-    
-    if (resolvedIds.length > 0) {
-      effectiveCategoryIds = resolvedIds.join(",");
-    }
-  }
-
-  const orderby = parseWooOrderBy(sParams.orderby);
-  const order = parseWooOrder(sParams.order);
-  const minPrice = typeof sParams.min_price === "string" ? sParams.min_price : undefined;
-  const maxPrice = typeof sParams.max_price === "string" ? sParams.max_price : undefined;
 
   const paParams: Record<string, string> = {};
   for (const key of Object.keys(sParams)) {
@@ -224,41 +241,25 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     }
   }
 
-  const hasAttributeFilters = Object.keys(paParams).length > 0;
-
-  const productParams: ProductQueryParams = {
-    page: hasAttributeFilters ? 1 : page,
-    per_page: 24, // Strict pagination parameter ceiling
-    category: effectiveCategoryIds,
-    orderby,
-    order,
-    min_price: minPrice,
-    max_price: maxPrice,
-  };
-
-  const filterProductParams: ProductQueryParams = {
-    page: 1,
-    per_page: 24, // Strict pagination parameter ceiling
-    category: activeCategoryId,
-    min_price: minPrice,
-    max_price: maxPrice,
-  };
+  const categoriesPromise = getCategories();
 
   const productsPromise = getProductsData(
-    productParams,
-    filterProductParams,
-    hasAttributeFilters,
+    slug,
+    sParams,
     paParams,
-    page
+    page,
+    categoriesPromise
   );
 
   return (
-    <CategoryHub
-      baseSlug={slug}
-      initialCategories={initialCategories}
-      initialCategory={effectiveCategoryIds}
-      productsPromise={productsPromise}
-      currentPage={page}
-    />
+    <Suspense fallback={<CategoryHubSkeleton />}>
+      <CategoryHub
+        baseSlug={slug}
+        categoriesPromise={categoriesPromise}
+        categorySlug={typeof sParams.category === "string" ? sParams.category : undefined}
+        productsPromise={productsPromise}
+        currentPage={page}
+      />
+    </Suspense>
   );
 }

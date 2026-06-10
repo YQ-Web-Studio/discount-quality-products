@@ -601,31 +601,114 @@ export function ProductGridSkeleton() {
   );
 }
 
+export function CategoryHubSkeleton() {
+  return (
+    <div className="bg-white min-h-screen">
+      {/* Top toolbar skeleton */}
+      <div className="border-b border-zinc-200 bg-white">
+        <div className="w-full pl-8 pr-8 md:pl-12 md:pr-12 2xl:pl-16 2xl:pr-16">
+          <div className="flex items-center justify-between gap-6 pt-5 pb-3">
+            <div>
+              <div className="h-8 w-48 bg-zinc-200 animate-pulse rounded" />
+              <div className="h-4 w-24 bg-zinc-100 animate-pulse rounded mt-1.5" />
+            </div>
+          </div>
+          <div className="relative flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 pb-4 flex-wrap w-full">
+            <div className="h-8.5 w-24 bg-zinc-50 border border-zinc-200 animate-pulse rounded-full" />
+            <div className="h-8.5 w-24 bg-zinc-50 border border-zinc-200 animate-pulse rounded-full" />
+            <div className="h-8.5 w-24 bg-zinc-50 border border-zinc-200 animate-pulse rounded-full" />
+          </div>
+        </div>
+      </div>
+
+      {/* Main content skeleton */}
+      <div className="w-full pr-8 md:pr-12 2xl:pr-16">
+        <div className="flex items-stretch">
+          {/* Desktop sidebar skeleton */}
+          <aside className="hidden lg:block shrink-0 w-60 mr-10 border-r border-zinc-200/50 bg-zinc-100/50">
+            <div className="sticky top-32 px-5 py-8 space-y-4">
+              <div className="h-3.5 w-20 bg-zinc-200 animate-pulse rounded mb-4" />
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="h-4 bg-zinc-100 animate-pulse rounded w-[80%]" />
+              ))}
+            </div>
+          </aside>
+
+          {/* Product grid skeleton */}
+          <div className="flex-1 flex flex-col py-8 pl-6 lg:pl-12 relative min-h-[400px]">
+            <ProductGridSkeleton />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main CategoryHub ─── */
 export default function CategoryHub({
   baseSlug,
-  initialCategories = [],
-  initialCategory,
+  categoriesPromise,
+  categorySlug,
+  subcategorySlug,
   initialQuery,
   productsPromise,
   currentPage = 1,
 }: {
   baseSlug: string;
-  initialCategories?: DynamicNavCategory[];
-  initialCategory?: string;
+  categoriesPromise: Promise<DynamicNavCategory[]>;
+  categorySlug?: string;
+  subcategorySlug?: string;
   initialQuery?: string;
   productsPromise: Promise<ProductDataResolved>;
   currentPage?: number;
 }) {
+  const initialCategories = use(categoriesPromise);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const [selectedCategories, setSelectedCategories] = useState<Set<number>>(
+  // Resolve activeCategoryId and initialCategory from initialCategories + slugs
+  const activeSlug = subcategorySlug || categorySlug;
+  const initialCategory = useMemo(() => {
+    if (!activeSlug) return "";
+    const slugParts = activeSlug.split(",");
+    const resolvedIds: number[] = [];
+    for (const part of slugParts) {
+      if (/^\d+$/.test(part)) {
+        resolvedIds.push(parseInt(part, 10));
+      } else {
+        for (const cat of initialCategories) {
+          if (cat.slug === part) {
+            resolvedIds.push(cat.id);
+            if (cat.subcategories) {
+              cat.subcategories.forEach(sub => resolvedIds.push(sub.id));
+            }
+            break;
+          }
+          const sub = cat.subcategories?.find(s => s.slug === part);
+          if (sub) {
+            resolvedIds.push(sub.id);
+            break;
+          }
+        }
+      }
+    }
+    return resolvedIds.join(",");
+  }, [activeSlug, initialCategories]);
+
+  const [selectedCategories, setSelectedCategories] = useState<Set<number>>(() =>
     initialCategory
       ? new Set(initialCategory.split(",").map(Number).filter((n) => !isNaN(n)))
       : new Set()
   );
+
+  useEffect(() => {
+    setSelectedCategories(
+      initialCategory
+        ? new Set(initialCategory.split(",").map(Number).filter((n) => !isNaN(n)))
+        : new Set()
+    );
+  }, [initialCategory]);
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
