@@ -390,6 +390,27 @@ class WooCommerceAPI:
         self.log.info("Total existing products fetched: %d", len(products_cache))
         return products_cache
 
+    def fetch_products_by_skus(self, skus):
+        """Fetch only the specified SKUs from WooCommerce to build a target cache."""
+        if self.dry_run or not skus:
+            return {}
+        
+        self.log.info("Fetching %d target products from WooCommerce...", len(skus))
+        products_cache = {}
+        for idx, sku in enumerate(skus, 1):
+            self.log.info("  [%d/%d] Querying WooCommerce for SKU: %s", idx, len(skus), sku)
+            res = self._request("GET", f"/wp-json/wc/v3/products?sku={sku}&_fields=id,sku,name,regular_price,stock_quantity")
+            if res and isinstance(res, list) and len(res) > 0:
+                p = res[0]
+                products_cache[sku] = {
+                    "id": p.get("id"),
+                    "name": p.get("name"),
+                    "regular_price": p.get("regular_price"),
+                    "stock_quantity": p.get("stock_quantity")
+                }
+        self.log.info("Fetched %d existing products for target SKUs.", len(products_cache))
+        return products_cache
+
     def batch_operations(self, create_list, update_list):
         """Send a batch of create and update operations."""
         if self.dry_run:
@@ -1091,7 +1112,8 @@ def notify_progress(progress_callback, payload):
 def process_row(
     row, has_sku, has_item_num, images_dir,
     wp, cat_cache, attr_registry, logger, dry_run, variations_log_fh, debug_counter,
-    existing_products, skip_updates=False
+    existing_products, skip_updates=False,
+    update_prices=True, update_stock=True, update_images=True, update_details=True, update_attributes=True
 ):
     """
     Process one CSV row. Returns a tuple: (status_string, payload_dict).
@@ -1152,13 +1174,19 @@ def process_row(
             logger.debug("  SKU '%s' already exists — skipping (Insert Only Mode).", sku)
             return "skipped", None
             
-        old_price = str(existing_product.get("regular_price") or "")
-        new_price = str(price)
-        old_stock = existing_product.get("stock_quantity")
-        
-        if (existing_product.get("name") == name and old_price == new_price and old_stock == stock_qty):
-            logger.debug("  SKU '%s' unchanged — skipping (Fast Path).", sku)
-            return "skipped", None
+        # Fast path skip: only run if complex fields (images, attributes) are NOT being updated
+        if not update_images and not update_attributes:
+            old_price = str(existing_product.get("regular_price") or "")
+            new_price = str(price)
+            old_stock = existing_product.get("stock_quantity")
+            
+            price_match = (not update_prices) or (old_price == new_price)
+            stock_match = (not update_stock) or (old_stock == stock_qty)
+            name_match = (not update_details) or (existing_product.get("name") == name)
+            
+            if price_match and stock_match and name_match:
+                logger.debug("  SKU '%s' unchanged — skipping (Fast Path).", sku)
+                return "skipped", None
 
     # --- Category ---
     category_ids = []
@@ -1218,15 +1246,28 @@ def process_row(
 
     fallback_note = " [fallback SKU]" if is_fallback else ""
     if existing_id:
-        update_fields = dict(fields)
-        update_fields.pop("sku", None)
-        update_fields.pop("type", None)
-        update_fields.pop("status", None)
-        update_fields["id"] = existing_id
+        update_fields = {"id": existing_id}
+        if update_details:
+            update_fields["name"] = name
+            if description:
+                update_fields["description"] = description
+            if category_ids:
+                update_fields["categories"] = category_ids
+        if update_prices:
+            update_fields["regular_price"] = price
+        if update_stock:
+            if stock_qty is not None:
+                update_fields["stock_quantity"] = stock_qty
+                update_fields["in_stock"] = stock_qty > 0
+                update_fields["manage_stock"] = True
+        if update_images and image_ids:
+            update_fields["images"] = [{"id": iid} for iid in image_ids]
+        if update_attributes and attributes:
+            update_fields["attributes"] = attributes
 
         logger.info(
-            "  [QUEUE] Update product '%s' (SKU: %s%s) @ %s [batch: %s]",
-            name[:50], sku, fallback_note, price, IMPORT_BATCH
+            "  [QUEUE] Update product '%s' (SKU: %s%s) [batch: %s]",
+            name[:50], sku, fallback_note, IMPORT_BATCH
         )
         return "queued_update", update_fields
 
@@ -1334,12 +1375,15 @@ def run_ingestion(args):
 
     # --- Count rows or init XML progress method ---
     total_rows = 0
+    target_skus = []
     if not is_xml:
         with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
-            reader = csv.reader(f)
-            next(reader, None)
-            for _ in reader:
+            reader = csv.DictReader(f)
+            for row in reader:
                 total_rows += 1
+                sku, _ = resolve_sku(row, has_sku, has_item_num)
+                if sku:
+                    target_skus.append(sku)
         logger.info("Total rows in CSV: %d", total_rows)
     else:
         logger.info("XML Input detected. Dynamic size-based progress calculation active.")
@@ -1370,7 +1414,10 @@ def run_ingestion(args):
     cat_cache = CategoryCache(wp, logger)
     attr_registry = AttributeRegistry(wp, logger)
 
-    existing_products = wp.fetch_all_products()
+    if not is_xml and total_rows <= 150:
+        existing_products = wp.fetch_products_by_skus(target_skus)
+    else:
+        existing_products = wp.fetch_all_products()
 
     # --- Stream and process ---
     counters = {"imported": 0, "updated": 0, "skipped": 0, "failed": 0}
@@ -1462,25 +1509,35 @@ def run_ingestion(args):
                 if skip_updates_active:
                     is_skipped = True
                 else:
-                    # Standard mode: check if price, stock, name are unchanged
-                    name = row.get(COL_TITLE, "").strip() or f"Product {sku}"
-                    raw_price = row.get(COL_PRICE, "").strip()
-                    price = transform_price(raw_price)
+                    update_prices = getattr(args, "update_prices", True)
+                    update_stock = getattr(args, "update_stock", True)
+                    update_images = getattr(args, "update_images", True)
+                    update_details = getattr(args, "update_details", True)
+                    update_attributes = getattr(args, "update_attributes", True)
                     
-                    raw_qty = row.get(COL_QTY, "").strip()
-                    stock_qty = None
-                    if raw_qty:
-                        try:
-                            stock_qty = int(Decimal(raw_qty))
-                        except (InvalidOperation, ValueError):
-                            stock_qty = None
-                            
-                    old_price = str(existing_product.get("regular_price") or "")
-                    new_price = str(price)
-                    old_stock = existing_product.get("stock_quantity")
-                    
-                    if (existing_product.get("name") == name and old_price == new_price and old_stock == stock_qty):
-                        is_skipped = True
+                    if not update_images and not update_attributes:
+                        name = row.get(COL_TITLE, "").strip() or f"Product {sku}"
+                        raw_price = row.get(COL_PRICE, "").strip()
+                        price = transform_price(raw_price)
+                        
+                        raw_qty = row.get(COL_QTY, "").strip()
+                        stock_qty = None
+                        if raw_qty:
+                            try:
+                                stock_qty = int(Decimal(raw_qty))
+                            except (InvalidOperation, ValueError):
+                                stock_qty = None
+                                
+                        old_price = str(existing_product.get("regular_price") or "")
+                        new_price = str(price)
+                        old_stock = existing_product.get("stock_quantity")
+                        
+                        price_match = (not update_prices) or (old_price == new_price)
+                        stock_match = (not update_stock) or (old_stock == stock_qty)
+                        name_match = (not update_details) or (existing_product.get("name") == name)
+                        
+                        if price_match and stock_match and name_match:
+                            is_skipped = True
             
             if is_skipped:
                 counters["skipped"] += 1
@@ -1523,7 +1580,13 @@ def run_ingestion(args):
                 result, payload = process_row(
                     row, has_sku, has_item_num, images_dir,
                     wp, cat_cache, attr_registry, logger, args.dry_run, variations_log_fh, debug_counter,
-                    existing_products, skip_updates=getattr(args, "skip_updates", False)
+                    existing_products, 
+                    skip_updates=getattr(args, "skip_updates", False),
+                    update_prices=getattr(args, "update_prices", True),
+                    update_stock=getattr(args, "update_stock", True),
+                    update_images=getattr(args, "update_images", True),
+                    update_details=getattr(args, "update_details", True),
+                    update_attributes=getattr(args, "update_attributes", True)
                 )
                 
                 if result == "queued_create":
@@ -1677,7 +1740,6 @@ class IngestionGui:
         self.images_dir = tk.StringVar(value=DEFAULT_IMAGES_DIR if os.path.isdir(DEFAULT_IMAGES_DIR) else "")
         self.upload_limit = tk.StringVar(value="")
         self.status_text = tk.StringVar(value="Ready")
-        self.skip_updates = tk.BooleanVar(value=False)
 
         root.title("WooCommerce Ingestion Pipeline")
         root.minsize(760, 560)
@@ -1688,7 +1750,7 @@ class IngestionGui:
         frame = ttk.Frame(root, padding=18)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(7, weight=1)
+        frame.rowconfigure(8, weight=1)
 
         ttk.Label(frame, text="Supplier CSV/XML").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
         ttk.Entry(frame, textvariable=self.csv_path).grid(row=0, column=1, sticky="ew", pady=(0, 8))
@@ -1702,25 +1764,62 @@ class IngestionGui:
         ttk.Spinbox(frame, from_=0, to=100000, textvariable=self.upload_limit, width=12).grid(row=2, column=1, sticky="w", pady=(0, 14))
         ttk.Label(frame, text="Leave blank or 0 to process the full CSV").grid(row=2, column=2, sticky="e", pady=(0, 14))
 
-        self.skip_updates_cb = ttk.Checkbutton(frame, text="Skip updates (Only upload new products)", variable=self.skip_updates)
-        self.skip_updates_cb.grid(row=3, column=0, columnspan=3, sticky="w", pady=(0, 14))
+        ttk.Label(frame, text="Import Mode").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=(0, 14))
+        self.import_mode_cb = ttk.Combobox(frame, values=["Update Existing Products", "Insert New Products Only"], state="readonly")
+        self.import_mode_cb.set("Update Existing Products")
+        self.import_mode_cb.grid(row=3, column=1, columnspan=2, sticky="ew", pady=(0, 14))
+
+        # Fields to Update Options Frame (row 4)
+        self.update_opts_frame = ttk.LabelFrame(frame, text="Fields to Update (for Existing Products)", padding=8)
+        self.update_opts_frame.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(0, 14))
+
+        self.chk_prices = tk.BooleanVar(value=True)
+        self.chk_stock = tk.BooleanVar(value=True)
+        self.chk_images = tk.BooleanVar(value=True)
+        self.chk_details = tk.BooleanVar(value=True)
+        self.chk_attributes = tk.BooleanVar(value=True)
+
+        self.cb_prices = ttk.Checkbutton(self.update_opts_frame, text="Prices", variable=self.chk_prices)
+        self.cb_stock = ttk.Checkbutton(self.update_opts_frame, text="Stock", variable=self.chk_stock)
+        self.cb_images = ttk.Checkbutton(self.update_opts_frame, text="Images", variable=self.chk_images)
+        self.cb_details = ttk.Checkbutton(self.update_opts_frame, text="Details", variable=self.chk_details)
+        self.cb_attributes = ttk.Checkbutton(self.update_opts_frame, text="Attributes", variable=self.chk_attributes)
+
+        self.cb_prices.pack(side="left", padx=10)
+        self.cb_stock.pack(side="left", padx=10)
+        self.cb_images.pack(side="left", padx=10)
+        self.cb_details.pack(side="left", padx=10)
+        self.cb_attributes.pack(side="left", padx=10)
+
+        def on_mode_change(event=None):
+            state = "normal" if self.import_mode_cb.get() == "Update Existing Products" else "disabled"
+            self.cb_prices.configure(state=state)
+            self.cb_stock.configure(state=state)
+            self.cb_images.configure(state=state)
+            self.cb_details.configure(state=state)
+            self.cb_attributes.configure(state=state)
+            
+        self.import_mode_cb.bind("<<ComboboxSelected>>", on_mode_change)
 
         self.run_button = ttk.Button(frame, text="Run Ingestion Pipeline", command=self.start_ingestion)
-        self.run_button.grid(row=4, column=0, columnspan=2, sticky="ew", ipady=8, pady=(0, 14))
+        self.run_button.grid(row=5, column=0, columnspan=2, sticky="ew", ipady=8, pady=(0, 14))
         
         self.stop_button = ttk.Button(frame, text="Stop", command=self.stop_ingestion, state="disabled")
-        self.stop_button.grid(row=4, column=2, sticky="ew", ipady=8, padx=(10, 0), pady=(0, 14))
+        self.stop_button.grid(row=5, column=2, sticky="ew", ipady=8, padx=(10, 0), pady=(0, 14))
 
-        ttk.Label(frame, textvariable=self.status_text).grid(row=5, column=0, columnspan=3, sticky="w")
+        ttk.Label(frame, textvariable=self.status_text).grid(row=6, column=0, columnspan=3, sticky="w")
 
         self.progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
-        self.progress.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(6, 12))
+        self.progress.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(6, 12))
 
         self.log_text = scrolledtext.ScrolledText(frame, wrap=tk.WORD, height=18, state="disabled")
-        self.log_text.grid(row=7, column=0, columnspan=3, sticky="nsew")
+        self.log_text.grid(row=8, column=0, columnspan=3, sticky="nsew")
 
         self.copy_button = ttk.Button(frame, text="Copy Logs to Clipboard", command=self.copy_logs)
-        self.copy_button.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        self.copy_button.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+
+        self.help_button = ttk.Button(frame, text="View Instructions", command=self.show_instructions)
+        self.help_button.grid(row=9, column=2, sticky="ew", padx=(10, 0), pady=(8, 0))
 
         root.after(100, self.drain_events)
 
@@ -1728,6 +1827,72 @@ class IngestionGui:
         self.root.clipboard_clear()
         self.root.clipboard_append(self.log_text.get("1.0", self.tk.END))
         self.root.update()
+
+    def show_instructions(self):
+        import tkinter as tk
+        from tkinter import scrolledtext
+
+        help_win = tk.Toplevel(self.root)
+        help_win.title("Ingestion Pipeline Instructions")
+        help_win.geometry("640x520")
+        help_win.minsize(500, 400)
+
+        frame = self.ttk.Frame(help_win, padding=12)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        title_label = self.ttk.Label(frame, text="WooCommerce Ingestion Pipeline Help", font=("Helvetica", 12, "bold"))
+        title_label.pack(anchor="w", pady=(0, 10))
+
+        text_area = scrolledtext.ScrolledText(frame, wrap=tk.WORD, font=("Consolas", 10))
+        text_area.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        instructions = """============================================================
+WooCommerce Ingestion Engine Instructions
+============================================================
+
+1. INPUT FILES (Supplier CSV/XML)
+   - Select either the supplier's lightbulbs CSV or the XML product feed.
+   - The engine automatically resolves titles, prices, SKU, stock quantity, 
+     shipping overrides, categories, and dynamic attribute fields.
+
+2. IMAGE FOLDER
+   - Select the local folder containing the product images.
+   - The engine matches filenames listed in the "Pictures Path" column.
+   - Images are automatically resized (max width 1200px), converted to high-efficiency 
+     WebP format, and deduplicated using MD5 hashes to prevent duplicate media uploads.
+
+3. IMPORT MODES
+   - UPDATE EXISTING PRODUCTS:
+     Updates catalog items that already exist in WooCommerce. You can selectively choose what to update:
+     * Prices: Updates the regular price.
+     * Stock: Updates stock levels and availability.
+     * Images: Re-processes, WebP-compresses, and attaches supplier images.
+     * Details: Updates name, description, and store categories.
+     * Attributes: Updates dynamic attributes (e.g. wattage, color, material).
+     
+     NOTE ON SPEEDS (Auto-Skipping): 
+     If Images or Attributes are checked, the engine runs a full process 
+     on existing items (since we don't cache these complex fields). 
+     If they are unchecked, the engine will automatically skip products 
+     where name, price, and stock match to optimize speed.
+   - INSERT NEW PRODUCTS ONLY:
+     Skips existing products. Useful for adding new stock additions quickly.
+
+4. MAX UPLOADS (Testing / Smoke Run)
+   - Leave blank or set to 0 to run the entire feed.
+   - Set to a small number (e.g., 5 or 10) to import a sample batch and test connections.
+
+5. BUSINESS RULES & FILTERS
+   - Stock: Skips items with a Stock Total of 0 or blank.
+   - Shipping: Only imports items with free/override shipping (contains '0.00' or 'Free').
+   - Variations: Skip parent products with variations (these are written to the
+     'variations_to_review.log' next to the script) and variation child rows.
+"""
+        text_area.insert("1.0", instructions)
+        text_area.configure(state="disabled")
+
+        close_btn = self.ttk.Button(frame, text="Close", command=help_win.destroy)
+        close_btn.pack(anchor="e")
 
     def browse_csv(self):
         from tkinter import filedialog
@@ -1798,7 +1963,12 @@ class IngestionGui:
             debug_limit=0,
             dry_run=False,
             upload_limit=upload_limit,
-            skip_updates=self.skip_updates.get(),
+            skip_updates=(self.import_mode_cb.get() == "Insert New Products Only"),
+            update_prices=self.chk_prices.get(),
+            update_stock=self.chk_stock.get(),
+            update_images=self.chk_images.get(),
+            update_details=self.chk_details.get(),
+            update_attributes=self.chk_attributes.get(),
             auto=True,
             log_file=None,
             status_file=None,
@@ -1944,8 +2114,24 @@ def main():
         help="Stop after N successful product creates/updates. Default: 0, process the full file.",
     )
     parser.add_argument(
-        "--skip-updates", action="store_true", default=False,
-        help="Skip updates for existing products (insert new products only).",
+        "--no-update-prices", action="store_false", dest="update_prices", default=True,
+        help="Do not update prices of existing products.",
+    )
+    parser.add_argument(
+        "--no-update-stock", action="store_false", dest="update_stock", default=True,
+        help="Do not update stock levels of existing products.",
+    )
+    parser.add_argument(
+        "--no-update-images", action="store_false", dest="update_images", default=True,
+        help="Do not update images of existing products.",
+    )
+    parser.add_argument(
+        "--no-update-details", action="store_false", dest="update_details", default=True,
+        help="Do not update details (names, descriptions, categories) of existing products.",
+    )
+    parser.add_argument(
+        "--no-update-attributes", action="store_false", dest="update_attributes", default=True,
+        help="Do not update custom attributes of existing products.",
     )
     parser.add_argument(
         "--auto", action="store_true", default=False,

@@ -8,7 +8,7 @@ import { ArticleSchema } from "@/components/seo/ArticleSchema";
 import type { Metadata } from "next";
 
 // ─── ISR: Revalidate every hour ───────────────────────────────────────────────
-export const revalidate = 3600;
+export const revalidate = 2592000;
 export const dynamicParams = true;
 
 // ─── Page Props ───────────────────────────────────────────────────────────────

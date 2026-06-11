@@ -21,7 +21,7 @@ import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import { BackButton } from '@/components/ui/BackButton';
 import type { Metadata } from 'next';
-export const revalidate = 3600;
+export const revalidate = 2592000;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {

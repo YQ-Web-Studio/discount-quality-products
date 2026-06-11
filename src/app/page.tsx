@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   },
 };
 
-export const revalidate = 3600; // 1 hour — data freshness is handled by unstable_cache on the underlying functions
+export const revalidate = 2592000; // 30 days — data freshness is handled by unstable_cache on the underlying functions
 
 export default async function Home() {
   let products: Product[] = [];

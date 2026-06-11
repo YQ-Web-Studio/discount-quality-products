@@ -6,7 +6,7 @@ import { productMatchesAttributeFilters } from "../../shop/filterAttributes";
 import { Suspense } from "react";
 import { navigationCategories } from "@/lib/navigationConfig";
 
-export const revalidate = 3600;
+export const revalidate = 2592000;
 export const dynamicParams = true;
 
 type CategoryPageProps = {

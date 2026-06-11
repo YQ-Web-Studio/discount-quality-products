@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Calendar, ArrowRight, BookOpen } from "lucide-react";
 import type { Metadata } from "next";
 
-export const revalidate = 3600;
+export const revalidate = 2592000;
 
 export const metadata: Metadata = {
   title: "Buying Guides & Tips | Discount Quality Products",

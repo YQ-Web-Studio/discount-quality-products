@@ -5,6 +5,7 @@ import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import OrderDispatchedEmail from "@/emails/OrderDispatchedEmail";
 import OrderRefundedEmail from "@/emails/OrderRefundedEmail";
 import React from "react";
+import { revalidateTag } from "next/cache";
 
 export async function POST(req: Request) {
   // 1. Authenticate the Webhook request
@@ -43,6 +44,15 @@ export async function POST(req: Request) {
   if (webhook_id || !id) {
     console.log(`[woocommerce-webhook] Received verification ping (Webhook ID: ${webhook_id || 'N/A'}).`);
     return NextResponse.json({ success: true, message: "Webhook URL successfully verified" });
+  }
+
+  // Trigger on-demand cache revalidation for storefront
+  try {
+    revalidateTag("wc-products");
+    revalidateTag("wc-categories");
+    console.log(`[woocommerce-webhook] Triggered on-demand cache revalidation for order #${id}`);
+  } catch (err) {
+    console.error("[woocommerce-webhook] Failed to trigger webhook cache revalidation:", err);
   }
 
   console.log(`[woocommerce-webhook] Received webhook for order #${id} (Status: ${status})`);
