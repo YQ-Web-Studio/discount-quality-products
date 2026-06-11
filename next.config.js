@@ -56,6 +56,19 @@ const nextConfig = {
     // Unblocks builds from compile-time type errors
     ignoreBuildErrors: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://yqwebstudio.com https://*.yqwebstudio.com;",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
