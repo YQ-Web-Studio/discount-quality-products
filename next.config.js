@@ -63,8 +63,12 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://yqwebstudio.com https://*.yqwebstudio.com;",
+            value: "frame-ancestors 'self' https://yqwebstudio.com https://*.yqwebstudio.com http://localhost:3000;",
           },
+          {
+            key: 'X-Frame-Options',
+            value: 'ALLOWALL',
+          }
         ],
       },
     ];
