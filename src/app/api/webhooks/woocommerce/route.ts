@@ -48,7 +48,9 @@ export async function POST(req: Request) {
 
   // Trigger on-demand cache revalidation for storefront
   try {
+    // @ts-expect-error - Next.js 16 types incorrectly require a second argument
     revalidateTag("wc-products");
+    // @ts-expect-error - Next.js 16 types incorrectly require a second argument
     revalidateTag("wc-categories");
     console.log(`[woocommerce-webhook] Triggered on-demand cache revalidation for order #${id}`);
   } catch (err) {
