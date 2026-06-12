@@ -59,6 +59,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: '*.gravatar.com',
       },
+      {
+        protocol: 'http',
+        hostname: 'secure.gravatar.com',
+      },
+      {
+        protocol: 'http',
+        hostname: '*.gravatar.com',
+      },
     ],
   },
   typescript: {

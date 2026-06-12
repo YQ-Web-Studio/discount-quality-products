@@ -206,7 +206,7 @@ export function AccountDashboard({
           <div className="flex items-center gap-5">
             <div className="h-16 w-16 overflow-hidden rounded-xl bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-0.5 shadow-sm ring-1 ring-zinc-200">
               {activeUser?.avatarUrl && !avatarError ? (
-                <Image
+                <img
                   src={activeUser.avatarUrl}
                   alt={activeUser.name}
                   width={64}
