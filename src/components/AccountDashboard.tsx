@@ -95,9 +95,9 @@ export function AccountDashboard({
     return Array.isArray(initialWishlistItems) ? initialWishlistItems : [];
   }, [initialWishlistItems]);
 
-  const storeRecentlyViewed = useRecentlyViewed((state) => state.itemsByUser?.[userKey] || []);
+  const storeRecentlyViewed = useRecentlyViewed((state) => state.itemsByUser?.[userKey]);
   const recentlyViewedItems = useMemo(() => {
-    return isMounted ? storeRecentlyViewed : [];
+    return isMounted ? (storeRecentlyViewed || []) : [];
   }, [isMounted, storeRecentlyViewed]);
 
   const basketItems = useMemo(() => {

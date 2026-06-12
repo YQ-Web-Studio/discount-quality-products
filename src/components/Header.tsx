@@ -24,7 +24,7 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const isMounted = useIsMounted();
-  const basketCount = useBasket((s) => s.itemCount);
+  const basketCount = useBasket((s) => s.items.reduce((sum, i) => sum + i.quantity, 0));
   const { wishlistIds } = useWishlist();
   const openMiniCart = useMiniCart((s) => s.open);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -198,7 +198,7 @@ export function Header() {
             >
               <ShoppingCart className="h-5 w-5 text-zinc-900" />
               <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-sm">
-                {isMounted ? (basketCount() > 99 ? "99+" : basketCount()) : 0}
+                {isMounted ? (basketCount > 99 ? "99+" : basketCount) : 0}
               </span>
             </button>
             
