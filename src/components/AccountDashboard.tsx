@@ -87,6 +87,14 @@ export function AccountDashboard({
   const activeUser = user || initialUser;
   const userKey = activeUser?.id ? `user_${activeUser.id}` : "guest";
   
+  const safeOrders = useMemo(() => {
+    return Array.isArray(initialOrders) ? initialOrders : [];
+  }, [initialOrders]);
+
+  const safeWishlistItems = useMemo(() => {
+    return Array.isArray(initialWishlistItems) ? initialWishlistItems : [];
+  }, [initialWishlistItems]);
+
   const storeRecentlyViewed = useRecentlyViewed((state) => state.itemsByUser?.[userKey] || []);
   const recentlyViewedItems = useMemo(() => {
     return isMounted ? storeRecentlyViewed : [];
@@ -100,7 +108,7 @@ export function AccountDashboard({
 
   const wishlistItems = useMemo(() => {
     if (wishlistIsLoading) {
-      return initialWishlistItems;
+      return safeWishlistItems;
     }
 
     if (!wishlistIds.length) {
@@ -108,13 +116,13 @@ export function AccountDashboard({
     }
 
     const wishlistMap = new Map(
-      initialWishlistItems.map((product) => [product.databaseId, product])
+      safeWishlistItems.map((product) => [product.databaseId, product])
     );
 
     return wishlistIds
       .map((wishlistId) => wishlistMap.get(wishlistId))
       .filter((product): product is MappedProduct => Boolean(product));
-  }, [initialWishlistItems, wishlistIds, wishlistIsLoading]);
+  }, [safeWishlistItems, wishlistIds, wishlistIsLoading]);
 
   const cleanupStartedRef = useRef<string | null>(null);
 
@@ -125,7 +133,7 @@ export function AccountDashboard({
     const currentUserKey = activeUser?.id ? String(activeUser.id) : "guest";
     if (cleanupStartedRef.current === currentUserKey) return;
 
-    const validIds = initialWishlistItems.map((p) => p.databaseId);
+    const validIds = safeWishlistItems.map((p) => p.databaseId);
     const invalidIds = wishlistIds.filter((id) => !validIds.includes(id));
 
     if (invalidIds.length > 0) {
@@ -142,7 +150,7 @@ export function AccountDashboard({
       };
       void cleanup();
     }
-  }, [wishlistIds, wishlistIsLoading, initialWishlistItems, toggleWishlist, activeUser?.id]);
+  }, [wishlistIds, wishlistIsLoading, safeWishlistItems, toggleWishlist, activeUser?.id]);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -339,24 +347,24 @@ export function AccountDashboard({
                           <Package className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Orders</p>
-                        <h3 className="mt-1 text-xl sm:text-2xl font-bold text-zinc-900">{initialOrders.length}</h3>
+                        <h3 className="mt-1 text-xl sm:text-2xl font-bold text-zinc-900">{safeOrders.length}</h3>
                       </div>
-
+ 
                       {/* Image Previews */}
-                      {initialOrders.length > 0 && (
+                      {safeOrders.length > 0 && (
                         <div className="flex items-center -space-x-2 pt-2">
-                          {initialOrders
-                            .flatMap(order => order.line_items)
-                            .filter(item => item.image?.src)
+                          {safeOrders
+                            .flatMap(order => order?.line_items || [])
+                            .filter(item => item?.image?.src)
                             .slice(0, 4)
                             .map((item, idx) => (
                               <div key={idx} className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full border-2 border-white img-shimmer shadow-sm ring-1 ring-zinc-200">
                                 <Image src={item.image!.src} alt="Preview" fill sizes="40px" className="object-cover" placeholder="blur" blurDataURL={THUMB_SHIMMER} />
                               </div>
                             ))}
-                          {initialOrders.flatMap(order => order.line_items).filter(item => item.image?.src).length > 4 && (
+                          {safeOrders.flatMap(order => order?.line_items || []).filter(item => item?.image?.src).length > 4 && (
                             <div className="relative z-10 flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full border-2 border-white bg-zinc-100 text-[9px] sm:text-[10px] font-bold text-zinc-600 shadow-sm ring-1 ring-zinc-200">
-                              +{initialOrders.flatMap(order => order.line_items).filter(item => item.image?.src).length - 4}
+                              +{safeOrders.flatMap(order => order?.line_items || []).filter(item => item?.image?.src).length - 4}
                             </div>
                           )}
                         </div>
@@ -560,10 +568,11 @@ export function AccountDashboard({
                   </p>
                 </div>
 
-                {initialOrders.length > 0 ? (
+                {safeOrders.length > 0 ? (
                   <div className="space-y-4">
-                    {initialOrders.map((order) => {
+                    {safeOrders.map((order) => {
                       const isExpanded = expandedOrderId === order.id;
+                      const lineItems = order?.line_items || [];
                       
                       return (
                         <div 
@@ -605,7 +614,7 @@ export function AccountDashboard({
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="hidden items-center -space-x-2 sm:flex">
-                                {order.line_items.slice(0, 3).map((item, idx) => (
+                                {lineItems.slice(0, 3).map((item, idx) => (
                                   <div key={idx} className="relative h-8 w-8 overflow-hidden rounded-full border-2 border-white bg-zinc-100 shadow-sm ring-1 ring-zinc-200">
                                     {item.image?.src ? (
                                       <Image src={item.image.src} alt="" fill sizes="32px" className="object-cover" placeholder="blur" blurDataURL={THUMB_SHIMMER} />
@@ -616,9 +625,9 @@ export function AccountDashboard({
                                     )}
                                   </div>
                                 ))}
-                                {order.line_items.length > 3 && (
+                                {lineItems.length > 3 && (
                                   <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-zinc-100 text-[9px] font-bold text-zinc-600 shadow-sm ring-1 ring-zinc-200">
-                                    +{order.line_items.length - 3}
+                                    +{lineItems.length - 3}
                                   </div>
                                 )}
                               </div>
@@ -629,7 +638,7 @@ export function AccountDashboard({
                               )}
                             </div>
                           </button>
-
+ 
                           {/* Expanded Details */}
                           {isExpanded && (
                             <div className="border-t border-zinc-200 bg-white p-5 sm:p-8 animate-in slide-in-from-top-2 duration-300">
@@ -638,7 +647,7 @@ export function AccountDashboard({
                                 <div className="lg:col-span-2 space-y-4">
                                   <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-900 border-b border-zinc-100 pb-2">Items Purchased</h3>
                                   <div className="divide-y divide-zinc-100">
-                                    {order.line_items.map((item) => {
+                                    {lineItems.map((item) => {
                                       const decodedName = decodeHtmlEntities(item.name);
                                       return (
                                         <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
@@ -662,7 +671,7 @@ export function AccountDashboard({
                                       );
                                     })}
                                   </div>
-
+ 
                                   <div className="mt-6 space-y-2 rounded-xl bg-zinc-50 p-4">
                                     <div className="flex justify-between text-xs text-zinc-500">
                                       <span>Subtotal</span>
@@ -678,7 +687,7 @@ export function AccountDashboard({
                                     </div>
                                   </div>
                                 </div>
-
+ 
                                 {/* Right: Metadata / Addresses */}
                                 <div className="space-y-6">
                                   {/* Shipping Address */}
@@ -688,14 +697,14 @@ export function AccountDashboard({
                                       Shipping To
                                     </div>
                                     <div className="text-xs text-zinc-600 leading-relaxed">
-                                      <p className="font-bold text-zinc-900">{order.shipping.first_name} {order.shipping.last_name}</p>
-                                      <p>{order.shipping.address_1}</p>
-                                      {order.shipping.address_2 && <p>{order.shipping.address_2}</p>}
-                                      <p>{order.shipping.city}, {order.shipping.postcode}</p>
-                                      <p>{order.shipping.country}</p>
+                                      <p className="font-bold text-zinc-900">{order.shipping?.first_name} {order.shipping?.last_name}</p>
+                                      <p>{order.shipping?.address_1}</p>
+                                      {order.shipping?.address_2 && <p>{order.shipping.address_2}</p>}
+                                      <p>{order.shipping?.city}, {order.shipping?.postcode}</p>
+                                      <p>{order.shipping?.country}</p>
                                     </div>
                                   </div>
-
+ 
                                   {/* Payment Method */}
                                   <div className="space-y-3">
                                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-900 border-b border-zinc-100 pb-2">
@@ -706,8 +715,8 @@ export function AccountDashboard({
                                       <span className="capitalize">{order.payment_method_title || order.payment_method}</span>
                                     </div>
                                   </div>
-
-
+ 
+ 
                                 </div>
                               </div>
                             </div>
