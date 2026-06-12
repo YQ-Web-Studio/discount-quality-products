@@ -130,14 +130,13 @@ export function AccountDashboard({
   useEffect(() => {
     if (wishlistIsLoading || !wishlistIds.length) return;
 
-    const currentUserKey = activeUser?.id ? String(activeUser.id) : "guest";
-    if (cleanupStartedRef.current === currentUserKey) return;
+    if (cleanupStartedRef.current === "started") return;
+    cleanupStartedRef.current = "started";
 
     const validIds = safeWishlistItems.map((p) => p.databaseId);
     const invalidIds = wishlistIds.filter((id) => !validIds.includes(id));
 
     if (invalidIds.length > 0) {
-      cleanupStartedRef.current = currentUserKey;
       const cleanup = async () => {
         console.log("[Wishlist Cleanup] Starting cleanup of invalid items:", invalidIds);
         for (const id of invalidIds) {
@@ -150,7 +149,8 @@ export function AccountDashboard({
       };
       void cleanup();
     }
-  }, [wishlistIds, wishlistIsLoading, safeWishlistItems, toggleWishlist, activeUser?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wishlistIsLoading]);
 
   async function handleSignOut() {
     setIsSigningOut(true);
