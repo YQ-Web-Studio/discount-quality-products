@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PRODUCT_SHIMMER, THUMB_SHIMMER } from "@/lib/shimmer";
 import {
@@ -104,6 +104,34 @@ export function AccountDashboard({
       .map((wishlistId) => wishlistMap.get(wishlistId))
       .filter((product): product is MappedProduct => Boolean(product));
   }, [initialWishlistItems, wishlistIds, wishlistIsLoading]);
+
+  const cleanupStartedRef = useRef<string | null>(null);
+
+  // Clean up invalid wishlist items from the backend database sequentially in the background
+  useEffect(() => {
+    if (wishlistIsLoading || !wishlistIds.length) return;
+
+    const currentUserKey = activeUser?.id ? String(activeUser.id) : "guest";
+    if (cleanupStartedRef.current === currentUserKey) return;
+
+    const validIds = initialWishlistItems.map((p) => p.databaseId);
+    const invalidIds = wishlistIds.filter((id) => !validIds.includes(id));
+
+    if (invalidIds.length > 0) {
+      cleanupStartedRef.current = currentUserKey;
+      const cleanup = async () => {
+        console.log("[Wishlist Cleanup] Starting cleanup of invalid items:", invalidIds);
+        for (const id of invalidIds) {
+          try {
+            await toggleWishlist(id);
+          } catch (err) {
+            console.error(`Failed to clean up invalid wishlist item ${id}:`, err);
+          }
+        }
+      };
+      void cleanup();
+    }
+  }, [wishlistIds, wishlistIsLoading, initialWishlistItems, toggleWishlist, activeUser?.id]);
 
   async function handleSignOut() {
     setIsSigningOut(true);
