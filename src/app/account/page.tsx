@@ -19,7 +19,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AccountPage() {
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const resolvedParams = await searchParams;
+  const tab = resolvedParams.tab;
   const session = await getCurrentWordPressSession();
 
   if (!session) {
@@ -73,6 +79,7 @@ export default async function AccountPage() {
       initialOrders={orders}
       initialCustomer={customer}
       wishlistLoadError={wishlistLoadError}
+      activeTabParam={tab}
     />
   );
 }

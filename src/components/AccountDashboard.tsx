@@ -43,6 +43,7 @@ interface AccountDashboardProps {
   initialOrders?: WooCommerceOrderResponse[];
   initialCustomer?: WooCommerceCustomer | null;
   wishlistLoadError?: string | null;
+  activeTabParam?: string;
 }
 
 type TabType = "dashboard" | "orders" | "wishlist" | "profile";
@@ -65,6 +66,7 @@ export function AccountDashboard({
   initialOrders = [],
   initialCustomer = null,
   wishlistLoadError = null,
+  activeTabParam,
 }: AccountDashboardProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -76,7 +78,25 @@ export function AccountDashboard({
     isPending,
   } = useWishlist();
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
+  
+  const [activeTab, setActiveTabState] = useState<TabType>(() => {
+    if (activeTabParam === "dashboard" || activeTabParam === "orders" || activeTabParam === "wishlist" || activeTabParam === "profile") {
+      return activeTabParam as TabType;
+    }
+    return "dashboard";
+  });
+
+  const setActiveTab = (tab: TabType) => {
+    setActiveTabState(tab);
+    router.push(`/account?tab=${tab}`, { scroll: false });
+  };
+
+  useEffect(() => {
+    if (activeTabParam && ["dashboard", "orders", "wishlist", "profile"].includes(activeTabParam)) {
+      setActiveTabState(activeTabParam as TabType);
+    }
+  }, [activeTabParam]);
+
   const addItem = useBasket((s) => s.addItem);
   const storeBasketItems = useBasket((s) => s.items);
   const openMiniCart = useMiniCart((s) => s.open);
