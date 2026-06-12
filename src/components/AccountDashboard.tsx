@@ -84,7 +84,7 @@ export function AccountDashboard({
 
   const activeUser = user || initialUser;
   const userKey = activeUser?.id ? `user_${activeUser.id}` : "guest";
-  const recentlyViewedItems = useRecentlyViewed((state) => state.itemsByUser[userKey] || []);
+  const recentlyViewedItems = useRecentlyViewed((state) => state.itemsByUser?.[userKey] || []);
   const wishlistStatusMessage = wishlistError || wishlistLoadError;
 
   const wishlistItems = useMemo(() => {
@@ -424,7 +424,7 @@ export function AccountDashboard({
                   </div>
                   {recentlyViewedItems.length > 0 ? (
                     <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-                      {recentlyViewedItems.slice(0, 4).map((product) => {
+                      {recentlyViewedItems.filter(Boolean).slice(0, 4).map((product) => {
                         // Cast RecentlyViewedItem to a partial MappedProduct and provide defaults for missing fields
                         const mappedProduct: MappedProduct = {
                           ...product,
