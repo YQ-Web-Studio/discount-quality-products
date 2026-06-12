@@ -35,6 +35,7 @@ import { IdentityForm } from "@/components/settings/IdentityForm";
 import { AddressForm } from "@/components/settings/AddressForm";
 import { WalletSection } from "@/components/settings/WalletSection";
 import type { WooCommerceCustomer } from "@/lib/woocommerce";
+import { useIsMounted } from "@/hooks/useIsMounted";
 
 interface AccountDashboardProps {
   initialUser: AuthUser | null;
@@ -77,14 +78,24 @@ export function AccountDashboard({
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const addItem = useBasket((s) => s.addItem);
-  const basketItems = useBasket((s) => s.items);
+  const storeBasketItems = useBasket((s) => s.items);
   const openMiniCart = useMiniCart((s) => s.open);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [avatarError, setAvatarError] = useState(false);
+  const isMounted = useIsMounted();
 
   const activeUser = user || initialUser;
   const userKey = activeUser?.id ? `user_${activeUser.id}` : "guest";
-  const recentlyViewedItems = useRecentlyViewed((state) => state.itemsByUser?.[userKey] || []);
+  
+  const storeRecentlyViewed = useRecentlyViewed((state) => state.itemsByUser?.[userKey] || []);
+  const recentlyViewedItems = useMemo(() => {
+    return isMounted ? storeRecentlyViewed : [];
+  }, [isMounted, storeRecentlyViewed]);
+
+  const basketItems = useMemo(() => {
+    return isMounted ? storeBasketItems : [];
+  }, [isMounted, storeBasketItems]);
+
   const wishlistStatusMessage = wishlistError || wishlistLoadError;
 
   const wishlistItems = useMemo(() => {
