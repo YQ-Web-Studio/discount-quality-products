@@ -19,30 +19,44 @@ export interface RecentlyViewedItem {
 }
 
 interface RecentlyViewedState {
-  items: RecentlyViewedItem[];
-  add: (product: Omit<RecentlyViewedItem, "viewedAt">) => void;
-  clear: () => void;
+  itemsByUser: Record<string, RecentlyViewedItem[]>;
+  add: (userId: string | number | undefined, product: Omit<RecentlyViewedItem, "viewedAt">) => void;
+  clear: (userId: string | number | undefined) => void;
 }
 
 export const useRecentlyViewed = create<RecentlyViewedState>()(
   persist(
     (set) => ({
-      items: [],
-      add: (product) => {
+      itemsByUser: {},
+      add: (userId, product) => {
+        const key = userId ? `user_${userId}` : "guest";
         set((state) => {
           const now = Date.now();
+          const userItems = state.itemsByUser[key] || [];
           // Remove if it already exists to move it to the top
-          const filtered = state.items.filter((i) => i.databaseId !== product.databaseId);
+          const filtered = userItems.filter((i) => i.databaseId !== product.databaseId);
           // Add to top, keep only last 10
+          const updatedItems = [{ ...product, viewedAt: now }, ...filtered].slice(0, 10);
           return {
-            items: [{ ...product, viewedAt: now }, ...filtered].slice(0, 10),
+            itemsByUser: {
+              ...state.itemsByUser,
+              [key]: updatedItems,
+            },
           };
         });
       },
-      clear: () => set({ items: [] }),
+      clear: (userId) => {
+        const key = userId ? `user_${userId}` : "guest";
+        set((state) => ({
+          itemsByUser: {
+            ...state.itemsByUser,
+            [key]: [],
+          },
+        }));
+      },
     }),
     {
-      name: "dqp-recently-viewed",
+      name: "dqp-recently-viewed-v2",
     }
   )
 );

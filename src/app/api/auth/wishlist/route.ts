@@ -6,6 +6,7 @@ import {
   toggleWordPressWishlist,
   WORDPRESS_AUTH_COOKIE,
 } from "@/lib/wordpress-auth.server";
+import { fetchWooCommerceProducts } from "@/lib/woocommerce";
 
 interface WishlistRequestBody {
   productId?: number | string;
@@ -34,6 +35,29 @@ export async function GET() {
 
   try {
     const wishlistIds = await fetchWordPressWishlistIds(session.token);
+
+    if (wishlistIds.length > 0) {
+      const { products } = await fetchWooCommerceProducts({
+        include: wishlistIds.join(","),
+        per_page: 100,
+      });
+
+      const validIds = products.map((p) => p.databaseId);
+      const invalidIds = wishlistIds.filter((id) => !validIds.includes(id));
+
+      if (invalidIds.length > 0) {
+        // Asynchronously toggle/remove invalid/deleted product IDs from the user's wishlist in WordPress
+        await Promise.all(
+          invalidIds.map((id) =>
+            toggleWordPressWishlist(session.token, id).catch((err) => {
+              console.error(`Failed to clean up invalid wishlist item ${id}:`, err);
+            })
+          )
+        );
+        return NextResponse.json({ wishlistIds: validIds });
+      }
+    }
+
     return NextResponse.json({ wishlistIds });
   } catch (error) {
     const message =

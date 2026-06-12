@@ -4,6 +4,7 @@ import { AccountDashboard } from "@/components/AccountDashboard";
 import {
   fetchWordPressWishlistIds,
   getCurrentWordPressSession,
+  toggleWordPressWishlist,
 } from "@/lib/wordpress-auth.server";
 import { orderProductsByWishlist } from "@/lib/wordpress-auth";
 import {
@@ -57,7 +58,23 @@ export default async function AccountPage() {
         per_page: 100,
       });
 
-      wishlistItems = orderProductsByWishlist(products, wishlistIds);
+      const validIds = products.map((p) => p.databaseId);
+      const invalidIds = wishlistIds.filter((id) => !validIds.includes(id));
+
+      if (invalidIds.length > 0) {
+        // Asynchronously toggle/remove invalid/deleted product IDs from user meta
+        await Promise.all(
+          invalidIds.map((id) =>
+            toggleWordPressWishlist(token, id).catch((err) => {
+              console.error(`Failed to clean up invalid wishlist item ${id}:`, err);
+            })
+          )
+        );
+        const cleanedWishlistIds = wishlistIds.filter((id) => validIds.includes(id));
+        wishlistItems = orderProductsByWishlist(products, cleanedWishlistIds);
+      } else {
+        wishlistItems = orderProductsByWishlist(products, wishlistIds);
+      }
     }
   } catch (error) {
     wishlistLoadError =

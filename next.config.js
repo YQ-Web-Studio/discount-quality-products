@@ -50,6 +50,15 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'images.unsplash.com',
       },
+      // ── Gravatar Fallbacks ─────────────────────────────────────────
+      {
+        protocol: 'https',
+        hostname: 'secure.gravatar.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.gravatar.com',
+      },
     ],
   },
   typescript: {

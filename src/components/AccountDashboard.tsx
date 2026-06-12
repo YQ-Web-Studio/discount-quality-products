@@ -74,15 +74,17 @@ export function AccountDashboard({
     toggleWishlist,
     isPending,
   } = useWishlist();
-  const recentlyViewedItems = useRecentlyViewed((state) => state.items);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const addItem = useBasket((s) => s.addItem);
   const basketItems = useBasket((s) => s.items);
   const openMiniCart = useMiniCart((s) => s.open);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   const activeUser = user || initialUser;
+  const userKey = activeUser?.id ? `user_${activeUser.id}` : "guest";
+  const recentlyViewedItems = useRecentlyViewed((state) => state.itemsByUser[userKey] || []);
   const wishlistStatusMessage = wishlistError || wishlistLoadError;
 
   const wishlistItems = useMemo(() => {
@@ -156,13 +158,14 @@ export function AccountDashboard({
         <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between px-4 sm:px-0">
           <div className="flex items-center gap-5">
             <div className="h-16 w-16 overflow-hidden rounded-xl bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-0.5 shadow-sm ring-1 ring-zinc-200">
-              {activeUser?.avatarUrl ? (
+              {activeUser?.avatarUrl && !avatarError ? (
                 <Image
                   src={activeUser.avatarUrl}
                   alt={activeUser.name}
                   width={64}
                   height={64}
                   className="h-full w-full rounded-lg object-cover"
+                  onError={() => setAvatarError(true)}
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center rounded-lg bg-gradient-to-br from-zinc-50 to-white text-primary shadow-inner">

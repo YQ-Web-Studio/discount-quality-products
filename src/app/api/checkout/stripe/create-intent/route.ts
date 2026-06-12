@@ -3,11 +3,7 @@ import Stripe from "stripe";
 import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 
-if (!process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV === "production") {
-  throw new Error("STRIPE_SECRET_KEY is not set. Stripe cannot initialise in production without a valid secret key.");
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
   apiVersion: "2023-10-16" as any,
 });
 
@@ -31,6 +27,14 @@ function resolveToNumericId(id: string): number {
 }
 
 export async function POST(req: Request) {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error("STRIPE_SECRET_KEY is not set.");
+    return NextResponse.json(
+      { error: "Stripe integration is not configured." },
+      { status: 500 }
+    );
+  }
+
   try {
     const { items, shippingMethod, form, couponCode } = await req.json();
 
