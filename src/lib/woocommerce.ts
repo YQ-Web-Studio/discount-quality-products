@@ -243,7 +243,7 @@ async function fetchProductsInternal(
         ...authHeader,
         "Content-Type": "application/json",
       },
-      next: { revalidate: 1800, tags: ["wc-products"] },
+      cache: "no-store",
     });
 
     if (!response.ok) {
@@ -290,7 +290,7 @@ export const fetchWooCommerceProducts = async (params: any = {}) => {
   const cachedFn = unstable_cache(
     async (p) => fetchProductsInternal(p),
     ["wc-products", String(categoryId), String(page), String(perPage), String(searchQ), String(orderby), String(order), String(minPrice), String(maxPrice), paParamsString],
-    { revalidate: 1800, tags: ["wc-products"] }
+    { revalidate: 86400, tags: ["wc-products"] }
   );
   return cachedFn(params);
 };
@@ -335,7 +335,7 @@ async function getProductBySlugInternal(slug: string): Promise<MappedProduct | n
         ...authHeader,
         "Content-Type": "application/json",
       },
-      next: { revalidate: 3600, tags: ["wc-products", `wc-product-${slug}`] },
+      cache: "no-store",
     });
 
     if (!response.ok) return null;
@@ -355,7 +355,7 @@ export const getProductBySlug = async (slug: string) => {
   const cachedFn = unstable_cache(
     async (s) => getProductBySlugInternal(s),
     [`wc-product-${slug}`],
-    { revalidate: 3600, tags: ["wc-products", `wc-product-${slug}`] }
+    { revalidate: 86400, tags: ["wc-products", `wc-product-${slug}`] }
   );
   return cachedFn(slug);
 };
@@ -445,7 +445,7 @@ async function getCategoriesInternal(): Promise<DynamicNavCategory[]> {
         ...authHeader,
         "Content-Type": "application/json",
       },
-      next: { revalidate: 7200, tags: ["wc-categories"] },
+      cache: "no-store",
     });
 
     if (!response.ok) {
@@ -468,7 +468,7 @@ export const getCategories = async () => {
   const cachedFn = unstable_cache(
     async () => getCategoriesInternal(),
     ["wc-categories"],
-    { revalidate: 3600, tags: ["wc-categories"] }
+    { revalidate: 604800, tags: ["wc-categories"] }
   );
   return cachedFn();
 };

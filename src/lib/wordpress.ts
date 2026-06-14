@@ -204,7 +204,7 @@ async function wpFetch<T>(
         variables,
       }),
       signal: controller.signal,
-      next: { revalidate: 1800, tags: ["wc-products"] },
+      cache: "no-store",
     });
 
     clearTimeout(timeoutId);
@@ -298,7 +298,7 @@ export const getProducts = cache(async (first: number = 12, after: string | null
   const cachedFn = unstable_cache(
     async (f, a, c, s) => getProductsInternal(f, a, c, s),
     ['get-products', String(first), String(after), String(categorySlug), String(searchTerm)],
-    { revalidate: 1800, tags: ["wc-products"] }
+    { revalidate: 86400, tags: ["wc-products"] }
   );
   return cachedFn(first, after, categorySlug, searchTerm);
 });
@@ -421,7 +421,7 @@ export const getSmartFeaturedProducts = unstable_cache(
     return featuredProducts;
   },
   ['smart-featured-products'],
-  { revalidate: 3600 }
+  { revalidate: 86400, tags: ["wc-products"] }
 );
 
 async function getLatestProductsInternal(first: number = 6): Promise<Product[]> {
@@ -444,7 +444,7 @@ export const getLatestProducts = cache(async (first: number = 6): Promise<Produc
   const cachedFn = unstable_cache(
     async (limit: number) => getLatestProductsInternal(limit),
     ['latest-products', String(first)],
-    { revalidate: 1800, tags: ["wc-products"] }
+    { revalidate: 86400, tags: ["wc-products"] }
   );
   return cachedFn(first);
 });
@@ -535,7 +535,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<Product | nu
   const cachedFn = unstable_cache(
     async (s: string) => getProductBySlugInternal(s),
     ['product-by-slug', slug],
-    { revalidate: 1800, tags: ["wc-products", `product-${slug}`] }
+    { revalidate: 86400, tags: ["wc-products", `product-${slug}`] }
   );
   return cachedFn(slug);
 });
@@ -692,7 +692,7 @@ export const getPostBySlug = cache(async (slug: string): Promise<WpPost | null> 
   const cachedFn = unstable_cache(
     async (s: string) => getPostBySlugInternal(s),
     ['post-by-slug', slug],
-    { revalidate: 1800, tags: ["wc-posts", `post-${slug}`] }
+    { revalidate: 604800, tags: ["wc-posts", `post-${slug}`] }
   );
   return cachedFn(slug);
 });
@@ -756,7 +756,7 @@ export const getPosts = cache(async (first: number = 12, after: string | null = 
   const cachedFn = unstable_cache(
     async (f, a) => getPostsInternal(f, a),
     ['get-posts', String(first), String(after)],
-    { revalidate: 1800, tags: ["wc-posts"] }
+    { revalidate: 604800, tags: ["wc-posts"] }
   );
   return cachedFn(first, after);
 });
@@ -908,7 +908,7 @@ export const searchProducts = cache(async (search: string, first: number = 10): 
   const cachedFn = unstable_cache(
     async (s, f) => searchProductsInternal(s, f),
     ['search-products', cleanSearch, String(first)],
-    { revalidate: 1800, tags: ["wc-products"] }
+    { revalidate: 86400, tags: ["wc-products"] }
   );
   return cachedFn(search, first);
 });

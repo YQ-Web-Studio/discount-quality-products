@@ -5,7 +5,6 @@ import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import OrderDispatchedEmail from "@/emails/OrderDispatchedEmail";
 import OrderRefundedEmail from "@/emails/OrderRefundedEmail";
 import React from "react";
-import { revalidateTag } from "next/cache";
 
 export async function POST(req: Request) {
   // 1. Authenticate the Webhook request
@@ -46,16 +45,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, message: "Webhook URL successfully verified" });
   }
 
-  // Trigger on-demand cache revalidation for storefront
-  try {
-    // @ts-expect-error - Next.js 16 types incorrectly require a second argument
-    revalidateTag("wc-products");
-    // @ts-expect-error - Next.js 16 types incorrectly require a second argument
-    revalidateTag("wc-categories");
-    console.log(`[woocommerce-webhook] Triggered on-demand cache revalidation for order #${id}`);
-  } catch (err) {
-    console.error("[woocommerce-webhook] Failed to trigger webhook cache revalidation:", err);
-  }
+  // NOTE: We intentionally do NOT call revalidateTag("wc-products") here.
+  // Order status changes (processing/completed/refunded) don't change the product catalogue.
+  // Each revalidateTag("wc-products") was invalidating the ENTIRE product cache across all pages,
+  // burning through Vercel's ISR write quota. Product data freshness is handled by:
+  //   1. The Stripe webhook (targeted per-product tag invalidation after purchase)
+  //   2. POST /api/revalidate (called by the ingestion engine when products are actually updated)
+  //   3. Time-based unstable_cache expiry as a safety net
 
   console.log(`[woocommerce-webhook] Received webhook for order #${id} (Status: ${status})`);
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { revalidatePath } from "next/cache";
+import { revalidateTag } from "next/cache";
 import { createWooCommerceOrder, updateWooCommerceOrder } from "@/lib/woocommerce";
 import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
@@ -70,17 +70,19 @@ export async function POST(req: Request) {
     // ── 3a. Update/create the WooCommerce order (primary action) ─────────
     await processOrderFromPaymentIntent(rawPaymentIntent, chargeId);
 
-    // ── 3b. Refresh frontend cache (revalidate) ──────────────────────────
-    // We revalidate the shop pages so that if WooCommerce naturally reduced
-    // stock to zero, the UI reflects it immediately.
+    // ── 3b. Targeted cache invalidation for purchased products ─────────
+    // Only invalidate the specific product caches — not the entire catalogue.
+    // This dramatically reduces ISR writes vs. the previous approach of
+    // revalidatePath("/"), revalidatePath("/shop"), and each product path.
     try {
-      const slugList = slugs ? slugs.split(",").map((s) => s.trim()) : [];
+      const slugList = slugs ? slugs.split(",").map((s) => s.trim()).filter(Boolean) : [];
       for (const slug of slugList) {
-        if (slug) revalidatePath(`/products/${slug}`);
+        // @ts-expect-error - Next.js 16 types incorrectly require a second argument
+        revalidateTag(`product-${slug}`);
+        // @ts-expect-error - Next.js 16 types incorrectly require a second argument
+        revalidateTag(`wc-product-${slug}`);
       }
-      revalidatePath("/");
-      revalidatePath("/shop");
-      console.log(`[webhook] ✓ Cache revalidated for ${slugList.length} products and shop pages.`);
+      console.log(`[webhook] ✓ Cache revalidated for ${slugList.length} product tags.`);
     } catch (err) {
       console.warn("[webhook] Cache revalidation failed:", err);
     }
