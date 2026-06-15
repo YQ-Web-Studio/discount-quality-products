@@ -47,7 +47,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-bold text-zinc-900 mb-4">1. Information About Us</h2>
             <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-6 space-y-3 text-sm text-zinc-600">
-              <p>This website is operated by <strong className="text-zinc-900">Discount Quality Products</strong>.</p>
+              <p>This website is operated by <strong className="text-zinc-900">FN Computers Ltd</strong>.</p>
               <p>
                 <span className="text-zinc-400 font-medium">Email:</span>{' '}
                 <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline">
@@ -60,11 +60,11 @@ export default function TermsPage() {
               </p>
               <p>
                 <span className="text-zinc-400 font-medium">Company Registration:</span>{' '}
-                07596933
+                05263375
               </p>
               <p>
                 <span className="text-zinc-400 font-medium">VAT Number:</span>{' '}
-                GB 150696600
+                GB 858231904
               </p>
             </div>
           </section>

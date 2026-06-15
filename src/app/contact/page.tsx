@@ -3,7 +3,7 @@ import ContactContent from "./ContactContent";
 export const metadata = {
   title: "Contact Us",
   description:
-    "Get in touch with Discount Quality Products Ltd. for sales enquiries, technical assistance, and post-purchase support. Call or email our UK team today.",
+    "Get in touch with FN Computers Ltd for sales enquiries, technical assistance, and post-purchase support. Call or email our UK team today.",
   alternates: { canonical: "https://www.discountproducts.co.uk/contact" },
 };
 

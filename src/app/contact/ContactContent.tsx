@@ -90,7 +90,7 @@ export default function ContactContent() {
               </div>
               <div className="flex flex-col pt-1">
                 <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">Headquarters</span>
-                <span className="text-base font-bold text-zinc-900">Discount Quality Products Ltd.</span>
+                <span className="text-base font-bold text-zinc-900">FN Computers Ltd.</span>
                 <span className="text-base text-zinc-600 mt-1">256 London Road</span>
                 <span className="text-base text-zinc-600">Westcliff-on-Sea, Essex</span>
                 <span className="text-base text-zinc-600">SS0 7JG</span>

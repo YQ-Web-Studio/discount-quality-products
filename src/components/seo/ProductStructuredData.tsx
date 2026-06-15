@@ -100,7 +100,7 @@ export function ProductStructuredData({ product, slug }: ProductStructuredDataPr
       itemCondition: "https://schema.org/NewCondition", // Assume catalog item new by default
       seller: {
         "@type": "Organization",
-        name: "Discount Quality Products Ltd.",
+        name: "FN Computers Ltd",
       },
       priceValidUntil: new Date(
         new Date().setFullYear(new Date().getFullYear() + 1)

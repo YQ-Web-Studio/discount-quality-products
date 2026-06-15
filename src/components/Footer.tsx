@@ -94,8 +94,8 @@ export function Footer() {
               ))}
             </ul>
             <div className="flex flex-col gap-2 text-[10px] font-medium uppercase tracking-widest text-zinc-600 border-t border-zinc-200 pt-6">
-              <p>VAT: GB 150696600</p>
-              <p>Company No: 07596933</p>
+              <p>VAT: GB 858231904</p>
+              <p>Company No: 05263375</p>
             </div>
           </div>
         </div>

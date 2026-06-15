@@ -97,7 +97,7 @@ export function ProductSchema({ product }: ProductSchemaProps) {
       itemCondition: "https://schema.org/NewCondition",
       seller: {
         "@type": "Organization",
-        name: "Discount Quality Products Ltd.",
+        name: "FN Computers Ltd",
       },
       priceValidUntil: new Date(
         new Date().setFullYear(new Date().getFullYear() + 1)

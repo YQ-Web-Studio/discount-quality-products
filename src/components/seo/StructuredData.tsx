@@ -5,7 +5,7 @@ export function StructuredData() {
     "@context": "https://schema.org",
     "@type": ["Organization", "OnlineStore"],
     name: "Discount Quality Products",
-    legalName: "Discount Quality Products Ltd.",
+    legalName: "FN Computers Ltd",
     description:
       "Your premier destination for premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.",
     url: "https://www.discountproducts.co.uk",
