@@ -27,7 +27,7 @@ export function ArticleSchema({ post }: ArticleSchemaProps) {
     ? post.excerpt.replace(/<[^>]*>/g, "").trim().slice(0, 300)
     : post.content?.replace(/<[^>]*>/g, "").trim().slice(0, 300) || "";
 
-  const authorName = post.author?.node?.name || "Discount Products Team";
+  const authorName = post.author?.node?.name || "Discount Quality Products Team";
 
   const featuredImg = post.featuredImage?.node;
 

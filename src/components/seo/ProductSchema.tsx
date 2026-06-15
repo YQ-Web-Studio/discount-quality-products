@@ -51,13 +51,13 @@ export function ProductSchema({ product }: ProductSchemaProps) {
     description:
       product.shortDescription?.replace(/<[^>]*>/g, "").slice(0, 500) ||
       product.description?.replace(/<[^>]*>/g, "").slice(0, 500) ||
-      `${product.name} from Discount Products.`,
+      `${product.name} from Discount Quality Products.`,
     url: productUrl,
     image: images.length > 0 ? images : [],
     sku: product.sku || String(product.databaseId),
     brand: {
       "@type": "Brand",
-      name: "Discount Products",
+      name: "Discount Quality Products",
     },
     ...(category && {
       category: category.name,
@@ -97,7 +97,7 @@ export function ProductSchema({ product }: ProductSchemaProps) {
       itemCondition: "https://schema.org/NewCondition",
       seller: {
         "@type": "Organization",
-        name: "Discount Products Ltd.",
+        name: "Discount Quality Products Ltd.",
       },
       priceValidUntil: new Date(
         new Date().setFullYear(new Date().getFullYear() + 1)

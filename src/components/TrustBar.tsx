@@ -19,7 +19,7 @@ const signals = [
   {
     icon: Award,
     title: "Expert Support",
-    description: "24/7 Global Assistance",
+    description: "Dedicated UK assistance",
   },
 ];
 

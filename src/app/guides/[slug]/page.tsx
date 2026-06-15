@@ -48,7 +48,7 @@ export async function generateMetadata(props: GuidePageProps): Promise<Metadata>
       siteName: "Discount Quality Products",
       publishedTime: post.date,
       modifiedTime: post.modified || post.date,
-      authors: [post.author?.node?.name || "Discount Products Team"],
+      authors: [post.author?.node?.name || "Discount Quality Products Team"],
       images: [
         {
           url: imageUrl,
@@ -144,7 +144,7 @@ export default async function GuidePage(props: GuidePageProps) {
   const title = decodeTitle(post.title);
   const safeHtml = sanitisePostContent(post.content || "");
   const mins = readingTime(post.content || "");
-  const authorName = post.author?.node?.name || "Discount Products Team";
+  const authorName = post.author?.node?.name || "Discount Quality Products Team";
   const category = post.categories?.nodes?.[0];
   const featuredImg = post.featuredImage?.node;
 

@@ -66,12 +66,12 @@ export async function generateMetadata(
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-  const description = `Buy ${decodedName} from Discount Products. Premium quality, competitive prices with free standard UK delivery.`;
+  const description = `Buy ${decodedName} from Discount Quality Products. Premium quality, competitive prices with free standard UK delivery on orders over £5.`;
   const absoluteUrl = `https://www.discountproducts.co.uk/products/${slug}`;
   const imageUrl = "/images/og-image.png"; // Fallback to main OG image for instant resolution
 
   return {
-    title: `${decodedName} | Discount Products`,
+    title: `${decodedName} | Discount Quality Products`,
     description,
     alternates: {
       canonical: absoluteUrl,
@@ -81,7 +81,7 @@ export async function generateMetadata(
       description,
       url: absoluteUrl,
       type: "website",
-      siteName: "Discount Products",
+      siteName: "Discount Quality Products",
       images: [{ url: imageUrl, width: 1200, height: 630, alt: decodedName }],
     },
     twitter: {
