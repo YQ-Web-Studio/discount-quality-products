@@ -43,6 +43,7 @@ export interface Product {
       altText?: string;
     };
   };
+  sku?: string;
   price?: string;
   regularPrice?: string;
   salePrice?: string;
@@ -112,6 +113,7 @@ export const PRODUCT_CARD_FRAGMENT = `
     }
 
     ... on SimpleProduct {
+      sku
       price
       regularPrice
       stockStatus
