@@ -5,7 +5,7 @@ import { ArrowLeft, Scale } from 'lucide-react';
 export const metadata: Metadata = {
   title: 'Terms & Conditions | Discount Quality Products',
   description:
-    'Read the Terms and Conditions of Sale governing purchases from Discount Quality Products (discountproducts.co.uk).',
+    'Read the Terms and Conditions of Sale governing purchases from Discount Quality Products (www.discountproducts.co.uk).',
   alternates: { canonical: 'https://www.discountproducts.co.uk/terms' },
 };
 
@@ -38,7 +38,7 @@ export default function TermsPage() {
       {/* Body */}
       <div className="mx-auto max-w-4xl px-6 sm:px-8 py-14 md:py-20">
         <p className="text-base text-zinc-600 leading-relaxed mb-12 border-l-4 border-primary/30 pl-5">
-          Welcome to Discount Quality Products (discountproducts.co.uk). These Terms and Conditions
+          Welcome to Discount Quality Products (www.discountproducts.co.uk). These Terms and Conditions
           govern your use of our website and the purchase of any goods from us. By placing an order,
           you agree to be bound by these terms.
         </p>

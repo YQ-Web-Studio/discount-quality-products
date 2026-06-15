@@ -236,10 +236,13 @@ export default async function ProductPage(props: ProductPageProps) {
                 {decodedName}
               </h1>
 
-              <div className="mt-5 flex items-baseline gap-4">
+              <div className="mt-5 flex items-baseline gap-4 flex-wrap">
                 <span className="text-3xl font-extrabold text-zinc-900">
                   {product.price || 'POA'}
                 </span>
+                {product.price && (
+                  <span className="text-xs font-semibold text-zinc-400 self-end pb-0.5">inc. VAT</span>
+                )}
                 {hasSale && (
                   <span className="text-xl font-medium text-zinc-400 line-through">
                     {product.regularPrice}

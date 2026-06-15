@@ -194,9 +194,14 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           {decodedTitle}
         </h2>
 
-        <p className="mt-2 text-base font-bold tracking-tight text-zinc-900">
-          {displayPrice}
-        </p>
+        <div className="mt-2 flex items-baseline gap-1.5">
+          <span className="text-base font-bold tracking-tight text-zinc-900">
+            {displayPrice}
+          </span>
+          {displayPrice !== 'N/A' && displayPrice !== 'POA' && (
+            <span className="text-[10px] font-semibold text-zinc-400">inc. VAT</span>
+          )}
+        </div>
       </div>
     </motion.div>
   );

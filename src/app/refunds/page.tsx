@@ -38,28 +38,29 @@ export default function RefundsPage() {
       {/* Body */}
       <div className="mx-auto max-w-4xl px-6 sm:px-8 py-14 md:py-20">
         <p className="text-base text-zinc-600 leading-relaxed mb-12 border-l-4 border-primary/30 pl-5">
-          Under the UK Consumer Contracts Regulations, you have the statutory right to cancel your
-          order and request a refund for any reason within a specific timeframe.
+          Under the UK Consumer Contracts Regulations, you have a statutory right to cancel your
+          order within 14 days. However, to provide our customers with peace of mind, Discount Quality Products
+          offers an extended <strong>30-day money-back guarantee</strong>.
         </p>
 
         <div className="space-y-10">
-          {/* 14-day highlight card */}
+          {/* 30-day highlight card */}
           <section>
-            <h2 className="text-lg font-bold text-zinc-900 mb-4">1. Your 14-Day Right to Cancel</h2>
+            <h2 className="text-lg font-bold text-zinc-900 mb-4">1. Your 30-Day Right to Return</h2>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 mb-4 flex items-start gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
                 <RotateCcw className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800 mb-1">14-Day Cooling-Off Period</p>
+                <p className="text-sm font-bold text-emerald-800 mb-1">30-Day Money-Back Guarantee</p>
                 <p className="text-sm text-emerald-700 leading-relaxed">
-                  You have the right to cancel your purchase within <strong>14 days</strong> from
+                  You have the right to cancel your purchase and return your items within <strong>30 days</strong> from
                   the day you receive the goods — no questions asked.
                 </p>
               </div>
             </div>
             <p className="text-base text-zinc-600 leading-relaxed">
-              To exercise your right to cancel, you must inform us of your decision by a clear
+              To exercise your right to return, you must inform us of your decision by a clear
               statement via email at{' '}
               <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
                 sales@fncomputers.com
@@ -68,7 +69,7 @@ export default function RefundsPage() {
               <Link href="/contact" className="text-primary hover:underline font-semibold">
                 Contact Page
               </Link>{' '}
-              before the 14-day period expires.
+              before the 30-day period expires.
             </p>
           </section>
 

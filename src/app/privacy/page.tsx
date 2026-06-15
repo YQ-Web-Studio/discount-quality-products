@@ -102,7 +102,7 @@ export default function PrivacyPage() {
           Discount Quality Products (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is
           committed to protecting your privacy. This Privacy Policy describes how your personal
           information is collected, used, and shared when you visit or make a purchase from
-          discountproducts.co.uk (the &ldquo;Site&rdquo;).
+          www.discountproducts.co.uk (the &ldquo;Site&rdquo;).
         </p>
 
         <div className="space-y-10">
