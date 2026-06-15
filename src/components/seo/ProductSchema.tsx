@@ -38,48 +38,11 @@ export function ProductSchema({ product }: ProductSchemaProps) {
 
   const category = product.productCategories?.nodes?.[0];
 
-  // Ratings & Reviews Integration with deterministic SEO fallback
-  let finalRating = product.averageRating;
-  let finalReviewCount = product.reviewCount;
-  let finalReviews = product.reviews?.nodes || [];
-
-  if (!finalRating || finalRating === 0 || !finalReviewCount || finalReviewCount === 0) {
-    // Deterministic fallback rating based on slug hash for products lacking active reviews
-    let hash = 0;
-    const slug = product.slug || "";
-    for (let i = 0; i < slug.length; i++) {
-      hash = slug.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const absHash = Math.abs(hash);
-    finalRating = 4.5 + (absHash % 5) * 0.1; // 4.5 to 4.9 stars
-    finalReviewCount = 5 + (absHash % 21); // 5 to 25 reviews
-    
-    const authors = ["A. Smith", "D. Jones", "M. Taylor", "J. Brown", "C. Wilson"];
-    const comments = [
-      "Brilliant quality, extremely fast standard UK delivery!",
-      "Very pleased with the purchase, outstanding value for money.",
-      "Top tier items, exactly as described. Fully recommended.",
-      "Outstanding customer care and superb products.",
-      "Excellent hardware quality, will definitely shop here again."
-    ];
-
-    finalReviews = [
-      {
-        id: `f1-${absHash}`,
-        author: { node: { name: authors[absHash % authors.length] } },
-        content: comments[absHash % comments.length],
-        date: new Date(Date.now() - (absHash % 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        rating: Math.round(finalRating)
-      },
-      {
-        id: `f2-${absHash}`,
-        author: { node: { name: authors[(absHash + 1) % authors.length] } },
-        content: comments[(absHash + 1) % comments.length],
-        date: new Date(Date.now() - ((absHash % 30) + 3) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        rating: Math.floor(finalRating)
-      }
-    ];
-  }
+  // Only use real reviews from WooCommerce — never fabricate reviews or ratings.
+  // Fake structured data reviews that don't match visually rendered content violate
+  // Google's Merchant Center Misrepresentation policy.
+  const hasRealRating = product.averageRating && product.averageRating > 0 && product.reviewCount && product.reviewCount > 0;
+  const realReviews = product.reviews?.nodes || [];
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -99,28 +62,32 @@ export function ProductSchema({ product }: ProductSchemaProps) {
     ...(category && {
       category: category.name,
     }),
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: finalRating.toFixed(1),
-      reviewCount: finalReviewCount,
-      bestRating: "5",
-      worstRating: "1"
-    },
-    review: finalReviews.map(r => ({
-      "@type": "Review",
-      author: {
-        "@type": "Person",
-        name: r.author?.node?.name || "Customer"
-      },
-      datePublished: r.date ? r.date.split('T')[0] : new Date().toISOString().split('T')[0],
-      reviewBody: r.content?.replace(/<[^>]*>/g, "").trim() || "Great quality product.",
-      reviewRating: {
-        "@type": "Rating",
-        ratingValue: String(r.rating || 5),
+    ...(hasRealRating && {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: product.averageRating!.toFixed(1),
+        reviewCount: product.reviewCount,
         bestRating: "5",
         worstRating: "1"
-      }
-    })),
+      },
+    }),
+    ...(realReviews.length > 0 && {
+      review: realReviews.map(r => ({
+        "@type": "Review",
+        author: {
+          "@type": "Person",
+          name: r.author?.node?.name || "Customer"
+        },
+        datePublished: r.date ? r.date.split('T')[0] : new Date().toISOString().split('T')[0],
+        reviewBody: r.content?.replace(/<[^>]*>/g, "").trim() || "Great quality product.",
+        reviewRating: {
+          "@type": "Rating",
+          ratingValue: String(r.rating || 5),
+          bestRating: "5",
+          worstRating: "1"
+        }
+      })),
+    }),
     offers: {
       "@type": "Offer",
       url: productUrl,
