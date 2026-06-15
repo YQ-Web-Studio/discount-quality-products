@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Terms & Conditions | Discount Quality Products',
   description:
     'Read the Terms and Conditions of Sale governing purchases from Discount Quality Products (discountproducts.co.uk).',
-  alternates: { canonical: 'https://discountqualityproducts.co.uk/terms' },
+  alternates: { canonical: 'https://www.discountproducts.co.uk/terms' },
 };
 
 export default function TermsPage() {

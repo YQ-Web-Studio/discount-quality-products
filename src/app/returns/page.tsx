@@ -4,7 +4,7 @@ export const metadata = {
   title: "Returns & Refunds",
   description:
     "Look up your order and submit a return request online. We honour our 30-day money-back guarantee for all purchases.",
-  alternates: { canonical: "https://discountqualityproducts.co.uk/returns" },
+  alternates: { canonical: "https://www.discountproducts.co.uk/returns" },
 };
 
 export default function ReturnsPage() {

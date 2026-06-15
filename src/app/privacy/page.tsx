@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Privacy Policy | Discount Quality Products',
   description:
     'Learn how Discount Quality Products collects, uses, and protects your personal information in accordance with UK GDPR and the Data Protection Act.',
-  alternates: { canonical: 'https://discountqualityproducts.co.uk/privacy' },
+  alternates: { canonical: 'https://www.discountproducts.co.uk/privacy' },
 };
 
 const sections = [

@@ -1,0 +1,3307 @@
+Found 66 snippets:
+
+==========================================
+ID: 1 | Title: Make upload filenames lowercase
+Active: False | Scope: global
+Code:
+add_filter( 'sanitize_file_name', 'mb_strtolower' );
+==========================================
+
+==========================================
+ID: 2 | Title: Disable admin bar
+Active: False | Scope: front-end
+Code:
+add_action( 'wp', function () {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		show_admin_bar( false );
+	}
+} );
+==========================================
+
+==========================================
+ID: 3 | Title: Allow smilies
+Active: False | Scope: global
+Code:
+add_filter( 'widget_text', 'convert_smilies' );
+add_filter( 'the_title', 'convert_smilies' );
+add_filter( 'wp_title', 'convert_smilies' );
+add_filter( 'get_bloginfo', 'convert_smilies' );
+==========================================
+
+==========================================
+ID: 4 | Title: Current year
+Active: False | Scope: content
+Code:
+<?php echo date( 'Y' ); ?>
+==========================================
+
+==========================================
+ID: 5 | Title: Custom Order Status - Return Requested
+Active: True | Scope: global
+Code:
+// Register Custom Order Status for Returns
+add_action( 'init', 'register_custom_order_status_return_req' );
+function register_custom_order_status_return_req() {
+    register_post_status( 'wc-return-req', array(
+        'label'                     => 'Return Requested',
+        'public'                    => true,
+        'show_in_admin_status_list' => true,
+        'show_in_admin_all_list'    => true,
+        'exclude_from_search'       => false,
+        'label_count'               => _n_noop( 'Return Requested <span class="count">(%s)</span>', 'Return Requested <span class="count">(%s)</span>' )
+    ) );
+}
+
+// Add Custom Status to WooCommerce Dropdowns
+add_filter( 'wc_order_statuses', 'add_custom_order_status_return_req_to_dropdown' );
+function add_custom_order_status_return_req_to_dropdown( $order_statuses ) {
+    $new_order_statuses = array();
+    foreach ( $order_statuses as $key => $status ) {
+        $new_order_statuses[ $key ] = $status;
+        if ( 'wc-processing' === $key ) {
+            $new_order_statuses['wc-return-req'] = 'Return Requested';
+        }
+    }
+    return $new_order_statuses;
+}
+==========================================
+
+==========================================
+ID: 6 | Title: eBay 10% Import Discount
+Active: False | Scope: global
+Code:
+add_filter( 'woocommerce_product_import_process_item_data', function( $data, $parsed_data ) {
+	if ( ! is_array( $data ) ) {
+		return $data;
+	}
+
+	foreach ( array( 'regular_price', 'price' ) as $field ) {
+		if ( ! isset( $data[ $field ] ) || $data[ $field ] === '' ) {
+			continue;
+		}
+
+		$original_price = (float) $data[ $field ];
+
+		if ( $original_price <= 0 ) {
+			continue;
+		}
+
+		$discounted_price = $original_price * 0.9;
+
+		// Save the reduced price back into the import data.
+		$data[ $field ] = wc_format_decimal( $discounted_price, wc_get_price_decimals() );
+	}
+
+	return $data;
+}, 10, 2 );
+
+==========================================
+
+==========================================
+ID: 7 | Title: Wishlist REST API Endpoint
+Active: True | Scope: global
+Code:
+/**
+ * Custom REST API Endpoint for Headless Wishlist
+ * 
+ * This snippet registers a custom route to manage a product wishlist
+ * natively in the WordPress user_meta.
+ * 
+ * Endpoint: /wp-json/custom/v1/wishlist
+ * Methods: GET, POST
+ */
+
+add_action('rest_api_init', function () {
+    register_rest_route('custom/v1', '/register', array(
+        'methods'             => 'POST',
+        'callback'            => 'handle_user_registration_request',
+        'permission_callback' => '__return_true',
+    ));
+
+    register_rest_route('custom/v1', '/wishlist', array(
+        'methods'             => array('GET', 'POST'),
+        'callback'            => 'handle_wishlist_request',
+        'permission_callback' => function () {
+            // Ensure the user is authenticated
+            return is_user_logged_in();
+        },
+    ));
+});
+
+/**
+ * Handle public user registration for the headless storefront.
+ *
+ * Expected payload:
+ * - name
+ * - email
+ * - password
+ */
+function handle_user_registration_request($request) {
+    $params = $request->get_json_params();
+
+    $name = isset($params['name']) ? sanitize_text_field($params['name']) : '';
+    $email = isset($params['email']) ? sanitize_email($params['email']) : '';
+    $password = isset($params['password']) ? (string) $params['password'] : '';
+
+    if (!$name || !$email || !$password) {
+        return new WP_Error('invalid_registration_payload', 'Name, email and password are required.', array('status' => 400));
+    }
+
+    if (!is_email($email)) {
+        return new WP_Error('invalid_email', 'Please enter a valid email address.', array('status' => 400));
+    }
+
+    if (email_exists($email)) {
+        return new WP_Error('email_exists', 'An account already exists for that email address.', array('status' => 409));
+    }
+
+    $username_base = sanitize_user(current(explode('@', $email)), true);
+    if (!$username_base) {
+        $username_base = 'customer';
+    }
+
+    $username = $username_base;
+    $suffix = 1;
+
+    while (username_exists($username)) {
+        $username = $username_base . $suffix;
+        $suffix++;
+    }
+
+    $user_id = wp_insert_user(array(
+        'user_login'   => $username,
+        'user_pass'    => $password,
+        'user_email'   => $email,
+        'display_name' => $name,
+        'nickname'     => $name,
+        'role'         => 'subscriber',
+    ));
+
+    if (is_wp_error($user_id)) {
+        return new WP_Error('registration_failed', $user_id->get_error_message(), array('status' => 500));
+    }
+
+    return rest_ensure_response(array(
+        'success' => true,
+        'user_id' => $user_id,
+        'message' => 'Account created successfully.',
+    ));
+}
+
+/**
+ * Handle GET and POST requests for the wishlist.
+ * 
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response|WP_Error
+ */
+function handle_wishlist_request($request) {
+    $user_id = get_current_user_id();
+    
+    // Safety check (redundant due to permission_callback but good practice)
+    if (!$user_id) {
+        return new WP_Error('not_logged_in', 'User must be logged in to manage wishlist.', array('status' => 401));
+    }
+
+    // Retrieve current wishlist (array of product IDs)
+    $wishlist = get_user_meta($user_id, 'wishlist_products', true);
+    
+    // Ensure it's an array (handles first-time setup or empty meta)
+    if (!is_array($wishlist)) {
+        $wishlist = array();
+    }
+
+    // Handle POST request (Add or Remove)
+    if ($request->get_method() === 'POST') {
+        $params = $request->get_json_params();
+        $product_id = isset($params['product_id']) ? (int) $params['product_id'] : (int) $request->get_param('product_id');
+
+        if (!$product_id) {
+            return new WP_Error('invalid_product_id', 'A valid product_id is required.', array('status' => 400));
+        }
+
+        if (in_array($product_id, $wishlist)) {
+            // Remove the product ID
+            $wishlist = array_values(array_diff($wishlist, array($product_id)));
+            $action = 'removed';
+        } else {
+            // Add the product ID
+            $wishlist[] = $product_id;
+            $action = 'added';
+        }
+
+        // Save back to user_meta
+        update_user_meta($user_id, 'wishlist_products', $wishlist);
+        
+        return rest_ensure_response(array(
+            'success' => true,
+            'action'  => $action,
+            'data'    => $wishlist
+        ));
+    }
+
+    // Handle GET request (Retrieve)
+    return rest_ensure_response(array(
+        'success' => true,
+        'data'    => $wishlist
+    ));
+}
+
+==========================================
+
+==========================================
+ID: 8 | Title: Custom Account Delete Endpoint
+Active: True | Scope: global
+Code:
+/**
+ * Plugin Name: Custom Account Delete Endpoint
+ * Description: Adds a secure endpoint for deleting the current user account.
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+add_action('rest_api_init', function () {
+    register_rest_route('custom/v1', '/delete-account', array(
+        'methods'  => 'POST',
+        'callback' => 'dq_delete_current_account',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+        'args' => array(
+            'current_password' => array(
+                'required' => true,
+                'type'     => 'string',
+            ),
+        ),
+    ));
+});
+
+function dq_delete_current_account(WP_REST_Request $request) {
+    $user = wp_get_current_user();
+
+    if (!$user || empty($user->ID)) {
+        return new WP_REST_Response(array(
+            'error' => 'Please sign in again.',
+        ), 401);
+    }
+
+    $current_password = (string) $request->get_param('current_password');
+
+    if ($current_password === '') {
+        return new WP_REST_Response(array(
+            'error' => 'Please enter your current password.',
+        ), 400);
+    }
+
+    if (!wp_check_password($current_password, $user->user_pass, $user->ID)) {
+        return new WP_REST_Response(array(
+            'error' => 'Your current password does not match our records.',
+        ), 403);
+    }
+
+    if (!function_exists('wp_delete_user')) {
+        require_once ABSPATH . 'wp-admin/includes/user.php';
+    }
+
+    $deleted = wp_delete_user($user->ID);
+
+    if (!$deleted) {
+        return new WP_REST_Response(array(
+            'error' => 'We could not delete your account right now.',
+        ), 500);
+    }
+
+    return new WP_REST_Response(array(
+        'success' => true,
+        'message' => 'Your account has been deleted.',
+    ), 200);
+}
+==========================================
+
+==========================================
+ID: 9 | Title:  User Self-Deletion
+Active: True | Scope: global
+Code:
+add_action('rest_api_init', function () {
+    register_rest_route('custom/v1', '/delete-account', array(
+        'methods' => 'POST',
+        'callback' => 'custom_user_self_deletion',
+        'permission_callback' => 'is_user_logged_in',
+    ));
+});
+
+function custom_user_self_deletion($request) {
+    $user = wp_get_current_user();
+    $params = $request->get_json_params();
+    $current_password = isset($params['current_password']) ? $params['current_password'] : '';
+
+    if (!wp_check_password($current_password, $user->user_pass, $user->ID)) {
+        return new WP_Error('incorrect_password', 'The password you entered is incorrect.', array('status' => 403));
+    }
+
+    require_once(ABSPATH . 'wp-admin/includes/user.php');
+    if (wp_delete_user($user->ID)) {
+        return rest_ensure_response(array('success' => true));
+    }
+    return new WP_Error('delete_failed', 'Account could not be deleted.', array('status' => 500));
+}
+
+==========================================
+
+==========================================
+ID: 10 | Title: Manage Payment Tokens
+Active: True | Scope: global
+Code:
+add_action('rest_api_init', function () {
+    // List Tokens
+    register_rest_route('custom/v1', '/payment-tokens', array(
+        'methods' => 'GET',
+        'callback' => 'custom_get_payment_tokens',
+        'permission_callback' => 'is_user_logged_in',
+    ));
+
+    // Delete Token
+    register_rest_route('custom/v1', '/payment-tokens/(?P<id>\d+)', array(
+        'methods' => 'DELETE',
+        'callback' => 'custom_delete_payment_token',
+        'permission_callback' => 'is_user_logged_in',
+        'args' => array(
+            'id' => array('validate_callback' => function($param) { return is_numeric($param); })
+        ),
+    ));
+});
+
+function custom_get_payment_tokens() {
+    $user_id = get_current_user_id();
+    $tokens = WC_Payment_Tokens::get_customer_tokens($user_id);
+    $formatted_tokens = array();
+
+    foreach ($tokens as $token) {
+        if ($token->get_type() === 'CC') {
+            $formatted_tokens[] = array(
+                'id' => $token->get_id(),
+                'brand' => $token->get_card_type(),
+                'last4' => $token->get_last4(),
+                'expiry' => $token->get_expiry_month() . '/' . $token->get_expiry_year()
+            );
+        }
+    }
+    return rest_ensure_response($formatted_tokens);
+}
+
+function custom_delete_payment_token($request) {
+    $user_id = get_current_user_id();
+    $token_id = $request['id'];
+    $token = WC_Payment_Tokens::get($token_id);
+
+    if (!$token || $token->get_user_id() !== $user_id) {
+        return new WP_Error('not_found', 'Payment token not found.', array('status' => 404));
+    }
+
+    if (WC_Payment_Tokens::delete($token_id)) {
+        return rest_ensure_response(array('success' => true));
+    }
+    return new WP_Error('delete_failed', 'Could not delete token.', array('status' => 500));
+}
+
+==========================================
+
+==========================================
+ID: 11 | Title: Save Payment Method
+Active: True | Scope: global
+Code:
+add_action('rest_api_init', function () {
+    // 1. Endpoint to generate a SetupIntent
+    register_rest_route('custom/v1', '/create-setup-intent', array(
+        'methods' => 'GET',
+        'callback' => 'custom_create_setup_intent',
+        'permission_callback' => 'is_user_logged_in'
+    ));
+
+    // 2. Endpoint to save the Payment Method
+    register_rest_route('custom/v1', '/add-payment-method', array(
+        'methods' => 'POST',
+        'callback' => 'custom_add_payment_method',
+        'permission_callback' => 'is_user_logged_in'
+    ));
+});
+
+function custom_create_setup_intent($request) {
+    $user_id = get_current_user_id();
+    
+    if (!class_exists('WC_Stripe_API')) {
+        return new WP_Error('stripe_missing', 'WooCommerce Stripe plugin is not active.', array('status' => 500));
+    }
+
+    // Try to get existing Stripe Customer ID
+    $customer_id = get_user_meta($user_id, '_stripe_customer_id', true);
+    $user = get_userdata($user_id);
+
+    try {
+        if (!$customer_id) {
+            // Create a new Stripe Customer
+            $customer = WC_Stripe_API::request(array(
+                'email' => $user->user_email,
+                'name'  => $user->first_name . ' ' . $user->last_name,
+            ), 'customers');
+            
+            if (!empty($customer->id)) {
+                $customer_id = $customer->id;
+                update_user_meta($user_id, '_stripe_customer_id', $customer_id);
+            } else {
+                return new WP_Error('stripe_error', 'Failed to create customer.', array('status' => 500));
+            }
+        }
+
+        // Create Setup Intent
+        $setup_intent = WC_Stripe_API::request(array(
+            'customer' => $customer_id,
+            'payment_method_types' => array('card'),
+        ), 'setup_intents');
+
+        return rest_ensure_response(array(
+            'client_secret' => $setup_intent->client_secret
+        ));
+
+    } catch (Exception $e) {
+        return new WP_Error('stripe_error', $e->getMessage(), array('status' => 500));
+    }
+}
+
+// REGISTER ADD PAYMENT METHOD ROUTE
+add_action('rest_api_init', function () {
+    register_rest_route('custom/v1', '/add-payment-method', array(
+        'methods' => 'POST',
+        'callback' => 'custom_add_payment_method',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        }
+    ));
+});
+
+function custom_add_payment_method($request) {
+    $user_id = get_current_user_id();
+    $payment_method_id = $request->get_param('payment_method_id');
+
+    if (empty($payment_method_id)) {
+        return new WP_Error('missing_param', 'Payment method ID is required.', array('status' => 400));
+    }
+
+    if (!class_exists('WC_Stripe_API')) {
+        return new WP_Error('stripe_missing', 'WooCommerce Stripe plugin is not active.', array('status' => 500));
+    }
+
+    try {
+        // Retrieve the Payment Method from Stripe
+        $payment_method = WC_Stripe_API::request(array(), "payment_methods/{$payment_method_id}", 'GET');
+        
+        if (empty($payment_method->id) || $payment_method->type !== 'card') {
+            return new WP_Error('invalid_method', 'Invalid payment method.', array('status' => 400));
+        }
+
+        // Try to get existing Stripe Customer ID
+        $customer_id = get_user_meta($user_id, '_stripe_customer_id', true);
+        
+        // If no customer ID exists, create one
+        if (!$customer_id) {
+            $user = get_userdata($user_id);
+            $customer = WC_Stripe_API::request(array(
+                'email' => $user->user_email,
+                'name'  => $user->first_name . ' ' . $user->last_name,
+            ), 'customers', 'POST');
+            
+            if (!empty($customer->id)) {
+                $customer_id = $customer->id;
+                update_user_meta($user_id, '_stripe_customer_id', $customer_id);
+            } else {
+                return new WP_Error('stripe_error', 'Failed to create Stripe customer.', array('status' => 500));
+            }
+        }
+
+        // ATTACH THE PAYMENT METHOD TO THE CUSTOMER
+        $attach_response = WC_Stripe_API::request(array(
+            'customer' => $customer_id
+        ), "payment_methods/{$payment_method_id}/attach", 'POST');
+
+        if (isset($attach_response->error)) {
+            return new WP_Error('stripe_attach_error', $attach_response->error->message, array('status' => 500));
+        }
+
+        // Create WooCommerce Payment Token
+        $token = new WC_Payment_Token_CC();
+        $token->set_token($payment_method->id);
+        $token->set_gateway_id('stripe');
+        $token->set_card_type(strtolower($payment_method->card->brand));
+        $token->set_last4($payment_method->card->last4);
+        $token->set_expiry_month($payment_method->card->exp_month);
+        $token->set_expiry_year($payment_method->card->exp_year);
+        $token->set_user_id($user_id);
+        
+        // Save the token
+        if (!$token->save()) {
+            return new WP_Error('db_error', 'Failed to save token to database.', array('status' => 500));
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'token_id' => $token->get_id()
+        ));
+
+    } catch (Exception $e) {
+        return new WP_Error('stripe_error', $e->getMessage(), array('status' => 500));
+    }
+}
+
+==========================================
+
+==========================================
+ID: 12 | Title: Prevent multiple images
+Active: False | Scope: global
+Code:
+/**
+ * THE INODE SHIELD: Protect Bluehost storage from the 25k product flood.
+ * Professional Headless Configuration.
+ */
+
+// 1. Disable all unnecessary image sizes
+add_filter('intermediate_image_sizes_advanced', function ($sizes) {
+    // Keep 'thumbnail' for the WP Admin, remove everything else.
+    // Next.js handles all other resizing on-the-fly.
+    unset($sizes['medium']);
+    unset($sizes['medium_large']);
+    unset($sizes['large']);
+    unset($sizes['1536x1536']);
+    unset($sizes['2048x2048']);
+    return $sizes;
+});
+
+// 2. Prevent WordPress from creating "scaled" versions of large eBay images
+add_filter('big_image_size_threshold', '__return_false');
+
+// 3. Register the MD5 Hash Meta Key for our Ingestion Engine
+// This allows engine.py to check if an image is already in the catalogue.
+add_action('rest_api_init', function () {
+    register_rest_meta('attachment', '_ingestion_md5', [
+        'type' => 'string',
+        'single' => true,
+        'show_in_rest' => true,
+    ]);
+});
+==========================================
+
+==========================================
+ID: 13 | Title: Prevent multiple images
+Active: False | Scope: global
+Code:
+/**
+ * THE INODE SHIELD: Protect Bluehost storage from the 25k product flood.
+ * Professional Headless Configuration.
+ */
+
+// 1. Disable all unnecessary image sizes
+add_filter('intermediate_image_sizes_advanced', function ($sizes) {
+    // Keep 'thumbnail' for WP Admin, remove everything else.
+    // Next.js handles all other resizing on-the-fly.
+    unset($sizes['medium']);
+    unset($sizes['medium_large']);
+    unset($sizes['large']);
+    unset($sizes['1536x1536']);
+    unset($sizes['2048x2048']);
+    return $sizes;
+});
+
+// 2. Prevent WordPress from creating "scaled" versions of large eBay images
+add_filter('big_image_size_threshold', '__return_false');
+
+// 3. Register the MD5 Hash Meta Key for our Ingestion Engine
+// FIX: Using register_meta() instead of the non-existent register_rest_meta()
+add_action('rest_api_init', function () {
+    register_meta('post', '_ingestion_md5', [
+        'type'         => 'string',
+        'single'       => true,
+        'show_in_rest' => true,
+    ]);
+});
+==========================================
+
+==========================================
+ID: 14 | Title: REST API: Enable Media Hash Filtering
+Active: True | Scope: global
+Code:
+/**
+ * THE INODE SHIELD & INGESTION CONFIGURATION
+ * Protect Bluehost storage from the 25k product flood.
+ * Professional Headless Configuration.
+ */
+
+// 1. Disable ALL automatically generated image sizes (WP Core + WooCommerce)
+add_filter('intermediate_image_sizes_advanced', function($sizes) {
+    return array();
+});
+
+// 2. Prevent WordPress from creating "scaled" versions of large eBay images
+add_filter('big_image_size_threshold', '__return_false');
+
+// 3. Allow the REST API to filter media by MD5 hash
+add_filter('rest_attachment_query', function($args, $request) {
+    if ($hash = $request->get_param('md5_hash')) {
+        $args['meta_key'] = '_ingestion_md5';
+        $args['meta_value'] = $hash;
+    }
+    return $args;
+}, 10, 2);
+
+// 4. Register the MD5 Hash Meta Key for our Ingestion Engine with explicit REST access
+add_action('init', function() {
+    register_meta('post', '_ingestion_md5', array(
+        'object_subtype' => 'attachment',
+        'type'           => 'string',
+        'description'    => 'MD5 Hash for Image Deduplication',
+        'single'         => true,
+        'show_in_rest'   => true, 
+        'auth_callback'  => function() {
+            return current_user_can( 'upload_files' ); 
+        }
+    ));
+});
+==========================================
+
+==========================================
+ID: 15 | Title: Global Attribute Filter Interceptor
+Active: True | Scope: global
+Code:
+
+/**
+ * Title: WooCommerce REST API Global Attribute Filter Interceptor
+ * Description: Intercepts Next.js API product requests via pre_get_posts to allow multi-select taxonomy filtering.
+ */
+
+add_action( 'pre_get_posts', function( $query ) {
+    // Only target the main query on WooCommerce REST API products endpoint
+    if ( ! is_admin() && strpos( $_SERVER['REQUEST_URI'], '/wp-json/wc/v3/products' ) !== false ) {
+        
+        $tax_query = $query->get( 'tax_query' );
+        if ( ! is_array( $tax_query ) ) {
+            $tax_query = array();
+        }
+        
+        $has_attribute_filter = false;
+        
+        // Loop through $_GET parameters directly
+        foreach ( $_GET as $key => $value ) {
+            if ( strpos( $key, 'pa_' ) === 0 && ! empty( $value ) ) {
+                $terms = array_map( 'trim', explode( ',', $value ) );
+                
+                $tax_query[] = array(
+                    'taxonomy' => $key,
+                    'field'    => 'name',
+                    'terms'    => $terms,
+                    'operator' => 'IN',
+                );
+                
+                $has_attribute_filter = true;
+            }
+        }
+        
+        if ( $has_attribute_filter ) {
+            if ( count( $tax_query ) > 1 ) {
+                $tax_query['relation'] = 'AND';
+            }
+            $query->set( 'tax_query', $tax_query );
+        }
+    }
+} );
+
+==========================================
+
+==========================================
+ID: 16 | Title: Password Reset
+Active: True | Scope: global
+Code:
+/**
+ * 1. The Headless Reset Hijack
+ * Intercepts the reset process at Priority 1. Generates the custom Next.js link,
+ * sends the email manually, and kills the default WordPress/WooCommerce flows.
+ */
+add_filter( 'retrieve_password_message', 'dqp_hijack_password_reset', 1, 4 );
+function dqp_hijack_password_reset( $message, $key, $user_login, $user_data ) {
+    $storefront_url = 'http://localhost:3000';
+    $reset_link = $storefront_url . '/reset-password?key=' . rawurlencode( $key ) . '&login=' . rawurlencode( $user_login );
+    
+    $custom_message = "Someone has requested a password reset for your account.\r\n\r\n";
+    $custom_message .= "To reset your password, visit the following link:\r\n\r\n";
+    $custom_message .= $reset_link . "\r\n\r\n";
+    $custom_message .= "If this was a mistake, just ignore this email and nothing will happen.\r\n";
+    
+    wp_mail( $user_data->user_email, 'Password Reset Request', $custom_message );
+    
+    return false; // Return false to completely kill the default process
+}
+
+/**
+ * 2. Headless Password Reset API Endpoint
+ * Accepts secure JSON payloads from Next.js, verifying the reset key 
+ * and updating the password directly without any HTML forms or cookies.
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/reset-password', array(
+        'methods' => 'POST',
+        'callback' => function( $request ) {
+            $key = sanitize_text_field( $request->get_param( 'key' ) );
+            $login = sanitize_text_field( $request->get_param( 'login' ) );
+            $password = $request->get_param( 'password' );
+            
+            $user = check_password_reset_key( $key, $login );
+            if ( is_wp_error( $user ) ) {
+                return new WP_REST_Response( array( 
+                    'success' => false, 
+                    'message' => wp_strip_all_tags( $user->get_error_message() ) 
+                ), 400 );
+            }
+            
+            reset_password( $user, $password );
+            return new WP_REST_Response( array( 'success' => true ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+
+==========================================
+
+==========================================
+ID: 17 | Title: Fix Headless GraphQL Redirects
+Active: True | Scope: global
+Code:
+add_action('template_redirect', 'disable_headless_canonical_redirects', 1);
+function disable_headless_canonical_redirects() {
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? strtolower($_SERVER['REQUEST_URI']) : '';
+    
+    if (str_contains($request_uri, 'graphql') || str_contains($request_uri, 'wp-json')) {
+        // Disables the core redirection engine for this request
+        remove_action('template_redirect', 'redirect_canonical');
+    }
+}
+==========================================
+
+==========================================
+ID: 18 | Title: Safe Auto-Delete Product Images (Hash & Variant Aware)
+Active: True | Scope: global
+Code:
+/**
+ * Snippet Title: Safe Auto-Delete Product Images (Hash & Variant Aware)
+ * Description: Deletes attachment files from disk/Cloudflare R2 only if no other products share the same asset hash.
+ */
+
+add_action('before_delete_post', 'dqp_safe_delete_product_images', 10, 1);
+
+function dqp_safe_delete_product_images($post_id) {
+    // Only execute if the post type being deleted is a WooCommerce product
+    if (get_post_type($post_id) !== 'product') {
+        return;
+    }
+
+    $image_ids = array();
+
+    // 1. Fetch the primary Featured Image ID
+    $featured_id = get_post_thumbnail_id($post_id);
+    if ($featured_id) {
+        $image_ids[] = intval($featured_id);
+    }
+
+    // 2. Fetch the Product Gallery image IDs
+    $gallery = get_post_meta($post_id, '_product_image_gallery', true);
+    if (!empty($gallery)) {
+        $gallery_ids = explode(',', $gallery);
+        $image_ids = array_merge($image_ids, array_filter(array_map('intval', $gallery_ids)));
+    }
+
+    // Deduplicate the array in case an image is listed in both featured and gallery
+    $image_ids = array_unique($image_ids);
+
+    // 3. Loop through each image and verify relationships before deleting
+    foreach ($image_ids as $attachment_id) {
+        if ($attachment_id <= 0) {
+            continue;
+        }
+
+        // If the image hash is shared by any other product, skip deletion
+        if (dqp_is_image_shared_by_others($attachment_id, $post_id)) {
+            continue; 
+        }
+
+        // Safe to delete permanently—bypasses the trash bin
+        // Media Cloud will intercept this hook and instantly delete the file from Cloudflare R2
+        wp_delete_attachment($attachment_id, true);
+    }
+}
+
+/**
+ * Helper function to query the database for shared image references
+ */
+function dqp_is_image_shared_by_others($attachment_id, $current_product_id) {
+    global $wpdb;
+
+    // Check A: Is this attachment ID used as a featured image (_thumbnail_id) on any OTHER product?
+    $featured_count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = '_thumbnail_id' AND meta_value = %d AND post_id != %d",
+        $attachment_id,
+        $current_product_id
+    ));
+
+    if (intval($featured_count) > 0) {
+        return true;
+    }
+
+    // Check B: Is this attachment ID listed inside the gallery string (_product_image_gallery) of any OTHER product?
+    $gallery_count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = '_product_image_gallery' AND meta_value LIKE %s AND post_id != %d",
+        '%' . $wpdb->esc_like($attachment_id) . '%',
+        $current_product_id
+    ));
+
+    if (intval($gallery_count) > 0) {
+        return true;
+    }
+
+    return false; // No dependencies found; the asset is safe to clear out completely
+}
+==========================================
+
+==========================================
+ID: 19 | Title: CTX Feed - Headless Frontend URL Rewrite
+Active: True | Scope: global
+Code:
+/**
+ * Cleanly route all product links to the headless frontend domain
+ */
+add_filter( 'woocommerce_product_get_permalink', 'dqp_headless_permalink', 999, 2 );
+add_filter( 'post_type_link', 'dqp_headless_post_permalink', 999, 2 );
+
+function dqp_headless_permalink( $permalink, $product ) {
+    return str_replace(
+        'https://admin.discountproducts.co.uk/product/',
+        'https://www.discountproducts.co.uk/products/',
+        $permalink
+    );
+}
+
+function dqp_headless_post_permalink( $permalink, $post ) {
+    if ( is_object($post) && $post->post_type === 'product' ) {
+        return str_replace(
+            'https://admin.discountproducts.co.uk/product/',
+            'https://www.discountproducts.co.uk/products/',
+            $permalink
+        );
+    }
+    return $permalink;
+}
+==========================================
+
+==========================================
+ID: 20 | Title: Silence WP 6.7 Translation Notices
+Active: True | Scope: global
+Code:
+add_filter( 'doing_it_wrong_trigger_error', function( $result, $function_name ) {
+    if ( $function_name === '_load_textdomain_just_in_time' ) {
+        return false;
+    }
+    return $result;
+}, 10, 2 );
+==========================================
+
+==========================================
+ID: 21 | Title: Force Checkout Emails
+Active: False | Scope: global
+Code:
+/**
+ * Force WooCommerce to send customer email notifications for headless REST API orders
+ * This ensures WP Mail SMTP and Resend catch PayPal transactions successfully.
+ */
+add_action( 'woocommerce_order_status_pending_to_processing_notification', 'wp_headless_force_rest_email', 10, 2 );
+add_action( 'woocommerce_order_status_failed_to_processing_notification', 'wp_headless_force_rest_email', 10, 2 );
+
+function wp_headless_force_rest_email( $order_id, $order ) {
+    // Access the core WooCommerce mailer instance
+    $email_notifications = WC()->mailer()->get_emails();
+    
+    if ( isset( $email_notifications['WC_Email_Customer_Processing_Order'] ) ) {
+        // Manually force the processing email event to trigger for this order ID
+        $email_notifications['WC_Email_Customer_Processing_Order']->trigger( $order_id );
+    }
+}
+==========================================
+
+==========================================
+ID: 23 | Title: Antigravity DB Debug Endpoint
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            global $wpdb;
+            
+            // Query options related to CTX Feed (woo-feed)
+            $woo_feed_options = $wpdb->get_results(
+                "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE '%woo_feed%' OR option_name LIKE '%webappick%'"
+            );
+            
+            // Also let's check for any active filters hooked into CTX Feed
+            // We can check the global $wp_filter array
+            global $wp_filter;
+            $feed_filters = array();
+            if (isset($wp_filter)) {
+                foreach ($wp_filter as $hook_name => $hook_object) {
+                    if (str_contains($hook_name, 'woo_feed') || str_contains($hook_name, 'ctx_feed')) {
+                        $feed_filters[$hook_name] = array();
+                        foreach ($hook_object->callbacks as $priority => $callbacks) {
+                            foreach ($callbacks as $idx => $callback_data) {
+                                $feed_filters[$hook_name][] = array(
+                                    'priority' => $priority,
+                                    'function' => is_string($callback_data['function']) ? $callback_data['function'] : 'Closure/Object'
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'woo_feed_options' => $woo_feed_options,
+                'feed_filters' => $feed_filters
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 24 | Title: Antigravity DB Debug Endpoint 2
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 2 for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-2', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            global $wpdb;
+            
+            // Query posts of type adt_product_feed
+            $feeds = $wpdb->get_results(
+                "SELECT * FROM {$wpdb->posts} WHERE post_type = 'adt_product_feed'"
+            );
+            
+            // Query postmeta for these feeds
+            $feed_meta = array();
+            foreach ($feeds as $feed) {
+                $meta = $wpdb->get_results($wpdb->prepare(
+                    "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d",
+                    $feed->ID
+                ));
+                
+                $unserialized_meta = array();
+                foreach ($meta as $m) {
+                    $val = $m->meta_value;
+                    if (is_serialized($val)) {
+                        $unserialized_meta[$m->meta_key] = maybe_unserialize($val);
+                    } else {
+                        $unserialized_meta[$m->meta_key] = $val;
+                    }
+                }
+                
+                $feed_meta[$feed->ID] = $unserialized_meta;
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'feeds' => $feeds,
+                'feed_meta' => $feed_meta
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 25 | Title: Antigravity DB Debug Endpoint 3
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 3 for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-3', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            global $wpdb;
+            
+            // 1. Get all post types
+            $post_types = get_post_types('', 'names');
+            
+            // 2. Search posts table for any post types related to feed or webappick
+            $distinct_post_types = $wpdb->get_col("SELECT DISTINCT post_type FROM {$wpdb->posts}");
+            
+            // 3. Search options table for any option names containing 'feed'
+            $feed_option_names = $wpdb->get_col(
+                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '%feed%'"
+            );
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'post_types' => $post_types,
+                'distinct_post_types' => $distinct_post_types,
+                'feed_option_names' => $feed_option_names
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 26 | Title: Antigravity DB Debug Endpoint 4
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 4 for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-4', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $feed_option = get_option('wf_feed_dqpfeed');
+            
+            // Let's also check if maybe_unserialize works
+            $unserialized = maybe_unserialize($feed_option);
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'feed_option_raw' => $feed_option,
+                'feed_option_unserialized' => $unserialized
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 27 | Title: Antigravity DB Debug Endpoint 5
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 5 for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-5', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            // Find CTX Feed class files and grep for output_type processing
+            $plugin_dir = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce';
+            if (!is_dir($plugin_dir)) {
+                return new WP_REST_Response( array('error' => 'Plugin dir not found'), 404 );
+            }
+
+            // Let's do a search for output_type usage or formatters
+            $output = array();
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($plugin_dir));
+            foreach ($it as $file) {
+                if ($file->isDir() || $file->getExtension() !== 'php') {
+                    continue;
+                }
+                $content = file_get_contents($file->getPathname());
+                if (str_contains($content, 'output_type') || str_contains($content, 'attribute_value')) {
+                    // Find lines containing the word output_type
+                    $lines = explode("\n", $content);
+                    foreach ($lines as $num => $line) {
+                        if (str_contains($line, 'output_type') || str_contains($line, 'wf_clean_val') || str_contains($line, 'attribute_value')) {
+                            if (strlen($line) < 300) { // skip minified or very long lines
+                                $output[] = array(
+                                    'file' => basename($file->getPathname()),
+                                    'line' => $num + 1,
+                                    'content' => trim($line)
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'matches' => array_slice($output, 0, 100)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 28 | Title: Antigravity DB Debug Endpoint 6
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 6 (Fix Feed Mapping)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-6', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if (!$option) {
+                return new WP_REST_Response(array('success' => false, 'error' => 'Option not found'), 404);
+            }
+
+            $raw_before = $option;
+            
+            // Clean output_type array in feedrules
+            if (isset($option['feedrules']['output_type'])) {
+                $count = count($option['feedrules']['output_type']);
+                for ($i = 0; $i < $count; $i++) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // Let's also restore standard default values if any are blank
+            // Note: brand has default "Co" which we can change to "Unbranded" or let it be empty so it queries the brand attribute.
+            // Wait, brand is type "pattern" and default "Co" in the option!
+            // Let's look at the mapping: brand attribute index is 13:
+            // "mattributes" index 13: "brand", type index 13: "pattern", default index 13: "Co".
+            // Since it's a "pattern" (static value), it outputs "Co" for every item!
+            // We want brand to map to the actual brand attribute "pa_brand"!
+            // Let's change brand mapping (index 13) to:
+            // - type: "attribute"
+            // - attributes: "pa_brand" (or "brand" or "pa_brand" - wait, in WooCommerce product 38958, the brand slug is "pa_brand")
+            // Let's change type[13] to 'attribute', attributes[13] to 'pa_brand', and default[13] to ''
+            if (isset($option['feedrules']['mattributes'][13]) && $option['feedrules']['mattributes'][13] === 'brand') {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // Update the option in the database
+            $updated = update_option($option_name, $option);
+
+            // Check if generation functions exist
+            $funcs = array(
+                'woo_feed_cron_update_single_feed' => function_exists('woo_feed_cron_update_single_feed'),
+                'woo_feed_generate_feed_by_name' => function_exists('woo_feed_generate_feed_by_name'),
+                'woo_feed_generate_feed_by_id' => function_exists('woo_feed_generate_feed_by_id'),
+            );
+
+            $regen_output = 'Not run';
+            if ($funcs['woo_feed_cron_update_single_feed']) {
+                // Run regeneration in the background or synchronously
+                ob_start();
+                woo_feed_cron_update_single_feed('dqpfeed');
+                $regen_output = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'updated' => $updated,
+                'funcs_exist' => $funcs,
+                'regen_output' => $regen_output,
+                'raw_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 29 | Title: Antigravity DB Debug Endpoint 7
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 7 (Check Option)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-7', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $option = get_option('wf_feed_dqpfeed');
+            return new WP_REST_Response( array(
+                'success' => true,
+                'feedrules' => isset($option['feedrules']) ? $option['feedrules'] : null
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 30 | Title: Antigravity DB Debug Endpoint 8
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 8 (Find hooks)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-8', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $plugin_dir = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce';
+            $output = array();
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($plugin_dir));
+            foreach ($it as $file) {
+                if ($file->isDir() || $file->getExtension() !== 'php') {
+                    continue;
+                }
+                $content = file_get_contents($file->getPathname());
+                if (str_contains($content, 'add_action') && (str_contains($content, 'feed') || str_contains($content, 'cron'))) {
+                    $lines = explode("\n", $content);
+                    foreach ($lines as $num => $line) {
+                        if (str_contains($line, 'add_action') && (str_contains($line, 'feed') || str_contains($line, 'cron'))) {
+                            if (strlen($line) < 300) {
+                                $output[] = array(
+                                    'file' => basename($file->getPathname()),
+                                    'line' => $num + 1,
+                                    'content' => trim($line)
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'matches' => array_slice($output, 0, 100)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 31 | Title: Antigravity DB Debug Endpoint 9
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 9 (Read cron-helper.php)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-9', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $cron_helper = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/includes/cron-helper.php';
+            if (!file_exists($cron_helper)) {
+                return new WP_REST_Response(array('error' => 'File not found'), 404);
+            }
+            $content = file_get_contents($cron_helper);
+            $lines = explode("\n", $content);
+            
+            // Find where woo_feed_cron_update_single_feed is defined
+            $start = 0;
+            foreach ($lines as $num => $line) {
+                if (str_contains($line, 'function woo_feed_cron_update_single_feed')) {
+                    $start = $num;
+                    break;
+                }
+            }
+            
+            $snippet = array_slice($lines, max(0, $start - 10), 80);
+            return new WP_REST_Response( array(
+                'success' => true,
+                'start_line' => $start,
+                'code' => implode("\n", $snippet)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 32 | Title: Antigravity DB Debug Endpoint 10
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 10 (Search all options)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-10', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            global $wpdb;
+            
+            // Search all options containing dqp
+            $dqp_options = $wpdb->get_col(
+                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '%dqp%' OR option_name LIKE 'wf_%'"
+            );
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'options' => $dqp_options
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 33 | Title: Antigravity DB Debug Endpoint 11
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 11 (Search feed loading)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-11', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $plugin_dir = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce';
+            $output = array();
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($plugin_dir));
+            foreach ($it as $file) {
+                if ($file->isDir() || $file->getExtension() !== 'php') {
+                    continue;
+                }
+                $content = file_get_contents($file->getPathname());
+                if (str_contains($content, 'wf_feed_') || str_contains($content, 'get_single_feed')) {
+                    $lines = explode("\n", $content);
+                    foreach ($lines as $num => $line) {
+                        if (str_contains($line, 'wf_feed_') || str_contains($line, 'get_single_feed') || str_contains($line, 'get_option')) {
+                            if (strlen($line) < 300) {
+                                $output[] = array(
+                                    'file' => basename($file->getPathname()),
+                                    'line' => $num + 1,
+                                    'content' => trim($line)
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'matches' => array_slice($output, 0, 100)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 34 | Title: Antigravity DB Option Search
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint (Better Option Search)
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-options-better', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            global $wpdb;
+            
+            $options = $wpdb->get_results(
+                "SELECT option_name, length(option_value) as val_length FROM {$wpdb->options} WHERE option_name LIKE '%wf_%' OR option_name LIKE '%dqp%' OR option_name LIKE '%woo_feed%' OR option_name LIKE '%feed%'"
+            );
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'options' => $options
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 35 | Title: Antigravity DB Debug Endpoint 4
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 4 for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-4', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $feed_option = get_option('wf_feed_dqpfeed');
+            
+            // Let's also check if maybe_unserialize works
+            $unserialized = maybe_unserialize($feed_option);
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'feed_option_raw' => $feed_option,
+                'feed_option_unserialized' => $unserialized
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 36 | Title: Antigravity DB Inspect Formatters
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect CTX Feed formatters
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-formatters', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            // Find DropDownOptions or WooFeedDropDownOptions class
+            $output_types = array();
+            if ( class_exists( 'DropDownOptions' ) ) {
+                if ( method_exists( 'DropDownOptions', 'output_types' ) ) {
+                    $output_types = DropDownOptions::output_types();
+                }
+            } elseif ( class_exists( 'WooFeedDropDownOptions' ) ) {
+                if ( method_exists( 'WooFeedDropDownOptions', 'output_types' ) ) {
+                    $output_types = WooFeedDropDownOptions::output_types();
+                }
+            } else {
+                // Try searching for the class files
+                $plugin_dir = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce';
+                $found_files = array();
+                if ( is_dir( $plugin_dir ) ) {
+                    $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $plugin_dir ) );
+                    foreach ( $it as $file ) {
+                        if ( $file->isFile() && strpos( $file->getFilename(), 'DropDownOptions' ) !== false ) {
+                            $found_files[] = $file->getPathname();
+                            include_once $file->getPathname();
+                        }
+                    }
+                }
+                if ( class_exists( 'DropDownOptions' ) ) {
+                    $output_types = DropDownOptions::output_types();
+                }
+            }
+
+            // Let's locate the output formatter logic file and view its contents
+            $formatter_code = '';
+            $plugin_dir = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce';
+            if ( is_dir( $plugin_dir ) ) {
+                $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $plugin_dir ) );
+                foreach ( $it as $file ) {
+                    if ( $file->isFile() && ( strpos( $file->getFilename(), 'FormatOutput' ) !== false || strpos( $file->getFilename(), 'OutputFormat' ) !== false ) ) {
+                        $formatter_code = file_get_contents( $file->getPathname() );
+                        break;
+                    }
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'output_types' => $output_types,
+                'formatter_code_length' => strlen($formatter_code),
+                'formatter_code_sample' => substr($formatter_code, 0, 5000)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 37 | Title: Antigravity Find Gen Funcs
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to find feed generation functions
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-generation-funcs', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            // Find files in plugin dir containing "generate" or "rebuild"
+            $plugin_dir = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce';
+            $files_with_generate = array();
+            if ( is_dir( $plugin_dir ) ) {
+                $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $plugin_dir ) );
+                foreach ( $it as $file ) {
+                    if ( $file->isFile() && $file->getExtension() === 'php' ) {
+                        $filename = $file->getFilename();
+                        if ( stripos( $filename, 'generate' ) !== false || stripos( $filename, 'rebuild' ) !== false || stripos( $filename, 'cron' ) !== false || stripos( $filename, 'factory' ) !== false ) {
+                            $files_with_generate[] = str_replace( $plugin_dir, '', $file->getPathname() );
+                        }
+                    }
+                }
+            }
+
+            // Find all defined functions starting with woo_feed
+            $all_funcs = get_defined_functions();
+            $woo_feed_funcs = array();
+            foreach ( $all_funcs['user'] as $func ) {
+                if ( stripos( $func, 'woo_feed' ) !== false || stripos( $func, 'ctx_feed' ) !== false || stripos( $func, 'webappick' ) !== false ) {
+                    $woo_feed_funcs[] = $func;
+                }
+            }
+
+            // Find defined classes starting with CTX or WooFeed
+            $all_classes = get_declared_classes();
+            $ctx_classes = array();
+            foreach ( $all_classes as $class ) {
+                if ( stripos( $class, 'CTXFeed' ) !== false || stripos( $class, 'WooFeed' ) !== false || stripos( $class, 'WebAppick' ) !== false ) {
+                    $ctx_classes[] = $class;
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'files' => $files_with_generate,
+                'functions' => $woo_feed_funcs,
+                'classes' => $ctx_classes
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 38 | Title: Antigravity Inspect Gen Func
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect woo_feed_generate_feed function
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-generate-func-details', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $details = array();
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                $func = new ReflectionFunction( 'woo_feed_generate_feed' );
+                $details['woo_feed_generate_feed'] = array(
+                    'file' => $func->getFileName(),
+                    'start_line' => $func->getStartLine(),
+                    'end_line' => $func->getEndLine(),
+                    'code' => array_slice( file( $func->getFileName() ), $func->getStartLine() - 1, $func->getEndLine() - $func->getStartLine() + 1 )
+                );
+            }
+            
+            // Check for class WooFeedGenerate or any generation hooks
+            $classes_to_check = array( 'WooFeedGenerate', 'CTXFeed\\V5\\API\\V1\\MakeFeed', 'CTXFeed\\V5\\Helper\\CronHelper' );
+            foreach ( $classes_to_check as $class ) {
+                if ( class_exists( $class ) ) {
+                    $ref = new ReflectionClass( $class );
+                    $methods = array();
+                    foreach ( $ref->getMethods() as $method ) {
+                        $methods[] = $method->getName();
+                    }
+                    $details[$class] = array(
+                        'file' => $ref->getFileName(),
+                        'methods' => $methods
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'details' => $details
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 39 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 40 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 41 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 42 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 43 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 44 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 45 | Title: Antigravity Fix and Generate Feed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found in database' ), 404 );
+            }
+
+            // Unserialize if it is serialized (WP get_option usually does this automatically)
+            $option = maybe_unserialize($option);
+            $before = $option;
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            // Verify first that index 13 matches brand
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $updated = update_option( $option_name, $option );
+
+            // 4. Regenerate feed
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                // Trigger feed generation synchronously
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 46 | Title: Antigravity Inspect CommonOverride
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect CommonOverride.php
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-common-override', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $file_path = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/V5/Override/CommonOverride.php';
+            if ( ! file_exists( $file_path ) ) {
+                return new WP_REST_Response( array( 'error' => 'File not found' ), 404 );
+            }
+            
+            $lines = file( $file_path );
+            $snippet_lines = array_slice( $lines, 100, 50 ); // view lines 101 to 150
+            
+            // Let's also check where remove_enclosure_from_description is registered as a filter
+            $search_hooks = array();
+            foreach ( $lines as $idx => $line ) {
+                if ( strpos( $line, 'remove_enclosure_from_description' ) !== false ) {
+                    $search_hooks[] = array(
+                        'line_num' => $idx + 1,
+                        'content' => trim($line)
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'hooks' => $search_hooks,
+                'code' => $snippet_lines
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 47 | Title: Antigravity Inspect Hooks
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect CommonOverride hooks
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-common-override-hooks', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $file_path = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/V5/Override/CommonOverride.php';
+            if ( ! file_exists( $file_path ) ) {
+                return new WP_REST_Response( array( 'error' => 'File not found' ), 404 );
+            }
+            
+            $lines = file( $file_path );
+            $snippet_lines = array_slice( $lines, 30, 50 ); // view lines 31 to 80
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'code' => $snippet_lines
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 48 | Title: Antigravity Inspect CronHelper
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect CronHelper.php
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-cron-helper', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $file_path = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/V5/Helper/CronHelper.php';
+            if ( ! file_exists( $file_path ) ) {
+                return new WP_REST_Response( array( 'error' => 'File not found' ), 404 );
+            }
+            
+            $ref = new ReflectionClass( 'CTXFeed\\V5\\Helper\\CronHelper' );
+            $method = $ref->getMethod( 'woo_feed_cron_update_single_feed' );
+            
+            $lines = file( $file_path );
+            $method_code = array_slice( $lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1 );
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'start_line' => $method->getStartLine(),
+                'end_line' => $method->getEndLine(),
+                'code' => $method_code
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 49 | Title: Antigravity List Routes
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to list REST API routes
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-routes', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            global $wp_rest_server;
+            $routes = $wp_rest_server->get_routes();
+            $filtered = array();
+            foreach ( $routes as $namespace => $route_data ) {
+                if ( stripos( $namespace, 'webappick' ) !== false || stripos( $namespace, 'woo-feed' ) !== false || stripos( $namespace, 'ctx' ) !== false ) {
+                    $filtered[$namespace] = array_keys( $route_data );
+                }
+            }
+            return new WP_REST_Response( array(
+                'success' => true,
+                'routes' => $filtered
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 50 | Title: Antigravity Fix and Generate Feed Bypass
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to fix options, bypass the filter parameter bug, and regenerate feed
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/fix-and-generate-bypass', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found' ), 404 );
+            }
+
+            $option = maybe_unserialize($option);
+
+            // 1. Clean output_type array in feedrules
+            if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+                $count = count( $option['feedrules']['output_type'] );
+                for ( $i = 0; $i < $count; $i++ ) {
+                    $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+                }
+            }
+
+            // 2. Fix Brand mapping (Index 13)
+            if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+                $option['feedrules']['type'][13] = 'attribute';
+                $option['feedrules']['attributes'][13] = 'pa_brand';
+                $option['feedrules']['default'][13] = '';
+            }
+
+            // 3. Update option in database
+            $db_updated = update_option( $option_name, $option );
+
+            // 4. Remove the crashing filters before triggering regeneration
+            if ( class_exists( 'CTXFeed\V5\Override\CommonOverride' ) ) {
+                $instance = CTXFeed\V5\Override\CommonOverride::instance();
+                remove_filter( 'woo_feed_filter_product_description', array( $instance, 'remove_enclosure_from_description' ), 10 );
+                remove_filter( 'woo_feed_filter_product_short_description', array( $instance, 'remove_enclosure_from_description' ), 10 );
+            }
+
+            // 5. Trigger feed generation
+            $generation_result = 'Not triggered';
+            $feed_url = '';
+            if ( function_exists( 'woo_feed_generate_feed' ) ) {
+                ob_start();
+                $feed_url = woo_feed_generate_feed( $option, 'dqpfeed' );
+                $generation_result = ob_get_clean();
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'db_updated' => $db_updated,
+                'feed_url' => $feed_url,
+                'generation_logs' => $generation_result,
+                'option_after' => $option
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 51 | Title: Antigravity Read Error Log
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to read PHP error logs
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-php-log', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $log_files = array();
+            
+            // 1. Check ini error_log
+            $ini_log = ini_get('error_log');
+            if ( $ini_log ) {
+                $log_files['ini_log'] = $ini_log;
+            }
+            
+            // 2. Check standard WP debug log
+            if ( defined('WP_CONTENT_DIR') ) {
+                $wp_log = WP_CONTENT_DIR . '/debug.log';
+                if ( file_exists($wp_log) ) {
+                    $log_files['wp_log'] = $wp_log;
+                }
+            }
+            
+            // 3. Check ABSPATH error_log
+            $abs_log = ABSPATH . 'error_log';
+            if ( file_exists($abs_log) ) {
+                $log_files['abs_log'] = $abs_log;
+            }
+
+            $results = array();
+            foreach ( $log_files as $key => $file ) {
+                if ( file_exists( $file ) && is_readable( $file ) ) {
+                    $content = file( $file );
+                    $results[$key] = array(
+                        'path' => $file,
+                        'size' => filesize($file),
+                        'last_lines' => array_slice( $content, -25 )
+                    );
+                } else {
+                    $results[$key] = array(
+                        'path' => $file,
+                        'exists' => file_exists($file),
+                        'readable' => is_readable($file)
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'results' => $results
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 52 | Title: Antigravity DB Debug Endpoint 4
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint 4 for Antigravity
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-db-4', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $feed_option = get_option('wf_feed_dqpfeed');
+            
+            // Let's also check if maybe_unserialize works
+            $unserialized = maybe_unserialize($feed_option);
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'feed_option_raw' => $feed_option,
+                'feed_option_unserialized' => $unserialized
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 53 | Title: Antigravity Inspect MakeFeed
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect MakeFeed.php
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-make-feed', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $file_path = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/V5/API/V1/MakeFeed.php';
+            if ( ! file_exists( $file_path ) ) {
+                return new WP_REST_Response( array( 'error' => 'File not found' ), 404 );
+            }
+            
+            $ref = new ReflectionClass( 'CTXFeed\\V5\\API\\V1\\MakeFeed' );
+            
+            $methods_info = array();
+            $methods_to_check = array( 'get_product_ids', 'make_per_batch_feed', 'save_feed_file' );
+            $lines = file( $file_path );
+            
+            foreach ( $methods_to_check as $m_name ) {
+                if ( $ref->hasMethod( $m_name ) ) {
+                    $m = $ref->getMethod( $m_name );
+                    $methods_info[$m_name] = array(
+                        'start' => $m->getStartLine(),
+                        'end' => $m->getEndLine(),
+                        'code' => array_slice( $lines, $m->getStartLine() - 1, $m->getEndLine() - $m->getStartLine() + 1 )
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'methods' => $methods_info
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 54 | Title: Antigravity Find FeedHelper FQCN
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to find FeedHelper FQCN
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-helper-fqcn', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $classes = array(
+                'CTXFeed\\V5\\API\\V1\\FeedHelper' => class_exists('CTXFeed\\V5\\API\\V1\\FeedHelper'),
+                'CTXFeed\\V5\\Helper\\FeedHelper' => class_exists('CTXFeed\\V5\\Helper\\FeedHelper'),
+                'CTXFeed\\V5\\Utility\\FeedHelper' => class_exists('CTXFeed\\V5\\Utility\\FeedHelper'),
+                'FeedHelper' => class_exists('FeedHelper')
+            );
+            
+            // Also let's list imports of MakeFeed.php by reading first 30 lines
+            $file_path = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/V5/API/V1/MakeFeed.php';
+            $imports = array();
+            if ( file_exists( $file_path ) ) {
+                $lines = file( $file_path );
+                $imports = array_slice( $lines, 0, 30 );
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'classes' => $classes,
+                'imports' => $imports
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 55 | Title: Antigravity Trigger Batch Generate
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to safely trigger batch feed generation
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/trigger-batch-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found' ), 404 );
+            }
+
+            $option = maybe_unserialize($option);
+            
+            // Resolve class names
+            if ( ! class_exists( 'CTXFeed\\V5\\Helper\\FeedHelper' ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'FeedHelper class not found' ), 500 );
+            }
+
+            // Get product IDs
+            $product_ids = CTXFeed\\V5\\Helper\\FeedHelper::get_product_ids( $option );
+            if ( empty( $product_ids ) || ! is_array( $product_ids ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'No products found' ), 500 );
+            }
+
+            $total_products = count( $product_ids );
+            $batch_size = 200;
+            $offset = 0;
+            $steps = array();
+
+            // Run generation in batches to prevent memory limits
+            while ( $offset < $total_products ) {
+                $batch_ids = array_slice( $product_ids, $offset, $batch_size );
+                $status = CTXFeed\\V5\\Helper\\FeedHelper::generate_temp_feed_body( $option, $batch_ids, $offset );
+                
+                $steps[] = array(
+                    'offset' => $offset,
+                    'count' => count($batch_ids),
+                    'status' => $status
+                );
+
+                if ( ! $status ) {
+                    return new WP_REST_Response( array(
+                        'success' => false,
+                        'error' => 'Batch generation failed',
+                        'offset' => $offset,
+                        'steps' => $steps
+                    ), 500 );
+                }
+
+                $offset += $batch_size;
+            }
+
+            // Save the final feed file
+            $save_file = CTXFeed\\V5\\Helper\\FeedHelper::save_feed_file( $option, true );
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'total_products' => $total_products,
+                'steps' => $steps,
+                'save_file_result' => $save_file
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 56 | Title: Antigravity Trigger Batch Generate
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to safely trigger batch feed generation
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/trigger-batch-generate', array(
+        'methods' => 'POST',
+        'callback' => function() {
+            $option_name = 'wf_feed_dqpfeed';
+            $option = get_option($option_name);
+            if ( ! $option ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'Feed option not found' ), 404 );
+            }
+
+            $option = maybe_unserialize($option);
+            
+            // Resolve class names
+            if ( ! class_exists( 'CTXFeed\V5\Helper\FeedHelper' ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'FeedHelper class not found' ), 500 );
+            }
+
+            // Get product IDs
+            $product_ids = CTXFeed\V5\Helper\FeedHelper::get_product_ids( $option );
+            if ( empty( $product_ids ) || ! is_array( $product_ids ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'error' => 'No products found' ), 500 );
+            }
+
+            $total_products = count( $product_ids );
+            $batch_size = 200;
+            $offset = 0;
+            $steps = array();
+
+            // Run generation in batches to prevent memory limits
+            while ( $offset < $total_products ) {
+                $batch_ids = array_slice( $product_ids, $offset, $batch_size );
+                $status = CTXFeed\V5\Helper\FeedHelper::generate_temp_feed_body( $option, $batch_ids, $offset );
+                
+                $steps[] = array(
+                    'offset' => $offset,
+                    'count' => count($batch_ids),
+                    'status' => $status
+                );
+
+                if ( ! $status ) {
+                    return new WP_REST_Response( array(
+                        'success' => false,
+                        'error' => 'Batch generation failed',
+                        'offset' => $offset,
+                        'steps' => $steps
+                    ), 500 );
+                }
+
+                $offset += $batch_size;
+            }
+
+            // Save the final feed file
+            $save_file = CTXFeed\V5\Helper\FeedHelper::save_feed_file( $option, true );
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'total_products' => $total_products,
+                'steps' => $steps,
+                'save_file_result' => $save_file
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 57 | Title: Antigravity Read Error Log
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to read PHP error logs
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-php-log', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $log_files = array();
+            
+            // 1. Check ini error_log
+            $ini_log = ini_get('error_log');
+            if ( $ini_log ) {
+                $log_files['ini_log'] = $ini_log;
+            }
+            
+            // 2. Check standard WP debug log
+            if ( defined('WP_CONTENT_DIR') ) {
+                $wp_log = WP_CONTENT_DIR . '/debug.log';
+                if ( file_exists($wp_log) ) {
+                    $log_files['wp_log'] = $wp_log;
+                }
+            }
+            
+            // 3. Check ABSPATH error_log
+            $abs_log = ABSPATH . 'error_log';
+            if ( file_exists($abs_log) ) {
+                $log_files['abs_log'] = $abs_log;
+            }
+
+            $results = array();
+            foreach ( $log_files as $key => $file ) {
+                if ( file_exists( $file ) && is_readable( $file ) ) {
+                    $content = file( $file );
+                    $results[$key] = array(
+                        'path' => $file,
+                        'size' => filesize($file),
+                        'last_lines' => array_slice( $content, -25 )
+                    );
+                } else {
+                    $results[$key] = array(
+                        'path' => $file,
+                        'exists' => file_exists($file),
+                        'readable' => is_readable($file)
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'results' => $results
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 58 | Title: Antigravity Trigger Batch Init
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to safely trigger batch feed generation via init
+ */
+add_action( 'init', function () {
+    if ( isset( $_GET['run_antigravity_fix'] ) ) {
+        $option_name = 'wf_feed_dqpfeed';
+        $option = get_option($option_name);
+        if ( ! $option ) {
+            $err_res = array( 'success' => false, 'error' => 'Feed option not found' );
+            update_option( 'antigravity_batch_gen_result', $err_res );
+            echo json_encode( $err_res );
+            exit;
+        }
+
+        $option = maybe_unserialize($option);
+
+        // 1. Clean output_type array in feedrules
+        if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+            $count = count( $option['feedrules']['output_type'] );
+            for ( $i = 0; $i < $count; $i++ ) {
+                $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+            }
+        }
+
+        // 2. Fix Brand mapping (Index 13)
+        if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+            $option['feedrules']['type'][13] = 'attribute';
+            $option['feedrules']['attributes'][13] = 'pa_brand';
+            $option['feedrules']['default'][13] = '';
+        }
+
+        // 3. Update option in database
+        $db_updated = update_option( $option_name, $option );
+
+        $log = array(
+            'db_updated' => $db_updated,
+            'start_time' => date('Y-m-d H:i:s')
+        );
+
+        try {
+            if ( class_exists( 'CTXFeed\V5\Helper\FeedHelper' ) ) {
+                $product_ids = CTXFeed\V5\Helper\FeedHelper::get_product_ids( $option );
+                $log['total_products'] = count($product_ids);
+                
+                $batch_size = 200;
+                $offset = 0;
+                $steps = array();
+                
+                while ( $offset < count($product_ids) ) {
+                    $batch_ids = array_slice( $product_ids, $offset, $batch_size );
+                    $status = CTXFeed\V5\Helper\FeedHelper::generate_temp_feed_body( $option, $batch_ids, $offset );
+                    
+                    $steps[] = array(
+                        'offset' => $offset,
+                        'count' => count($batch_ids),
+                        'status' => $status
+                    );
+                    
+                    if ( ! $status ) {
+                        $log['success'] = false;
+                        $log['error'] = 'Batch generation failed';
+                        $log['steps'] = $steps;
+                        update_option( 'antigravity_batch_gen_result', $log );
+                        echo json_encode( $log );
+                        exit;
+                    }
+                    
+                    $offset += $batch_size;
+                }
+                
+                $log['steps'] = $steps;
+                // Save final feed file
+                $save_result = CTXFeed\V5\Helper\FeedHelper::save_feed_file( $option, true );
+                $log['save_result'] = $save_result;
+                $log['success'] = true;
+            } else {
+                $log['success'] = false;
+                $log['error'] = 'FeedHelper class not found';
+            }
+        } catch ( Exception $e ) {
+            $log['success'] = false;
+            $log['error'] = $e->getMessage();
+        }
+
+        $log['end_time'] = date('Y-m-d H:i:s');
+        update_option( 'antigravity_batch_gen_result', $log );
+        
+        echo json_encode( $log );
+        exit;
+    }
+} );
+==========================================
+
+==========================================
+ID: 59 | Title: Antigravity Trigger Batch Init
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to safely trigger batch feed generation via init
+ */
+add_action( 'init', function () {
+    if ( isset( $_GET['run_antigravity_fix'] ) ) {
+        $option_name = 'wf_feed_dqpfeed';
+        $option = get_option($option_name);
+        if ( ! $option ) {
+            $err_res = array( 'success' => false, 'error' => 'Feed option not found' );
+            update_option( 'antigravity_batch_gen_result', $err_res );
+            echo json_encode( $err_res );
+            exit;
+        }
+
+        $option = maybe_unserialize($option);
+
+        // 1. Clean output_type array in feedrules
+        if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+            $count = count( $option['feedrules']['output_type'] );
+            for ( $i = 0; $i < $count; $i++ ) {
+                $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+            }
+        }
+
+        // 2. Fix Brand mapping (Index 13)
+        if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+            $option['feedrules']['type'][13] = 'attribute';
+            $option['feedrules']['attributes'][13] = 'pa_brand';
+            $option['feedrules']['default'][13] = '';
+        }
+
+        // 3. Update option in database
+        $db_updated = update_option( $option_name, $option );
+
+        $log = array(
+            'db_updated' => $db_updated,
+            'start_time' => date('Y-m-d H:i:s')
+        );
+
+        try {
+            if ( class_exists( 'CTXFeed\V5\Helper\FeedHelper' ) ) {
+                $product_ids = CTXFeed\V5\Helper\FeedHelper::get_product_ids( $option );
+                $log['total_products'] = count($product_ids);
+                
+                $batch_size = 200;
+                $offset = 0;
+                $steps = array();
+                
+                while ( $offset < count($product_ids) ) {
+                    $batch_ids = array_slice( $product_ids, $offset, $batch_size );
+                    $status = CTXFeed\V5\Helper\FeedHelper::generate_temp_feed_body( $option, $batch_ids, $offset );
+                    
+                    $steps[] = array(
+                        'offset' => $offset,
+                        'count' => count($batch_ids),
+                        'status' => $status
+                    );
+                    
+                    if ( ! $status ) {
+                        $log['success'] = false;
+                        $log['error'] = 'Batch generation failed';
+                        $log['steps'] = $steps;
+                        update_option( 'antigravity_batch_gen_result', $log );
+                        echo json_encode( $log );
+                        exit;
+                    }
+                    
+                    $offset += $batch_size;
+                }
+                
+                $log['steps'] = $steps;
+                // Save final feed file
+                $save_result = CTXFeed\V5\Helper\FeedHelper::save_feed_file( $option, true );
+                $log['save_result'] = $save_result;
+                $log['success'] = true;
+            } else {
+                $log['success'] = false;
+                $log['error'] = 'FeedHelper class not found';
+            }
+        } catch ( Exception $e ) {
+            $log['success'] = false;
+            $log['error'] = $e->getMessage();
+        }
+
+        $log['end_time'] = date('Y-m-d H:i:s');
+        update_option( 'antigravity_batch_gen_result', $log );
+        
+        echo json_encode( $log );
+        exit;
+    }
+} );
+==========================================
+
+==========================================
+ID: 60 | Title: Antigravity Read Error Log
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to read PHP error logs
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-php-log', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $log_files = array();
+            
+            // 1. Check ini error_log
+            $ini_log = ini_get('error_log');
+            if ( $ini_log ) {
+                $log_files['ini_log'] = $ini_log;
+            }
+            
+            // 2. Check standard WP debug log
+            if ( defined('WP_CONTENT_DIR') ) {
+                $wp_log = WP_CONTENT_DIR . '/debug.log';
+                if ( file_exists($wp_log) ) {
+                    $log_files['wp_log'] = $wp_log;
+                }
+            }
+            
+            // 3. Check ABSPATH error_log
+            $abs_log = ABSPATH . 'error_log';
+            if ( file_exists($abs_log) ) {
+                $log_files['abs_log'] = $abs_log;
+            }
+
+            $results = array();
+            foreach ( $log_files as $key => $file ) {
+                if ( file_exists( $file ) && is_readable( $file ) ) {
+                    $content = file( $file );
+                    $results[$key] = array(
+                        'path' => $file,
+                        'size' => filesize($file),
+                        'last_lines' => array_slice( $content, -25 )
+                    );
+                } else {
+                    $results[$key] = array(
+                        'path' => $file,
+                        'exists' => file_exists($file),
+                        'readable' => is_readable($file)
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'results' => $results
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 61 | Title: Antigravity Trigger Batch Init
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to safely trigger batch feed generation via init
+ */
+add_action( 'init', function () {
+    if ( isset( $_GET['run_antigravity_fix'] ) ) {
+        $option_name = 'wf_feed_dqpfeed';
+        $option = get_option($option_name);
+        if ( ! $option ) {
+            $err_res = array( 'success' => false, 'error' => 'Feed option not found' );
+            update_option( 'antigravity_batch_gen_result', $err_res );
+            echo json_encode( $err_res );
+            exit;
+        }
+
+        $option = maybe_unserialize($option);
+
+        // 1. Clean output_type array in feedrules
+        if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+            $count = count( $option['feedrules']['output_type'] );
+            for ( $i = 0; $i < $count; $i++ ) {
+                $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+            }
+        }
+
+        // 2. Fix Brand mapping (Index 13)
+        if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+            $option['feedrules']['type'][13] = 'attribute';
+            $option['feedrules']['attributes'][13] = 'pa_brand';
+            $option['feedrules']['default'][13] = '';
+        }
+
+        // 3. Update option in database
+        $db_updated = update_option( $option_name, $option );
+
+        // Wrap option in the structure expected by V5 FeedHelper
+        $feed_info_wrapped = array(
+            'option_name' => $option_name,
+            'option_value' => $option
+        );
+
+        $log = array(
+            'db_updated' => $db_updated,
+            'start_time' => date('Y-m-d H:i:s')
+        );
+
+        try {
+            if ( class_exists( 'CTXFeed\V5\Helper\FeedHelper' ) ) {
+                $product_ids = CTXFeed\V5\Helper\FeedHelper::get_product_ids( $feed_info_wrapped );
+                $log['total_products'] = count($product_ids);
+                
+                $batch_size = 200;
+                $offset = 0;
+                $steps = array();
+                
+                while ( $offset < count($product_ids) ) {
+                    $batch_ids = array_slice( $product_ids, $offset, $batch_size );
+                    $status = CTXFeed\V5\Helper\FeedHelper::generate_temp_feed_body( $feed_info_wrapped, $batch_ids, $offset );
+                    
+                    $steps[] = array(
+                        'offset' => $offset,
+                        'count' => count($batch_ids),
+                        'status' => $status
+                    );
+                    
+                    if ( ! $status ) {
+                        $log['success'] = false;
+                        $log['error'] = 'Batch generation failed';
+                        $log['steps'] = $steps;
+                        update_option( 'antigravity_batch_gen_result', $log );
+                        echo json_encode( $log );
+                        exit;
+                    }
+                    
+                    $offset += $batch_size;
+                }
+                
+                $log['steps'] = $steps;
+                // Save final feed file
+                $save_result = CTXFeed\V5\Helper\FeedHelper::save_feed_file( $feed_info_wrapped, true );
+                $log['save_result'] = $save_result;
+                $log['success'] = true;
+            } else {
+                $log['success'] = false;
+                $log['error'] = 'FeedHelper class not found';
+            }
+        } catch ( Exception $e ) {
+            $log['success'] = false;
+            $log['error'] = $e->getMessage();
+        }
+
+        $log['end_time'] = date('Y-m-d H:i:s');
+        update_option( 'antigravity_batch_gen_result', $log );
+        
+        echo json_encode( $log );
+        exit;
+    }
+} );
+==========================================
+
+==========================================
+ID: 62 | Title: Antigravity Read Error Log
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to read PHP error logs
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-php-log', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $log_files = array();
+            
+            // 1. Check ini error_log
+            $ini_log = ini_get('error_log');
+            if ( $ini_log ) {
+                $log_files['ini_log'] = $ini_log;
+            }
+            
+            // 2. Check standard WP debug log
+            if ( defined('WP_CONTENT_DIR') ) {
+                $wp_log = WP_CONTENT_DIR . '/debug.log';
+                if ( file_exists($wp_log) ) {
+                    $log_files['wp_log'] = $wp_log;
+                }
+            }
+            
+            // 3. Check ABSPATH error_log
+            $abs_log = ABSPATH . 'error_log';
+            if ( file_exists($abs_log) ) {
+                $log_files['abs_log'] = $abs_log;
+            }
+
+            $results = array();
+            foreach ( $log_files as $key => $file ) {
+                if ( file_exists( $file ) && is_readable( $file ) ) {
+                    $content = file( $file );
+                    $results[$key] = array(
+                        'path' => $file,
+                        'size' => filesize($file),
+                        'last_lines' => array_slice( $content, -25 )
+                    );
+                } else {
+                    $results[$key] = array(
+                        'path' => $file,
+                        'exists' => file_exists($file),
+                        'readable' => is_readable($file)
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'results' => $results
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 63 | Title: Antigravity Inspect FeedHelper
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to inspect FeedHelper.php
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-feed-helper', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $file_path = WP_PLUGIN_DIR . '/webappick-product-feed-for-woocommerce/V5/Helper/FeedHelper.php';
+            if ( ! file_exists( $file_path ) ) {
+                return new WP_REST_Response( array( 'error' => 'File not found' ), 404 );
+            }
+            
+            $lines = file( $file_path );
+            $snippet_lines = array_slice( $lines, 1140, 50 ); // view lines 1141 to 1190
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'code' => $snippet_lines
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 64 | Title: Antigravity Trigger Batch Init
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to safely trigger batch feed generation via init
+ */
+add_action( 'init', function () {
+    if ( isset( $_GET['run_antigravity_fix'] ) ) {
+        $option_name = 'wf_feed_dqpfeed';
+        $option = get_option($option_name);
+        if ( ! $option ) {
+            $err_res = array( 'success' => false, 'error' => 'Feed option not found' );
+            update_option( 'antigravity_batch_gen_result', $err_res );
+            echo json_encode( $err_res );
+            exit;
+        }
+
+        $option = maybe_unserialize($option);
+
+        // 1. Clean output_type array in feedrules
+        if ( isset( $option['feedrules']['output_type'] ) && is_array( $option['feedrules']['output_type'] ) ) {
+            $count = count( $option['feedrules']['output_type'] );
+            for ( $i = 0; $i < $count; $i++ ) {
+                $option['feedrules']['output_type'][$i] = array(); // Set to empty array
+            }
+        }
+
+        // 2. Fix Brand mapping (Index 13)
+        if ( isset( $option['feedrules']['mattributes'][13] ) && $option['feedrules']['mattributes'][13] === 'brand' ) {
+            $option['feedrules']['type'][13] = 'attribute';
+            $option['feedrules']['attributes'][13] = 'pa_brand';
+            $option['feedrules']['default'][13] = '';
+        }
+
+        // 3. Update option in database
+        $db_updated = update_option( $option_name, $option );
+
+        // Wrap option in the structure expected by V5 FeedHelper
+        $feed_info_wrapped = array(
+            'option_name' => $option_name,
+            'option_value' => $option
+        );
+
+        // Increase memory limit and execution time dynamically
+        @ini_set( 'memory_limit', '1024M' );
+        @set_time_limit( 300 );
+
+        // Remove the warning-generating filters before starting regeneration
+        if ( class_exists( 'CTXFeed\V5\Override\CommonOverride' ) ) {
+            $instance = CTXFeed\V5\Override\CommonOverride::instance();
+            remove_filter( 'woo_feed_filter_product_description', array( $instance, 'remove_enclosure_from_description' ), 10 );
+            remove_filter( 'woo_feed_filter_product_short_description', array( $instance, 'remove_enclosure_from_description' ), 10 );
+            remove_filter( 'woo_feed_filter_product_title', array( $instance, 'remove_enclosure_from_title' ), 10 );
+            remove_filter( 'woo_feed_filter_product_parent_title', array( $instance, 'remove_enclosure_from_title' ), 10 );
+        }
+
+        $log = array(
+            'db_updated' => $db_updated,
+            'start_time' => date('Y-m-d H:i:s')
+        );
+
+        try {
+            if ( class_exists( 'CTXFeed\V5\Helper\FeedHelper' ) ) {
+                $product_ids = CTXFeed\V5\Helper\FeedHelper::get_product_ids( $feed_info_wrapped );
+                $log['total_products'] = count($product_ids);
+                
+                $batch_size = 200;
+                $offset = 0;
+                $steps = array();
+                
+                while ( $offset < count($product_ids) ) {
+                    $batch_ids = array_slice( $product_ids, $offset, $batch_size );
+                    $status = CTXFeed\V5\Helper\FeedHelper::generate_temp_feed_body( $feed_info_wrapped, $batch_ids, $offset );
+                    
+                    $steps[] = array(
+                        'offset' => $offset,
+                        'count' => count($batch_ids),
+                        'status' => $status
+                    );
+                    
+                    if ( ! $status ) {
+                        $log['success'] = false;
+                        $log['error'] = 'Batch generation failed';
+                        $log['steps'] = $steps;
+                        update_option( 'antigravity_batch_gen_result', $log );
+                        echo json_encode( $log );
+                        exit;
+                    }
+                    
+                    $offset += $batch_size;
+                }
+                
+                $log['steps'] = $steps;
+                // Save final feed file
+                $save_result = CTXFeed\V5\Helper\FeedHelper::save_feed_file( $feed_info_wrapped, true );
+                $log['save_result'] = $save_result;
+                $log['success'] = true;
+            } else {
+                $log['success'] = false;
+                $log['error'] = 'FeedHelper class not found';
+            }
+        } catch ( Exception $e ) {
+            $log['success'] = false;
+            $log['error'] = $e->getMessage();
+        }
+
+        $log['end_time'] = date('Y-m-d H:i:s');
+        update_option( 'antigravity_batch_gen_result', $log );
+        
+        echo json_encode( $log );
+        exit;
+    }
+} );
+==========================================
+
+==========================================
+ID: 65 | Title: Antigravity Read Error Log
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to read PHP error logs
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/debug-php-log', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $log_files = array();
+            
+            // 1. Check ini error_log
+            $ini_log = ini_get('error_log');
+            if ( $ini_log ) {
+                $log_files['ini_log'] = $ini_log;
+            }
+            
+            // 2. Check standard WP debug log
+            if ( defined('WP_CONTENT_DIR') ) {
+                $wp_log = WP_CONTENT_DIR . '/debug.log';
+                if ( file_exists($wp_log) ) {
+                    $log_files['wp_log'] = $wp_log;
+                }
+            }
+            
+            // 3. Check ABSPATH error_log
+            $abs_log = ABSPATH . 'error_log';
+            if ( file_exists($abs_log) ) {
+                $log_files['abs_log'] = $abs_log;
+            }
+
+            $results = array();
+            foreach ( $log_files as $key => $file ) {
+                if ( file_exists( $file ) && is_readable( $file ) ) {
+                    $content = file( $file );
+                    $results[$key] = array(
+                        'path' => $file,
+                        'size' => filesize($file),
+                        'last_lines' => array_slice( $content, -25 )
+                    );
+                } else {
+                    $results[$key] = array(
+                        'path' => $file,
+                        'exists' => file_exists($file),
+                        'readable' => is_readable($file)
+                    );
+                }
+            }
+
+            return new WP_REST_Response( array(
+                'success' => true,
+                'results' => $results
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 66 | Title: Antigravity Get Option Temp
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to retrieve option value
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/get-dqpfeed-option', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $option = get_option('wf_feed_dqpfeed');
+            return new WP_REST_Response( array(
+                'success' => true,
+                'option' => maybe_unserialize($option)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================
+
+==========================================
+ID: 67 | Title: Antigravity Get Option Temp
+Active: False | Scope: global
+Code:
+/**
+ * Temporary Debug Endpoint to retrieve option value
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'dqp/v1', '/get-dqpfeed-option', array(
+        'methods' => 'GET',
+        'callback' => function() {
+            $option = get_option('wf_feed_dqpfeed');
+            return new WP_REST_Response( array(
+                'success' => true,
+                'option' => maybe_unserialize($option)
+            ), 200 );
+        },
+        'permission_callback' => '__return_true'
+    ) );
+} );
+==========================================

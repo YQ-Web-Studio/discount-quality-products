@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Refund & Cancellation Policy | Discount Quality Products',
   description:
     'Understand your 14-day right to cancel and our refund process at Discount Quality Products, in accordance with UK Consumer Contracts Regulations.',
-  alternates: { canonical: 'https://discountqualityproducts.co.uk/refunds' },
+  alternates: { canonical: 'https://www.discountproducts.co.uk/refunds' },
 };
 
 export default function RefundsPage() {

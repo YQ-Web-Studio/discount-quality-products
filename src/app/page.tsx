@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     images: ["/images/og-image.png"],
   },
   alternates: {
-    canonical: "https://discountqualityproducts.co.uk",
+    canonical: "https://www.discountproducts.co.uk",
   },
 };
 

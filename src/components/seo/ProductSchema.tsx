@@ -54,7 +54,7 @@ export function ProductSchema({ product }: ProductSchemaProps) {
       `${product.name} from Discount Products.`,
     url: productUrl,
     image: images.length > 0 ? images : [],
-    sku: `SB-${product.databaseId}`,
+    sku: product.sku || String(product.databaseId),
     brand: {
       "@type": "Brand",
       name: "Discount Products",
@@ -117,12 +117,15 @@ export function ProductSchema({ product }: ProductSchemaProps) {
       },
 
       // Explicit Shipping Details Extensions (UK mainland shipping rates)
+      // Standard: £2.00 flat rate; FREE on orders over £5.
+      // Schema must reflect what customers actually see on the page to avoid misrepresentation.
       shippingDetails: [
         {
+          // Standard shipping: £2.00 flat (free threshold handled at checkout, not schema level)
           "@type": "OfferShippingDetails",
           "shippingRate": {
             "@type": "MonetaryAmount",
-            "value": 0,
+            "value": 2.00,
             "currency": "GBP"
           },
           "shippingDestination": {

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Shipping & Delivery Policy | Discount Quality Products',
   description:
     'Find out about our UK shipping rates, delivery estimates, and order processing times at Discount Quality Products.',
-  alternates: { canonical: 'https://discountqualityproducts.co.uk/shipping' },
+  alternates: { canonical: 'https://www.discountproducts.co.uk/shipping' },
 };
 
 export default function ShippingPage() {

@@ -1,0 +1,9 @@
+{
+  "message": "Feed Successfully Generated",
+  "feed_url": "https://admin.discountproducts.co.uk/wp-content/uploads/woo-feed/google/xml/dqpfeed.xml",
+  "notice": {
+    "type": "warning",
+    "message": "",
+    "link": ""
+  }
+}
