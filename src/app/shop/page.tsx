@@ -175,7 +175,7 @@ export async function generateMetadata({
     title = `Search: ${q}`;
   }
 
-  const baseUrl = "https://discountqualityproducts.co.uk/shop";
+  const baseUrl = "https://www.discountproducts.co.uk/shop";
   
   const getCleanCanonicalUrl = (pageNum: number) => {
     const p = new URLSearchParams();

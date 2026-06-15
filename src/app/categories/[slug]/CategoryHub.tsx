@@ -423,7 +423,7 @@ function HeadLinks({
   const getUrlForPage = (pageNum: number) => {
     const p = new URLSearchParams(searchParams.toString());
     setPageParam(p, pageNum);
-    return `https://discountqualityproducts.co.uk${buildCategoryUrl(baseSlug, p)}`;
+    return `https://www.discountproducts.co.uk${buildCategoryUrl(baseSlug, p)}`;
   };
 
   return (

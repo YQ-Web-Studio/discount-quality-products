@@ -11,7 +11,7 @@ interface ProductStructuredDataProps {
  * Must be a Server Component — no "use client" directive.
  */
 export function ProductStructuredData({ product, slug }: ProductStructuredDataProps) {
-  const baseUrl = "https://discountqualityproducts.co.uk";
+  const baseUrl = "https://www.discountproducts.co.uk";
   const productUrl = `${baseUrl}/products/${slug}`;
 
   // Parse GBP price string like "£12.99" -> "12.99"
@@ -125,7 +125,7 @@ export function ProductStructuredData({ product, slug }: ProductStructuredDataPr
           "@type": "OfferShippingDetails",
           "shippingRate": {
             "@type": "MonetaryAmount",
-            "value": 0,
+            "value": 2.00,
             "currency": "GBP"
           },
           "shippingDestination": {

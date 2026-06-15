@@ -25,7 +25,7 @@ export function Breadcrumbs({ paths }: BreadcrumbsProps) {
       "@type": "ListItem",
       position: index + 1,
       name: path.label,
-      item: `https://discountqualityproducts.co.uk${path.href}`,
+      item: `https://www.discountproducts.co.uk${path.href}`,
     })),
   };
 
