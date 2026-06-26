@@ -38,7 +38,7 @@ export async function generateStaticParams() {
 }
 ```
 
-The reason: pre-rendering ALL 14,000+ products would make builds take hours.
+The reason: pre-rendering ALL 13,000+ products would make builds take hours.
 We only pre-render the ~12 products on the homepage. All others use ISR (on-demand + cached).
 
 ## 2. Category/shop pages CANNOT be pre-rendered — this is a Next.js architectural constraint

@@ -16,7 +16,7 @@ export function SearchCommand() {
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="flex-1 text-left truncate">
-          <span className="hidden 2xl:inline">Search 14,000+ products...</span>
+          <span className="hidden 2xl:inline">Search 13,000+ products...</span>
           <span className="hidden lg:inline 2xl:hidden">Search</span>
           <span className="lg:hidden">Search...</span>
         </span>

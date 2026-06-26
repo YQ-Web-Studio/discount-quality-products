@@ -311,7 +311,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                  <input
                   ref={inputRef}
                   type="text"
-                  placeholder="Search 14,000+ products..."
+                  placeholder="Search 13,000+ products..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => {
@@ -495,7 +495,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         </div>
                         <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
                         <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
-                          Find exactly what you need across our range of 14,000+ premium products and trade accessories.
+                          Find exactly what you need across our range of 13,000+ premium products and trade accessories.
                         </p>
                       </motion.div>
                     )}

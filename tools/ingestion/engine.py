@@ -9,10 +9,10 @@ Column mappings (lightbulbs.csv):
   SKU                                      → SKU
   Item ID                                  → fallback SKU source
   Buy It Now Price                         → regular_price (×0.9 reduction)
-  Stock Total                              → stock_quantity
+  Qty Currently Listed                     → stock_quantity
 
 Business rules:
-  - Skip rows where Stock Total is 0, empty, or non-numeric.
+  - Skip rows where Qty Currently Listed is 0, empty, or non-numeric.
   - Only process rows where eBay Shipping Service Cost Override List contains
     '0.00' or 'Free' (case-insensitive).
   - If Use Variations is 'True', skip and log SKU to variations_to_review.log.
@@ -80,7 +80,7 @@ COL_TITLE        = "Title"
 COL_SKU          = "SKU"
 COL_ITEM_NUM     = "Item ID"
 COL_PRICE        = "Fixed Price eBay"          # actual selling price column
-COL_QTY          = "Stock Total"               # primary stock column
+COL_QTY          = "Qty Currently Listed"      # primary stock column
 COL_QTY_LIST     = "Qty To List"               # secondary stock cross-check
 COL_CATEGORY     = "eBay Store Category1Name"  # WooCommerce product category
 COL_SHIPPING     = "eBay Shipping Service Cost Override List"
@@ -833,20 +833,20 @@ def passes_price_filter(row, logger, sku):
 
 def passes_stock_filter(row, logger, sku):
     """
-    Return True only if Stock Total is > 0.
+    Return True only if Qty Currently Listed is > 0.
     Also logs a debug message if Qty To List reports a higher available count.
     """
     raw = row.get(COL_QTY, "").strip()
     if not raw:
-        logger.debug("  SKU '%s': empty Stock Total — skipping.", sku)
+        logger.debug("  SKU '%s': empty Qty Currently Listed — skipping.", sku)
         return False
     try:
         qty = float(raw)
     except ValueError:
-        logger.debug("  SKU '%s': non-numeric Stock Total '%s' — skipping.", sku, raw)
+        logger.debug("  SKU '%s': non-numeric Qty Currently Listed '%s' — skipping.", sku, raw)
         return False
     if qty <= 0:
-        logger.debug("  SKU '%s': Stock Total is 0 — skipping.", sku)
+        logger.debug("  SKU '%s': Qty Currently Listed is 0 — skipping.", sku)
         return False
 
     return True
@@ -1156,7 +1156,7 @@ def process_row(
         logger.warning("  SKU '%s': could not transform price '%s' — skipping.", sku, raw_price)
         return "failed", None
 
-    # --- Stock quantity (primary: Stock Total) ---
+    # --- Stock quantity (primary: Qty Currently Listed) ---
     stock_qty = None
     raw_qty = row.get(COL_QTY, "").strip()
     if raw_qty:

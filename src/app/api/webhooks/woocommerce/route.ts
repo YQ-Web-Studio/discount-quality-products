@@ -119,6 +119,38 @@ export async function POST(req: Request) {
         throw new Error(`Resend email delivery failed: ${JSON.stringify(emailResult.error)}`);
       }
 
+      // Also send a copy of the order confirmation to the admin
+      try {
+        console.log(`[woocommerce-webhook] Sending order notification copy to admin for order #${id}...`);
+        await sendEmail({
+          to: 'sales@fncomputers.com',
+          subject: `[New Order] Order Confirmation - #${id}`,
+          react: React.createElement(OrderConfirmationEmail, {
+            customerName: customerName,
+            orderNumber: id.toString(),
+            orderDate: new Date(date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+            items: emailItems,
+            subtotal: `£${subtotalVal.toFixed(2)}`,
+            shipping: `£0.00`,
+            vat: `£${vatVal.toFixed(2)}`,
+            total: `£${orderTotal.toFixed(2)}`,
+            shippingAddress: {
+              name: shippingName,
+              line1: shipping?.address_1 || '',
+              line2: shipping?.address_2 || '',
+              city: shipping?.city || '',
+              postcode: shipping?.postcode || '',
+              country: shipping?.country || 'United Kingdom',
+            },
+            shippingMethod: "Free Delivery",
+          }),
+        });
+        console.log(`[woocommerce-webhook] ✓ Admin order notification copy sent for order #${id}`);
+      } catch (adminEmailErr) {
+        // Log but do NOT throw to avoid blocking customer flow if only the admin copy fails
+        console.error(`[woocommerce-webhook] Failed to send admin order notification copy for order #${id}:`, adminEmailErr);
+      }
+
       // Update WooCommerce metadata to flag that the confirmation email has been dispatched
       await updateWooCommerceOrder(id, {
         meta_data: [{ key: "_confirmation_email_sent", value: "yes" }],
