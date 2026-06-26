@@ -156,9 +156,9 @@ export async function POST(req: Request) {
         meta_data: [{ key: "_confirmation_email_sent", value: "yes" }],
       });
       console.log(`[woocommerce-webhook] ✓ Order #${id} updated with _confirmation_email_sent: yes`);
-    } catch (err) {
+    } catch (err: any) {
       console.error(`[woocommerce-webhook] Error handling confirmation email for order #${id}:`, err);
-      return NextResponse.json({ error: "Failed to send confirmation email" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to send confirmation email", details: err.message || String(err) }, { status: 500 });
     }
   }
 
