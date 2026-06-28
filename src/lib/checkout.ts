@@ -12,6 +12,7 @@ export interface ValidationResult {
   discountAmount: number;
   vat: number;
   shippingCost: number;
+  shippingTitle?: string;
   finalTotal: number;
   error?: string;
 }
@@ -138,19 +139,27 @@ export async function validateCartTotals(
 
     // Determine shipping cost dynamically from WooCommerce Store API
     let shippingCost = 0;
+    let shippingTitle = "Free Delivery";
     if (address && address.country) {
       try {
         const rates = await fetchWooCommerceShippingRates(items, address);
         const matchedRate = rates.find(r => r.id === shippingMethod) || rates[0];
         if (matchedRate) {
-          const label = matchedRate.label.toLowerCase();
+          const label = matchedRate.label;
+          const lowerLabel = label.toLowerCase();
           const price = matchedRate.price;
+          
+          shippingTitle = label;
+
           // Format the dynamic WooCommerce table-rate methods to align with pricing requirements
-          if (label.includes("standard delivery")) {
+          if (lowerLabel.includes("standard delivery")) {
             shippingCost = subtotal >= 5 ? 0 : 2.00;
-          } else if (label.includes("first class delivery")) {
+            if (subtotal >= 5) {
+              shippingTitle = "Free Delivery";
+            }
+          } else if (lowerLabel.includes("first class delivery")) {
             shippingCost = subtotal >= 5 ? 2.00 : 4.00;
-          } else if (label.includes("courier delivery")) {
+          } else if (lowerLabel.includes("courier delivery")) {
             shippingCost = subtotal >= 5 ? 10.00 : 12.00;
           } else {
             shippingCost = price;
@@ -160,6 +169,7 @@ export async function validateCartTotals(
         console.error("Failed to dynamically fetch WooCommerce shipping rates:", err);
         // Fallback standard rate if API fails
         shippingCost = 0;
+        shippingTitle = "Free Delivery";
       }
     }
 
@@ -176,6 +186,7 @@ export async function validateCartTotals(
       discountAmount,
       vat,
       shippingCost,
+      shippingTitle,
       finalTotal,
     };
   } catch (error: any) {

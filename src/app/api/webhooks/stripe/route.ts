@@ -68,7 +68,11 @@ export async function POST(req: Request) {
     }
 
     // ── 3a. Update/create the WooCommerce order (primary action) ─────────
-    await processOrderFromPaymentIntent(rawPaymentIntent, chargeId);
+    const order = await processOrderFromPaymentIntent(rawPaymentIntent, chargeId);
+    if (!order) {
+      console.error(`[webhook] Webhook order processing failed for PI ${rawPaymentIntent.id}. Returning 500 to trigger Stripe retry.`);
+      return NextResponse.json({ error: "WooCommerce order creation failed. Webhook will retry." }, { status: 500 });
+    }
 
     // ── 3b. Targeted cache invalidation for purchased products ─────────
     // Only invalidate the specific product caches — not the entire catalogue.

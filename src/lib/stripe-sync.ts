@@ -36,6 +36,15 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
     const customerName = order.billing?.first_name || metadataForm?.fn || 'Customer';
     const shippingName = `${order.shipping?.first_name || metadataForm?.fn || ''} ${order.shipping?.last_name || metadataForm?.ln || ''}`.trim() || 'Customer';
 
+    const orderTotal = parseFloat(order.total || '0');
+    const shippingCost = parseFloat(order.shipping_total || '0');
+    const orderTax = parseFloat(order.total_tax || '0');
+    const vatVal = orderTax || (orderTotal / 6);
+    const subtotalVal = orderTotal - shippingCost - vatVal;
+
+    const shippingMethodTitle = order.shipping_lines?.[0]?.method_title || "Free Delivery";
+
+    // Send customer confirmation copy
     await sendEmail({
       to: recipientEmail,
       subject: `Order Confirmation - #${order.id}`,
@@ -44,10 +53,10 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
         orderNumber: order.id.toString(),
         orderDate: new Date(order.date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
         items: emailItems,
-        subtotal: `£${parseFloat(order.total || '0').toFixed(2)}`,
-        shipping: `£0.00`,
-        vat: `£${parseFloat(order.total_tax || '0').toFixed(2)}`,
-        total: `£${parseFloat(order.total || '0').toFixed(2)}`,
+        subtotal: `£${subtotalVal.toFixed(2)}`,
+        shipping: `£${shippingCost.toFixed(2)}`,
+        vat: `£${vatVal.toFixed(2)}`,
+        total: `£${orderTotal.toFixed(2)}`,
         shippingAddress: {
           name: shippingName,
           line1: order.shipping?.address_1 || metadataForm?.a1 || '',
@@ -56,10 +65,41 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
           postcode: order.shipping?.postcode || metadataForm?.pc || '',
           country: order.shipping?.country || 'United Kingdom',
         },
-        shippingMethod: "Free Delivery",
+        shippingMethod: shippingMethodTitle,
       }),
     });
     console.log(`[stripe-sync] Confirmation email sent successfully to ${recipientEmail} for order #${order.id}`);
+
+    // Also send admin notification copy
+    try {
+      console.log(`[stripe-sync] Sending order notification copy to admin for order #${order.id}...`);
+      await sendEmail({
+        to: 'sales@fncomputers.com',
+        subject: `[New Order] Order Confirmation - #${order.id}`,
+        react: React.createElement(OrderConfirmationEmail, {
+          customerName: customerName,
+          orderNumber: order.id.toString(),
+          orderDate: new Date(order.date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+          items: emailItems,
+          subtotal: `£${subtotalVal.toFixed(2)}`,
+          shipping: `£${shippingCost.toFixed(2)}`,
+          vat: `£${vatVal.toFixed(2)}`,
+          total: `£${orderTotal.toFixed(2)}`,
+          shippingAddress: {
+            name: shippingName,
+            line1: order.shipping?.address_1 || metadataForm?.a1 || '',
+            line2: order.shipping?.address_2 || '',
+            city: order.shipping?.city || metadataForm?.ct || '',
+            postcode: order.shipping?.postcode || metadataForm?.pc || '',
+            country: order.shipping?.country || 'United Kingdom',
+          },
+          shippingMethod: shippingMethodTitle,
+        }),
+      });
+      console.log(`[stripe-sync] ✓ Admin order notification copy sent for order #${order.id}`);
+    } catch (adminEmailErr) {
+      console.error(`[stripe-sync] Failed to send admin order notification copy for order #${order.id}:`, adminEmailErr);
+    }
   } catch (emailError) {
     console.error("[stripe-sync] Failed to send order confirmation email:", emailError);
   }
@@ -75,7 +115,7 @@ export async function processOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {
-  const { cart_items, cart_shipping, cart_shipping_cost, cart_discount, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
+  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
 
   if (!cart_items || (!cart_form && !delivery_address)) {
     console.warn(
@@ -107,7 +147,7 @@ export async function processOrderFromPaymentIntent(
 
   const shippingMethod = cart_shipping ?? "standard";
   const shippingCost = cart_shipping_cost ? parseFloat(cart_shipping_cost) : 0;
-  const shippingTitle = shippingCost > 0 ? `Shipping (${shippingMethod})` : "Free Delivery";
+  const shippingTitle = cart_shipping_title || (shippingCost > 0 ? `Shipping (${shippingMethod})` : "Free Delivery");
   const line_items = items.map((item) => ({ product_id: item.i, quantity: item.q }));
   const paymentMeta = buildPaymentMeta(paymentIntent.id, chargeId);
 

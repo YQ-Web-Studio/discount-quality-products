@@ -3,6 +3,7 @@ import { createWooCommerceOrder } from "@/lib/woocommerce";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
+import { validateCartTotals } from "@/lib/checkout";
 import React from "react";
 
 interface CheckoutCustomerForm {
@@ -70,8 +71,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing order data." }, { status: 400 });
     }
 
-    const shippingCost = 0;
-    const shippingTitle = "Free Delivery";
+    // Dynamic cart validation to resolve the correct shipping details.
+    const validation = await validateCartTotals(
+      items.map(i => ({ id: i.id, quantity: i.quantity })),
+      shippingMethod || "standard",
+      form ? { country: form.country || "GB", city: form.city, postcode: form.postcode } : undefined
+    );
+
+    const shippingCost = validation.shippingCost;
+    const shippingTitle = validation.shippingTitle || "Free Delivery";
 
     const line_items = items.map((item) => {
       const productId = resolveToNumericId(item.id);
@@ -184,8 +192,9 @@ export async function POST(req: Request) {
         const orderTotal = parseFloat(newOrder.total || '0');
         const orderTax = parseFloat(newOrder.total_tax || '0');
         const vatVal = orderTax || (orderTotal / 6);
-        const subtotalVal = orderTotal - vatVal;
+        const subtotalVal = orderTotal - shippingCost - vatVal;
 
+        // Customer Copy
         await sendEmail({
           to: recipientEmail,
           subject: `Order Confirmation - #${newOrder.id}`,
@@ -195,7 +204,7 @@ export async function POST(req: Request) {
             orderDate: new Date(newOrder.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
             items: emailItems,
             subtotal: `£${subtotalVal.toFixed(2)}`,
-            shipping: `£0.00`,
+            shipping: `£${shippingCost.toFixed(2)}`,
             vat: `£${vatVal.toFixed(2)}`,
             total: `£${orderTotal.toFixed(2)}`,
             shippingAddress: {
@@ -209,6 +218,37 @@ export async function POST(req: Request) {
             shippingMethod: shippingTitle,
           }),
         });
+
+        // Admin Copy
+        try {
+          console.log(`[checkout] Sending order notification copy to admin for order #${newOrder.id}...`);
+          await sendEmail({
+            to: 'sales@fncomputers.com',
+            subject: `[New Order] Order Confirmation - #${newOrder.id}`,
+            react: React.createElement(OrderConfirmationEmail, {
+              customerName: newOrder.billing?.first_name || form?.firstName || 'Customer',
+              orderNumber: newOrder.id.toString(),
+              orderDate: new Date(newOrder.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+              items: emailItems,
+              subtotal: `£${subtotalVal.toFixed(2)}`,
+              shipping: `£${shippingCost.toFixed(2)}`,
+              vat: `£${vatVal.toFixed(2)}`,
+              total: `£${orderTotal.toFixed(2)}`,
+              shippingAddress: {
+                name: `${newOrder.shipping?.first_name || ''} ${newOrder.shipping?.last_name || ''}`.trim(),
+                line1: newOrder.shipping?.address_1 || '',
+                line2: newOrder.shipping?.address_2 || '',
+                city: newOrder.shipping?.city || '',
+                postcode: newOrder.shipping?.postcode || '',
+                country: newOrder.shipping?.country || 'United Kingdom',
+              },
+              shippingMethod: shippingTitle,
+            }),
+          });
+          console.log(`[checkout] ✓ Admin order notification copy sent for order #${newOrder.id}`);
+        } catch (adminEmailErr) {
+          console.error(`[checkout] Failed to send admin order notification copy for order #${newOrder.id}:`, adminEmailErr);
+        }
       }
     } catch (emailError) {
       console.error("[checkout] Failed to send order confirmation email:", emailError);

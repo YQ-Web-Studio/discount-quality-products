@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, ArrowRight, Package, Loader2, AlertCircle } from "lucide-react";
 import { sendGAEvent } from "@next/third-parties/google";
+import { useBasket } from "@/lib/useBasket";
 
 
 // Maximum time to wait for the Stripe webhook to create the WC order (ms).
@@ -30,6 +31,14 @@ export default function SuccessContent() {
   const ga4FiredRef = useRef(false);
 
   useEffect(() => {
+    // Clear the customer's shopping basket immediately on success page mount.
+    // This blocks duplicate checkout attempts if they refresh or go back.
+    try {
+      useBasket.getState().clearBasket();
+    } catch (basketErr) {
+      console.warn("Failed to clear basket on success page mount:", basketErr);
+    }
+
     if (ga4FiredRef.current) return;
 
     try {
@@ -190,7 +199,13 @@ export default function SuccessContent() {
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row print:hidden">
+        <button
+          onClick={() => window.print()}
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-6 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
+        >
+          Print Receipt
+        </button>
         <Link
           href="/"
           className="inline-flex items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
@@ -198,6 +213,19 @@ export default function SuccessContent() {
           Continue Shopping <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
+
+      {/* Print-specific style overrides */}
+      <style>{`
+        @media print {
+          header, footer, nav, .print\\:hidden, button, a {
+            display: none !important;
+          }
+          body {
+            background: white !important;
+            color: black !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

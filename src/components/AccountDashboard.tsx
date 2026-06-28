@@ -735,8 +735,34 @@ export function AccountDashboard({
                                       <span className="capitalize">{order.payment_method_title || order.payment_method}</span>
                                     </div>
                                   </div>
- 
- 
+
+                                  {/* Print Invoice */}
+                                  <div className="pt-4 print:hidden">
+                                    <button
+                                      onClick={() => window.print()}
+                                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-xs font-bold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm w-full"
+                                    >
+                                      Print Invoice / Receipt
+                                    </button>
+                                  </div>
+
+                                  {/* Print-specific style overrides */}
+                                  <style>{`
+                                    @media print {
+                                      header, footer, nav, aside, .print\\:hidden, button, a {
+                                        display: none !important;
+                                      }
+                                      body {
+                                        background: white !important;
+                                        color: black !important;
+                                      }
+                                      main {
+                                        border: none !important;
+                                        box-shadow: none !important;
+                                        padding: 0 !important;
+                                      }
+                                    }
+                                  `}</style>
                                 </div>
                               </div>
                             </div>
