@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Discount Quality Products — E-Commerce Storefront
+
+A production-grade, highly-optimized headless e-commerce storefront built with Next.js and integrated with WooCommerce. The storefront is designed to serve a large catalog of over 25,000 products with near-instant load times, featuring secure checkout integrations and real-time inventory updates.
+
+Live Storefront: [www.discountproducts.co.uk](https://www.discountproducts.co.uk)
+
+---
+
+## Architecture Overview
+
+This storefront operates as a decoupled frontend client interacting with a WordPress/WooCommerce backend through APIs:
+
+1. **Headless Catalog**: Fetches product listings, categories, attributes, and inventory dynamically via the WooCommerce REST API.
+2. **High-Performance Rendering**: Utilizes Incremental Static Regeneration (ISR) and cache-tag invalidation. Pages are rendered statically for speed and SEO, with cache updates triggered instantly when product data changes.
+3. **Secure Transactions**: Features server-side Stripe and PayPal payment gateway integrations, processing orders and customer information securely.
+4. **Order Synchronisation**: Receives real-time payment notifications via webhooks, completing checkouts and updating store inventory automatically.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js (App Router) |
+| Styling | TailwindCSS, CSS Variables |
+| Payment Gateways | Stripe API, PayPal Checkout SDK |
+| Backend CMS | Headless WordPress / WooCommerce REST API |
+| Deployment | Vercel (Frontend), Apache/Linux (Backend) |
+
+---
+
+## Key Features
+
+- **Dynamic Navigation**: Categorized catalog browsing with automatic filtering options derived from WooCommerce attributes.
+- **Dynamic Search**: High-speed keyword search with debounced inputs and pagination.
+- **Unified Shopping Cart**: Secure, persistent client-side shopping cart with real-time stock availability verification.
+- **Stripe & PayPal Checkout**: Direct gateway checkout processing with client/server validation.
+- **Technical SEO**: Optimized page load times, structural HTML5 elements, automated XML sitemap generation, and dynamic metadata/JSON-LD structured data.
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+- Node.js 18+
+- A running WordPress site with WooCommerce activated
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### 2. Environment Setup
+Create a `.env.local` file in the project root:
+
+```ini
+# Store API Configuration
+WORDPRESS_URL=https://your-wordpress-backend.com
+WOOCOMMERCE_CONSUMER_KEY=ck_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+WOOCOMMERCE_CONSUMER_SECRET=cs_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# Payment Gateways
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+NEXT_PUBLIC_PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+
+# Store URLs
+NEXT_PUBLIC_SITE_URL=https://www.discountproducts.co.uk
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Installation
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Running the Development Server
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Production Build
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is private and all rights are reserved. Not licensed for public redistribution or commercial use.
