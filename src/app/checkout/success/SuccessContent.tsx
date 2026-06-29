@@ -23,6 +23,30 @@ export default function SuccessContent() {
   );
   const [polling, setPolling] = useState(!!pi && !directOrder);
   const [error, setError] = useState(false);
+  const [orderDetails, setOrderDetails] = useState<any | null>(null);
+
+  // Fetch full WooCommerce order details when orderNumber changes
+  useEffect(() => {
+    if (!orderNumber) return;
+
+    let active = true;
+    async function fetchOrderDetails() {
+      try {
+        const res = await fetch(`/api/checkout/order-details?id=${orderNumber}`);
+        if (res.ok && active) {
+          const data = await res.json();
+          if (data.order) {
+            setOrderDetails(data.order);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch order details for print receipt:", err);
+      }
+    }
+
+    fetchOrderDetails();
+    return () => { active = false; };
+  }, [orderNumber]);
 
   // ── GA4: fire purchase event once from sessionStorage snapshot ──────────────
   // CheckoutFlow writes a full order snapshot to sessionStorage immediately
@@ -144,85 +168,178 @@ export default function SuccessContent() {
   }, [pi, directOrder]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[70vh] px-8 text-center">
-      {/* Success icon */}
-      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/5">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white">
-          <Check className="h-6 w-6" />
+    <div className="flex flex-col items-center justify-center min-h-[70vh] px-8 text-center w-full">
+      <div className="screen-card-container print:hidden flex flex-col items-center justify-center text-center">
+        {/* Success icon */}
+        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white">
+            <Check className="h-6 w-6" />
+          </div>
+        </div>
+
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl mb-2">
+          {orderNumber ? "Order Confirmed" : "Payment Received"}
+        </h1>
+
+        <p className="text-sm text-zinc-500 max-w-md mb-6">
+          {orderNumber 
+            ? "Thank you for your purchase. We've received your order and will begin processing it shortly. A confirmation email has been sent to your inbox."
+            : "Thank you for your purchase. Your payment was successful, but we are still verifying the order details. This may take a few moments."}
+        </p>
+
+        {/* Order reference */}
+        <div className="mb-8 rounded-xl border border-zinc-200 bg-white px-8 py-5 inline-flex flex-col items-center gap-2 min-w-[220px]">
+          {error ? (
+             <span className="flex items-center gap-2 text-sm text-amber-600">
+               <AlertCircle className="h-4 w-4" />
+               Order processing delayed
+             </span>
+          ) : (
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              Order Number
+            </span>
+          )}
+
+          {polling ? (
+            <span className="flex items-center gap-2 text-sm text-zinc-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Confirming&hellip;
+            </span>
+          ) : orderNumber ? (
+            <span className="text-xl font-black tracking-wider text-zinc-900">
+              #{orderNumber}
+            </span>
+          ) : (
+            <span className="text-sm text-zinc-400 italic">
+              Please check your email for order reference.
+            </span>
+          )}
+
+          {orderNumber && (
+            <div className="flex items-center gap-2 mt-1">
+              <Package className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="text-xs text-zinc-500">Estimated delivery: 3–5 working days</span>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-3 sm:flex-row print:hidden">
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-6 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
+          >
+            Print Receipt
+          </button>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
+          >
+            Continue Shopping <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
 
-      <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl mb-2">
-        {orderNumber ? "Order Confirmed" : "Payment Received"}
-      </h1>
-
-      <p className="text-sm text-zinc-500 max-w-md mb-6">
-        {orderNumber 
-          ? "Thank you for your purchase. We've received your order and will begin processing it shortly. A confirmation email has been sent to your inbox."
-          : "Thank you for your purchase. Your payment was successful, but we are still verifying the order details. This may take a few moments."}
-      </p>
-
-      {/* Order reference */}
-      <div className="mb-8 rounded-xl border border-zinc-200 bg-white px-8 py-5 inline-flex flex-col items-center gap-2 min-w-[220px]">
-        {error ? (
-           <span className="flex items-center gap-2 text-sm text-amber-600">
-             <AlertCircle className="h-4 w-4" />
-             Order processing delayed
-           </span>
-        ) : (
-          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-            Order Number
-          </span>
-        )}
-
-        {polling ? (
-          <span className="flex items-center gap-2 text-sm text-zinc-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Confirming&hellip;
-          </span>
-        ) : orderNumber ? (
-          <span className="text-xl font-black tracking-wider text-zinc-900">
-            #{orderNumber}
-          </span>
-        ) : (
-          <span className="text-sm text-zinc-400 italic">
-            Please check your email for order reference.
-          </span>
-        )}
-
-        {orderNumber && (
-          <div className="flex items-center gap-2 mt-1">
-            <Package className="h-3.5 w-3.5 text-zinc-400" />
-            <span className="text-xs text-zinc-500">Estimated delivery: 3–5 working days</span>
+      {orderDetails && (
+        <div className="hidden print:block w-full max-w-3xl mx-auto p-8 text-left text-zinc-850">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b border-zinc-200 pb-6 mb-6">
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-zinc-950">RECEIPT / INVOICE</h1>
+              <p className="text-sm font-semibold text-zinc-500 mt-1">Order Number: #{orderNumber}</p>
+              <p className="text-xs text-zinc-400">Date: {new Date(orderDetails.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </div>
+            <div className="text-right text-xs text-zinc-600 leading-relaxed">
+              <p className="font-extrabold text-zinc-950 text-sm">FN Computers T/A</p>
+              <p className="font-extrabold text-zinc-950 text-sm">Discount Products</p>
+              <p>256 London Road</p>
+              <p>Westcliff on Sea</p>
+              <p>Essex</p>
+              <p>SS0 7JG</p>
+              <p className="mt-1 font-bold text-zinc-900">VAT: GB 858231904</p>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* Actions */}
-      <div className="flex flex-col gap-3 sm:flex-row print:hidden">
-        <button
-          onClick={() => window.print()}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-6 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
-        >
-          Print Receipt
-        </button>
-        <Link
-          href="/"
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
-        >
-          Continue Shopping <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
+          {/* Addresses */}
+          <div className="grid grid-cols-2 gap-8 mb-8 text-xs leading-relaxed">
+            <div>
+              <p className="font-bold text-zinc-900 uppercase tracking-wider mb-2 border-b border-zinc-100 pb-1">Billing Address</p>
+              <p className="font-bold text-zinc-800">{orderDetails.billing.first_name} {orderDetails.billing.last_name}</p>
+              <p>{orderDetails.billing.address_1}</p>
+              {orderDetails.billing.address_2 && <p>{orderDetails.billing.address_2}</p>}
+              <p>{orderDetails.billing.city}, {orderDetails.billing.postcode}</p>
+              <p>{orderDetails.billing.country || "United Kingdom"}</p>
+              {orderDetails.billing.email && <p className="mt-1">Email: {orderDetails.billing.email}</p>}
+              {orderDetails.billing.phone && <p>Phone: {orderDetails.billing.phone}</p>}
+            </div>
+            <div>
+              <p className="font-bold text-zinc-900 uppercase tracking-wider mb-2 border-b border-zinc-100 pb-1">Shipping Address</p>
+              <p className="font-bold text-zinc-800">{orderDetails.shipping.first_name} {orderDetails.shipping.last_name}</p>
+              <p>{orderDetails.shipping.address_1}</p>
+              {orderDetails.shipping.address_2 && <p>{orderDetails.shipping.address_2}</p>}
+              <p>{orderDetails.shipping.city}, {orderDetails.shipping.postcode}</p>
+              <p>{orderDetails.shipping.country || "United Kingdom"}</p>
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <table className="w-full mb-8 text-xs border-collapse">
+            <thead>
+              <tr className="border-b-2 border-zinc-200 text-left font-bold text-zinc-900">
+                <th className="py-2">Product Details</th>
+                <th className="py-2 text-center w-16">Quantity</th>
+                <th className="py-2 text-right w-24">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200">
+              {orderDetails.line_items.map((item: any) => (
+                <tr key={item.id} className="border-b border-zinc-100">
+                  <td className="py-3 font-semibold text-zinc-900">{item.name}</td>
+                  <td className="py-3 text-center text-zinc-600">{item.quantity}</td>
+                  <td className="py-3 text-right font-semibold text-zinc-900">£{parseFloat(item.total).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Totals Summary */}
+          <div className="flex justify-end text-xs">
+            <div className="w-72 space-y-2.5 border-t-2 border-zinc-200 pt-4">
+              <div className="flex justify-between text-zinc-600">
+                <span>Subtotal (excl. VAT)</span>
+                <span>£{(parseFloat(orderDetails.total) - parseFloat(orderDetails.shipping_total || "0") - parseFloat(orderDetails.total_tax || "0")).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-600">
+                <span>Shipping ({orderDetails.shipping_lines?.[0]?.method_title || "Standard Delivery"})</span>
+                <span>£{parseFloat(orderDetails.shipping_total || "0").toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-600">
+                <span>VAT (20%)</span>
+                <span>£{parseFloat(orderDetails.total_tax || "0").toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-t border-zinc-300 pt-2.5 font-black text-zinc-950 text-sm">
+                <span>Grand Total (incl. VAT)</span>
+                <span>£{parseFloat(orderDetails.total).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Print-specific style overrides */}
       <style>{`
         @media print {
-          header, footer, nav, .print\\:hidden, button, a {
+          header, footer, nav, .print\\:hidden, button, a, .screen-card-container {
             display: none !important;
           }
           body {
             background: white !important;
             color: black !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .print\\:block {
+            display: block !important;
           }
         }
       `}</style>

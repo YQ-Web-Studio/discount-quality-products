@@ -598,8 +598,8 @@ export function AccountDashboard({
                         <div 
                           key={order.id} 
                           className={cn(
-                            "overflow-hidden rounded-xl border transition-all duration-300",
-                            isExpanded ? "border-zinc-300 bg-zinc-50/30 shadow-md" : "border-zinc-200 bg-white hover:border-zinc-300"
+                            "overflow-hidden rounded-xl border transition-all duration-300 order-card-container",
+                            isExpanded ? "border-zinc-300 bg-zinc-50/30 shadow-md printing-active-order" : "border-zinc-200 bg-white hover:border-zinc-300"
                           )}
                         >
                           {/* Order Header (Summary) */}
@@ -662,6 +662,23 @@ export function AccountDashboard({
                           {/* Expanded Details */}
                           {isExpanded && (
                             <div className="border-t border-zinc-200 bg-white p-5 sm:p-8 animate-in slide-in-from-top-2 duration-300">
+                              {/* Print-only company header */}
+                              <div className="hidden print:flex justify-between items-start border-b border-zinc-200 pb-6 mb-6">
+                                <div>
+                                  <h1 className="text-2xl font-black tracking-tight text-zinc-950">RECEIPT / INVOICE</h1>
+                                  <p className="text-sm font-semibold text-zinc-500 mt-1">Order Number: #{order.number}</p>
+                                  <p className="text-xs text-zinc-400">Date: {new Date(order.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                </div>
+                                <div className="text-right text-xs text-zinc-600 leading-relaxed">
+                                  <p className="font-extrabold text-zinc-955 text-sm">FN Computers T/A</p>
+                                  <p className="font-extrabold text-zinc-955 text-sm">Discount Products</p>
+                                  <p>256 London Road</p>
+                                  <p>Westcliff on Sea</p>
+                                  <p>Essex</p>
+                                  <p>SS0 7JG</p>
+                                  <p className="mt-1 font-bold text-zinc-900">VAT: GB 858231904</p>
+                                </div>
+                              </div>
                               <div className="grid gap-8 lg:grid-cols-3">
                                 {/* Left: Line Items */}
                                 <div className="lg:col-span-2 space-y-4">
@@ -752,14 +769,22 @@ export function AccountDashboard({
                                       header, footer, nav, aside, .print\\:hidden, button, a {
                                         display: none !important;
                                       }
+                                      .order-card-container:not(.printing-active-order) {
+                                        display: none !important;
+                                      }
                                       body {
                                         background: white !important;
                                         color: black !important;
+                                        padding: 0 !important;
+                                        margin: 0 !important;
                                       }
                                       main {
                                         border: none !important;
                                         box-shadow: none !important;
                                         padding: 0 !important;
+                                      }
+                                      .print\\:flex {
+                                        display: flex !important;
                                       }
                                     }
                                   `}</style>
