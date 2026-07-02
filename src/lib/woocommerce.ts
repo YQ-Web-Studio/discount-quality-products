@@ -545,7 +545,8 @@ export async function updateWooCommerceOrder(orderId: number, orderData: any): P
     throw new Error("WooCommerce API keys are missing.");
   }
 
-  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders/${orderId}`;
+  // Use POST method override to bypass hosting firewalls that block HTTP PUT requests
+  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders/${orderId}?_method=PUT`;
 
   const CryptoJS = require("crypto-js");
   const OAuth = require("oauth-1.0a");
@@ -558,10 +559,10 @@ export async function updateWooCommerceOrder(orderId: number, orderData: any): P
     },
   });
 
-  const authHeader = oauth.toHeader(oauth.authorize({ url: apiUrl, method: "PUT" }));
+  const authHeader = oauth.toHeader(oauth.authorize({ url: apiUrl, method: "POST" }));
 
   const response = await fetch(apiUrl, {
-    method: "PUT",
+    method: "POST",
     headers: { ...authHeader, "Content-Type": "application/json" },
     body: JSON.stringify(orderData),
     cache: "no-store",
