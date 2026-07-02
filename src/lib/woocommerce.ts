@@ -586,6 +586,90 @@ export async function updateWooCommerceOrder(orderId: number, orderData: any): P
 }
 
 /**
+ * Fetches a single WooCommerce order by ID via GET /wp-json/wc/v3/orders/{id}.
+ * Used for idempotency checks before updating an order.
+ */
+export async function fetchWooCommerceOrder(orderId: number): Promise<any> {
+  const url = process.env.WOOCOMMERCE_URL;
+  const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;
+  const consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
+
+  if (!url || !consumerKey || !consumerSecret) {
+    throw new Error("WooCommerce API keys are missing.");
+  }
+
+  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders/${orderId}`;
+
+  const CryptoJS = require("crypto-js");
+  const OAuth = require("oauth-1.0a");
+
+  const oauth = new OAuth({
+    consumer: { key: consumerKey, secret: consumerSecret },
+    signature_method: "HMAC-SHA1",
+    hash_function(base_string: string, key: string) {
+      return CryptoJS.HmacSHA1(base_string, key).toString(CryptoJS.enc.Base64);
+    },
+  });
+
+  const authHeader = oauth.toHeader(oauth.authorize({ url: apiUrl, method: "GET" }));
+
+  const response = await fetch(apiUrl, {
+    method: "GET",
+    headers: { ...authHeader, "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`WooCommerce GET order ${orderId} failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Searches WooCommerce for an order that references the given Stripe PaymentIntent ID.
+ * Used as a deduplication guard before creating a new order in Path B.
+ * Returns the first matching order, or null if none found.
+ */
+export async function searchWooCommerceOrderByPaymentIntent(paymentIntentId: string): Promise<any | null> {
+  const url = process.env.WOOCOMMERCE_URL;
+  const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;
+  const consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
+
+  if (!url || !consumerKey || !consumerSecret) {
+    throw new Error("WooCommerce API keys are missing.");
+  }
+
+  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders?search=${encodeURIComponent(paymentIntentId)}&per_page=1`;
+
+  const CryptoJS = require("crypto-js");
+  const OAuth = require("oauth-1.0a");
+
+  const oauth = new OAuth({
+    consumer: { key: consumerKey, secret: consumerSecret },
+    signature_method: "HMAC-SHA1",
+    hash_function(base_string: string, key: string) {
+      return CryptoJS.HmacSHA1(base_string, key).toString(CryptoJS.enc.Base64);
+    },
+  });
+
+  const authHeader = oauth.toHeader(oauth.authorize({ url: apiUrl, method: "GET" }));
+
+  const response = await fetch(apiUrl, {
+    method: "GET",
+    headers: { ...authHeader, "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`WooCommerce search for PI ${paymentIntentId} failed: ${response.status}`);
+  }
+
+  const orders: any[] = await response.json();
+  return orders.length > 0 ? orders[0] : null;
+}
+
+/**
  * Fetches orders for a specific customer from WooCommerce.
  */
 export async function fetchWooCommerceOrders(params: {

@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { createWooCommerceOrder, updateWooCommerceOrder } from "@/lib/woocommerce";
+import { createWooCommerceOrder, updateWooCommerceOrder, fetchWooCommerceOrder, searchWooCommerceOrderByPaymentIntent } from "@/lib/woocommerce";
 import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import React from "react";
@@ -154,6 +154,23 @@ export async function processOrderFromPaymentIntent(
   // ── Path A: update the linked WooCommerce order if one already exists ────
   if (wc_order_id) {
     const orderId = parseInt(wc_order_id, 10);
+
+    // ── Idempotency check: if the order was already promoted by a prior
+    //    webhook delivery or the success-page fallback, return it as-is
+    //    without re-updating or re-sending the confirmation email. ──
+    try {
+      const existing = await fetchWooCommerceOrder(orderId);
+      if (existing && (existing.status === "processing" || existing.status === "completed")) {
+        console.log(
+          `[stripe-sync] Order #${existing.number ?? existing.id} is already "${existing.status}" — skipping duplicate update for PI ${paymentIntent.id}.`
+        );
+        return existing;
+      }
+    } catch (fetchErr) {
+      // If we can't fetch the order to check, proceed with the update attempt.
+      console.warn(`[stripe-sync] Could not fetch order ${orderId} for idempotency check:`, fetchErr);
+    }
+
     try {
       const updated = await updateWooCommerceOrder(orderId, {
         status: "processing",
@@ -172,11 +189,36 @@ export async function processOrderFromPaymentIntent(
       await sendConfirmationEmailForOrder(updated, form);
       return updated;
     } catch (err) {
-      console.error(`[stripe-sync] Failed to update existing order ${orderId} — falling back to create:`, err);
+      // CRITICAL: Do NOT fall through to Path B when a pre-created order exists.
+      // Creating a second order would produce a duplicate. Instead, return null
+      // so the webhook handler returns 500 and Stripe retries delivery.
+      console.error(
+        `[stripe-sync] Failed to update existing order ${orderId}. ` +
+        `Returning null to trigger Stripe webhook retry (will NOT create a duplicate order). ` +
+        `PaymentIntent: ${paymentIntent.id}`,
+        err
+      );
+      return null;
     }
   }
 
   // ── Path B: fallback — create order from scratch (WC was down at intent time) ──
+  // DEDUPLICATION GUARD: Before creating, search WooCommerce for an order that
+  // already references this PaymentIntent. This prevents duplicates when the
+  // webhook and success-page fallback race each other.
+  try {
+    const existingOrder = await searchWooCommerceOrderByPaymentIntent(paymentIntent.id);
+    if (existingOrder) {
+      console.log(
+        `[stripe-sync] Found existing order #${existingOrder.number ?? existingOrder.id} for PI ${paymentIntent.id} — skipping duplicate creation.`
+      );
+      return existingOrder;
+    }
+  } catch (searchErr) {
+    // If search fails, proceed cautiously with creation.
+    console.warn(`[stripe-sync] Deduplication search failed for PI ${paymentIntent.id}:`, searchErr);
+  }
+
   const billingPayload = billing
     ? {
         first_name: billing.firstName,
