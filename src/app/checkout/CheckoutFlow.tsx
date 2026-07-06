@@ -816,6 +816,18 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [clientSecret, setClientSecret] = useState("");
   const [savedCards, setSavedCards] = useState<any[]>([]);
+
+  // Track the active PI so we can cancel it if the customer
+  // retries checkout (prevents orphaned payment intents).
+  const activePaymentIntentIdRef = useRef<string>("");
+
+  // Restore previous checkout session from sessionStorage (survives page refreshes)
+  useEffect(() => {
+    try {
+      const savedPi = sessionStorage.getItem("dqp_active_pi");
+      if (savedPi) activePaymentIntentIdRef.current = savedPi;
+    } catch {}
+  }, []);
   const [currentStep, setCurrentStep] = useState<CheckoutStep>("details");
 
   // Scroll to top on step transition
@@ -1019,11 +1031,13 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         headers: { "Content-Type": "application/json" },
         // Pass the full form so customer data is embedded securely in the
         // Stripe PaymentIntent metadata for webhook-side order creation.
+        // Also pass previous PI/order IDs so the server can cancel them.
         body: JSON.stringify({
           items: computedItems,
           shippingMethod: shipping,
           form: { ...form, showBillingAddress },
           couponCode: appliedCoupon,
+          previousPaymentIntentId: activePaymentIntentIdRef.current || undefined,
         })
       });
       const data = await res.json();
@@ -1031,6 +1045,12 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         setClientSecret(data.clientSecret);
         setSavedCards(data.savedCards || []);
         preparedCheckoutSnapshotRef.current = checkoutSnapshot;
+
+        // Track the new PI and WC order so we can cancel them on retry
+        if (data.paymentIntentId) {
+          activePaymentIntentIdRef.current = data.paymentIntentId;
+          try { sessionStorage.setItem("dqp_active_pi", data.paymentIntentId); } catch {}
+        }
       } else {
         alert(data.error || "Failed to initialise payment. Please check your basket.");
       }
@@ -1039,7 +1059,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     } finally {
       setFetchingSecret(false);
     }
-  }, [checkoutSnapshot, clientSecret, computedItems, fetchingSecret, form, showBillingAddress, shipping, validateDetails]);
+  }, [checkoutSnapshot, clientSecret, computedItems, fetchingSecret, form, showBillingAddress, shipping, validateDetails, appliedCoupon]);
 
 
 
@@ -1091,6 +1111,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         })),
       };
       sessionStorage.setItem('dqp_ga4_purchase', JSON.stringify(ga4PurchasePayload));
+      sessionStorage.removeItem("dqp_active_pi");
     } catch {
       // sessionStorage may be blocked in some environments — silently ignore.
     }
@@ -1635,6 +1656,19 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               } catch (err) {
                                 alert("Network error during PayPal capture.");
                                 setProcessing(false);
+                              } finally {
+                                // Best-effort cleanup: cancel any Stripe PaymentIntent that was
+                                // created when the card form loaded, since the user paid via PayPal.
+                                const orphanedPi = activePaymentIntentIdRef.current;
+                                if (orphanedPi) {
+                                  activePaymentIntentIdRef.current = "";
+                                  try { sessionStorage.removeItem("dqp_active_pi"); } catch {}
+                                  fetch("/api/checkout/stripe/cancel-intent", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ paymentIntentId: orphanedPi }),
+                                  }).catch(() => {}); // fire-and-forget
+                                }
                               }
                             }}
                           />

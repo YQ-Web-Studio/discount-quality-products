@@ -1,4 +1,4 @@
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
  * Usage:
  *   POST /api/revalidate
  *   Header: x-revalidate-secret: <REVALIDATE_SECRET from .env.local>
- *   Body: { "tags": ["wc-products"] }   (optional — defaults to all product tags)
+ *   Body: { "tags": ["wc-products"], "paths": ["/products/slug"] }
  */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-revalidate-secret");
@@ -18,10 +18,14 @@ export async function POST(req: NextRequest) {
   }
 
   let tags: string[] = ["wc-products", "wc-categories"];
+  let paths: string[] = [];
   try {
     const body = await req.json();
     if (Array.isArray(body?.tags) && body.tags.length > 0) {
       tags = body.tags;
+    }
+    if (Array.isArray(body?.paths)) {
+      paths = body.paths;
     }
   } catch {
     // No body or invalid JSON — use the default tag list
@@ -29,10 +33,17 @@ export async function POST(req: NextRequest) {
 
   // @ts-expect-error - Next.js 16 types incorrectly require a second profile argument
   tags.forEach((tag) => revalidateTag(tag));
+  
+  paths.forEach((path) => {
+    if (path.startsWith("/")) {
+      revalidatePath(path);
+    }
+  });
 
   return NextResponse.json({
     revalidated: true,
     tags,
+    paths,
     timestamp: new Date().toISOString(),
   });
 }

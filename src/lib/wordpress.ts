@@ -482,6 +482,11 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
     }
   } catch (error) {
     console.warn(`Direct product slug fetch failed for "${slug}":`, error);
+    // Do NOT swallow the error if it's a critical network/backend issue.
+    // If the server is throwing 500/502s, we want to throw so Next.js doesn't cache a null (404).
+    if (error instanceof Error && !error.message.includes("GraphQL Error")) {
+      throw error;
+    }
   }
 
   // 2. Fallback: Search for the product using keywords from the sanitized slug
@@ -527,6 +532,9 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
       }
     } catch (fallbackError) {
       console.error(`Fallback search failed for slug "${slug}":`, fallbackError);
+      // We must throw here so unstable_cache doesn't silently cache null for 24 hours
+      // when the WooCommerce server is temporarily down.
+      throw fallbackError;
     }
   }
 

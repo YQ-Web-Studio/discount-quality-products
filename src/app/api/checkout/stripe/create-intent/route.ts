@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
-import { createWooCommerceOrder } from "@/lib/woocommerce";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
   apiVersion: "2023-10-16" as any,
@@ -37,7 +36,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { items, shippingMethod, form, couponCode } = await req.json();
+    const { items, shippingMethod, form, couponCode, previousPaymentIntentId } = await req.json();
+
+    // ── Cleanup: Cancel the previous Payment Intent if the customer is retrying
+    //    checkout. This prevents orphaned incomplete PIs from piling up in Stripe. ──
+    if (previousPaymentIntentId) {
+      try {
+        const oldPi = await stripe.paymentIntents.retrieve(previousPaymentIntentId);
+        if (oldPi.status === "requires_payment_method" || oldPi.status === "requires_confirmation" || oldPi.status === "requires_action") {
+          await stripe.paymentIntents.cancel(previousPaymentIntentId);
+          console.log(`[stripe-intent] Cancelled previous PI ${previousPaymentIntentId}`);
+        }
+      } catch (err) {
+        // Non-critical: the old PI may have already expired or been cancelled
+        console.warn(`[stripe-intent] Could not cancel previous PI ${previousPaymentIntentId}:`, err);
+      }
+    }
 
     const validation = await validateCartTotals(items, shippingMethod, form ? { ...form, email: form.email } : undefined, couponCode);
 
@@ -134,86 +148,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Pre-create the WooCommerce Order in "pending" status ──
-    let wcOrderId = "";
-    try {
-      const line_items = resolvedItems.map((item: { numericId: number; quantity: number }) => ({
-        product_id: item.numericId,
-        quantity: item.quantity,
-      }));
-
-      const billingPayload = billingAddress
-        ? {
-            first_name: billingAddress.firstName,
-            last_name: billingAddress.lastName,
-            address_1: billingAddress.address1,
-            address_2: billingAddress.address2 || "",
-            city: billingAddress.city,
-            state: billingAddress.county,
-            postcode: billingAddress.postcode,
-            country: "GB",
-            email: billingAddress.email || "",
-            phone: billingAddress.phone || "",
-          }
-        : {
-            first_name: form?.firstName || "",
-            last_name: form?.lastName || "",
-            address_1: form?.address1 || "",
-            city: form?.city || "",
-            postcode: form?.postcode || "",
-            country: "GB",
-            email: form?.email || "",
-          };
-
-      const shippingPayload = deliveryAddress
-        ? {
-            first_name: deliveryAddress.firstName,
-            last_name: deliveryAddress.lastName,
-            address_1: deliveryAddress.address1,
-            address_2: deliveryAddress.address2 || "",
-            city: deliveryAddress.city,
-            state: deliveryAddress.county,
-            postcode: deliveryAddress.postcode,
-            country: "GB",
-            phone: deliveryAddress.phone || "",
-          }
-        : {
-            first_name: form?.firstName || "",
-            last_name: form?.lastName || "",
-            address_1: form?.address1 || "",
-            city: form?.city || "",
-            postcode: form?.postcode || "",
-            country: "GB",
-          };
-
-      const wcOrder = await createWooCommerceOrder({
-        payment_method: "stripe",
-        payment_method_title: "Credit Card (Stripe)",
-        set_paid: false,
-        status: "pending",
-        customer_id: session?.user?.id ? session.user.id : 0,
-        billing: billingPayload,
-        shipping: shippingPayload,
-        line_items,
-        shipping_lines: [
-          {
-            method_id: "flat_rate",
-            method_title: validation.shippingTitle || "Free Delivery",
-            total: validation.shippingCost.toString(),
-          },
-        ],
-        meta_data: [
-          { key: "_stripe_intent_id", value: "" },
-        ],
-      });
-      wcOrderId = String(wcOrder.id);
-      console.log(`[stripe-intent] Pre-created WooCommerce pending order #${wcOrderId}`);
-    } catch (orderErr) {
-      console.error("[stripe-intent] Failed to pre-create WooCommerce order. Proceeding without pre-creation:", orderErr);
-    }
-
     // Create the Stripe PaymentIntent and embed the cart snapshot for webhook-side
     // WooCommerce order creation after payment has actually completed.
+    // NOTE: We intentionally do NOT pre-create a WooCommerce order here.
+    // The WC order is created only upon confirmed payment (via the Stripe webhook
+    // or the success-page fallback). This prevents orphaned "pending" orders when
+    // users pay via PayPal or abandon checkout.
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInPence,
       currency: "gbp",
@@ -231,7 +171,6 @@ export async function POST(req: Request) {
         delivery_address: deliveryAddress ? JSON.stringify(deliveryAddress) : "",
         billing_address: billingAddress ? JSON.stringify(billingAddress) : "",
         wc_customer_id: session?.user?.id ? String(session.user.id) : "",
-        wc_order_id: wcOrderId || "",
       },
     });
 
@@ -259,7 +198,6 @@ export async function POST(req: Request) {
       totalCalculated: validation.finalTotal,
       paymentIntentId: paymentIntent.id,
       savedCards,
-      wcOrderId,
     });
   } catch (error: unknown) {
     console.error("Stripe Intent Error:", error);

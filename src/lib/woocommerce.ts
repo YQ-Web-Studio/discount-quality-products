@@ -586,6 +586,58 @@ export async function updateWooCommerceOrder(orderId: number, orderData: any): P
 }
 
 /**
+ * Permanently deletes a WooCommerce order by ID.
+ * Used to clean up abandoned pending orders during checkout retries.
+ */
+export async function deleteWooCommerceOrder(orderId: number): Promise<any> {
+  const url = process.env.WOOCOMMERCE_URL;
+  const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;
+  const consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
+
+  if (!url || !consumerKey || !consumerSecret) {
+    throw new Error("WooCommerce API keys are missing.");
+  }
+
+  // Use POST method override with force=true to permanently delete
+  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders/${orderId}?force=true&_method=DELETE`;
+
+  const CryptoJS = require("crypto-js");
+  const OAuth = require("oauth-1.0a");
+
+  const oauth = new OAuth({
+    consumer: { key: consumerKey, secret: consumerSecret },
+    signature_method: "HMAC-SHA1",
+    hash_function(base_string: string, key: string) {
+      return CryptoJS.HmacSHA1(base_string, key).toString(CryptoJS.enc.Base64);
+    },
+  });
+
+  const authHeader = oauth.toHeader(oauth.authorize({ url: apiUrl, method: "POST" }));
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: { ...authHeader, "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+
+  const text = await response.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    console.error("Non-JSON response from WooCommerce (delete):", text);
+    throw new Error("Failed to parse WooCommerce delete response");
+  }
+
+  if (!response.ok) {
+    console.error(`WooCommerce Delete Order Error: ${response.status}`, json);
+    throw new Error(json.message || "WooCommerce Order Delete Failed");
+  }
+
+  return json;
+}
+
+/**
  * Fetches a single WooCommerce order by ID via GET /wp-json/wc/v3/orders/{id}.
  * Used for idempotency checks before updating an order.
  */
