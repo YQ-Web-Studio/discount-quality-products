@@ -35,7 +35,7 @@ export function HeroSection() {
   };
 
   return (
-    <section className="relative h-[480px] sm:h-[580px] md:h-[650px] lg:h-[720px] 2xl:h-[820px] w-full overflow-hidden bg-zinc-950">
+    <section className="relative z-30 bg-zinc-900 h-[300px] lg:h-[60vh] w-full overflow-hidden">
       {/* Background Hero Image with responsive mobile/desktop variants */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         {/* Mobile Background Hero Image */}
