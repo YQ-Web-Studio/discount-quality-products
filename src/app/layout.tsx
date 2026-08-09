@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const montserrat = Montserrat({
   subsets: ["latin"],
+  variable: "--font-montserrat",
+  display: "swap",
 });
 
 import { Header } from "@/components/Header";
@@ -20,6 +22,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { StructuredData } from "@/components/seo/StructuredData";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Suspense } from "react";
+import { PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.discountproducts.co.uk"),
@@ -28,11 +31,11 @@ export const metadata: Metadata = {
     default: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
   },
   description:
-    "Shop 13,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.",
+    `Shop ${PRODUCT_COUNT_LABEL} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
   openGraph: {
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      "Shop 13,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.",
+      `Shop ${PRODUCT_COUNT_LABEL} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
     url: "https://www.discountproducts.co.uk",
     siteName: "Discount Quality Products",
     type: "website",
@@ -50,7 +53,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      "Shop 13,000+ items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.",
+      `Shop ${PRODUCT_COUNT_LABEL} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
     images: ["/images/og-image.png"],
   },
   icons: {
@@ -72,7 +75,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      className={`${inter.variable} ${montserrat.variable} antialiased`}
       suppressHydrationWarning
     >
       <head>
@@ -91,7 +94,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.className} min-h-screen bg-background text-foreground`} suppressHydrationWarning>
+      <body className={`${inter.className} min-h-screen bg-background text-foreground`} suppressHydrationWarning>
         <div className="relative flex min-h-screen flex-col overflow-x-clip">
           <StructuredData />
           <AuthProvider>

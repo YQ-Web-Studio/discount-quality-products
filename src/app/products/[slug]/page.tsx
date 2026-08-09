@@ -104,7 +104,16 @@ const trustItems = [
 export default async function ProductPage(props: ProductPageProps) {
 
   const { slug } = await props.params;
-  const product = await getProductBySlug(slug);
+
+  let product: Product | null = null;
+  let relatedProducts: Product[] = [];
+
+  try {
+    product = await getProductBySlug(slug);
+  } catch (error) {
+    console.error(`GraphQL fetch failed or timed out for product slug "${slug}":`, error);
+    notFound();
+  }
 
   if (!product) notFound();
 
@@ -113,19 +122,23 @@ export default async function ProductPage(props: ProductPageProps) {
 
   // Fetch related products from the same category (one fetch, no wasted parallel request).
   // Results are cached by unstable_cache so repeat visits are instant.
-  let relatedProducts: Product[] = [];
   if (categories[0]) {
-    const categoryRelated = await getProducts(10, null, categories[0].slug);
-    relatedProducts = categoryRelated.products
-      .filter(p => p.databaseId !== product.databaseId)
-      .slice(0, 5);
-
-    // Fallback to general products if category had no results
-    if (relatedProducts.length === 0) {
-      const generalFallback = await getProducts(6);
-      relatedProducts = generalFallback.products
-        .filter(p => p.databaseId !== product.databaseId)
+    try {
+      const categoryRelated = await getProducts(10, null, categories[0].slug);
+      relatedProducts = categoryRelated.products
+        .filter(p => p.databaseId !== product!.databaseId)
         .slice(0, 5);
+
+      // Fallback to general products if category had no results
+      if (relatedProducts.length === 0) {
+        const generalFallback = await getProducts(6);
+        relatedProducts = generalFallback.products
+          .filter(p => p.databaseId !== product!.databaseId)
+          .slice(0, 5);
+      }
+    } catch (error) {
+      console.error(`Failed to fetch related products for category "${categories[0].slug}":`, error);
+      relatedProducts = [];
     }
   }
 

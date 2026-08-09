@@ -5,26 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, Variants } from "framer-motion";
 import { generateSeoAltText } from "@/lib/seo-utils";
-
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
-    },
-  },
-};
-
-const childVariants: Variants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] }
-  },
-};
+import { PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
 
 const trustSignals = [
   { icon: Truck, title: "Free UK Delivery", desc: "On all orders over £5" },
@@ -33,30 +14,41 @@ const trustSignals = [
 ];
 
 export function HeroSection() {
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.1,
+      },
+    },
+  };
+
+  const childVariants: Variants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const },
+    },
+  };
+
   return (
-    <section className="relative z-30 bg-zinc-900 h-[300px] lg:h-[60vh]">
-      {/* Background Hero Image with its own clipping */}
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        {/* Mobile Background Hero Image */}
+    <section className="relative h-[480px] sm:h-[580px] md:h-[650px] lg:h-[720px] 2xl:h-[820px] w-full overflow-hidden bg-zinc-950">
+      {/* Background Image Container with Gradient Overlay */}
+      <div className="absolute inset-0 z-0">
         <Image
-          src="/images/hero-v3.png"
-          alt={generateSeoAltText("Storefront Hero Mobile", "Home")}
+          src="/images/hero-bg.webp"
+          alt="Discount Quality Products Hero"
           fill
           priority
-          fetchPriority="high"
-          className="object-cover object-center opacity-50 md:hidden"
+          sizes="100vw"
+          className="object-cover object-center opacity-40 scale-105 animate-pulse-subtle"
         />
-        {/* Desktop Background Hero Image */}
-        <Image
-          src="/images/hero-v5.png"
-          alt={generateSeoAltText("Storefront Hero Desktop", "Home")}
-          fill
-          priority
-          fetchPriority="high"
-          className="hidden md:block object-cover object-center opacity-60"
-        />
-        {/* Solid Dark Overlay for clean contrast */}
-        <div className="absolute inset-0 bg-black/50 md:bg-black/40" />
+        {/* Modern Multi-stage Gradient Mask */}
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-transparent to-zinc-950/80" />
       </div>
 
       {/* Centered Content Overlay */}
@@ -69,7 +61,7 @@ export function HeroSection() {
         >
           <motion.div variants={childVariants} className="space-y-4">
             <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-5xl 2xl:text-7xl drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]">
-              13,000+ Products.<br />
+              {PRODUCT_COUNT_LABEL} Products.<br />
               Discounted <span className="text-primary italic">Prices.</span>
             </h1>
             <p className="mx-auto max-w-2xl text-base font-medium text-zinc-200 sm:text-xl 2xl:text-2xl px-4 sm:px-0 hidden sm:block">

@@ -19,6 +19,69 @@ function getWordPressGraphqlUrl() {
 
 const WP_GRAPHQL_URL = getWordPressGraphqlUrl();
 
+/**
+ * Fallback product count in case of backend network failure.
+ */
+export const FALLBACK_PRODUCT_COUNT = 14569;
+
+/**
+ * Calculates dynamic rounded product count threshold (e.g. 14569 -> 14000, 15200 -> 15000)
+ */
+export function getRoundedProductCount(count: number = FALLBACK_PRODUCT_COUNT): number {
+  return Math.floor(count / 1000) * 1000;
+}
+
+/**
+ * Formats rounded product count string (e.g. "14,000+")
+ */
+export function getFormattedProductCount(count: number = FALLBACK_PRODUCT_COUNT): string {
+  return `${getRoundedProductCount(count).toLocaleString('en-GB')}+`;
+}
+
+/**
+ * Fetches the live published product count directly from WordPress via GraphQL.
+ * Cached for 24 hours (86,400s) to keep page loads instant while staying fully automatic.
+ */
+export const getTotalProductCount = cache(async (): Promise<number> => {
+  const cachedFn = unstable_cache(
+    async () => {
+      const query = `
+        query GetTotalProductCount {
+          products(first: 0, where: { status: "PUBLISH", visibility: VISIBLE }) {
+            pageInfo {
+              total
+            }
+          }
+        }
+      `;
+      try {
+        const data = await wpFetch<{ products: { pageInfo?: { total?: number } } }>(query);
+        const total = data?.products?.pageInfo?.total;
+        if (typeof total === 'number' && total > 0) {
+          return total;
+        }
+      } catch (error) {
+        console.warn("Failed to fetch live total product count from WordPress GraphQL:", error);
+      }
+      return FALLBACK_PRODUCT_COUNT;
+    },
+    ['total-product-count'],
+    { revalidate: 86400, tags: ["wc-products"] }
+  );
+
+  return cachedFn();
+});
+
+/**
+ * Helper to fetch formatted dynamic product count string (e.g. "14,000+") asynchronously
+ */
+export async function getDynamicProductCountLabel(): Promise<string> {
+  const total = await getTotalProductCount();
+  return getFormattedProductCount(total);
+}
+
+export const PRODUCT_COUNT_LABEL = getFormattedProductCount(FALLBACK_PRODUCT_COUNT);
+
 export interface ProductCategory {
   name: string;
   slug: string;
@@ -190,8 +253,7 @@ async function wpFetch<T>(
   query: string,
   variables: Record<string, any> = {}
 ): Promise<T> {
-  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
-  const timeoutMs = isBuildPhase ? 30000 : 10000; // 30s during build, 10s during runtime
+  const timeoutMs = 5000; // 5-second timeout attached to fetch signal
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -219,12 +281,14 @@ async function wpFetch<T>(
       responseText.trim().startsWith("[");
 
     if (!response.ok) {
+      console.error(`WordPress GraphQL HTTP Error ${response.status} fetching ${WP_GRAPHQL_URL}`);
       throw new Error(
         `WordPress GraphQL request failed with status ${response.status}.`
       );
     }
 
     if (!looksLikeJson) {
+      console.error(`WordPress GraphQL non-JSON response from ${WP_GRAPHQL_URL}`);
       throw new Error(
         "WordPress GraphQL returned HTML or another non-JSON response. Check that the backend GraphQL endpoint is correct and reachable."
       );
@@ -257,7 +321,9 @@ async function wpFetch<T>(
 
     return json.data;
   } catch (error: any) {
+    clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
+      console.error(`WordPress GraphQL fetch timed out after ${timeoutMs}ms:`, WP_GRAPHQL_URL);
       throw new Error(
         "Connection timeout - WordPress backend is taking too long to respond."
       );
@@ -700,7 +766,13 @@ async function getPostBySlugInternal(slug: string): Promise<WpPost | null> {
 
 export const getPostBySlug = cache(async (slug: string): Promise<WpPost | null> => {
   const cachedFn = unstable_cache(
-    async (s: string) => getPostBySlugInternal(s),
+    async (s: string) => {
+      const wpPost = await getPostBySlugInternal(s);
+      if (wpPost) return wpPost;
+      // Fallback to local SEO guides if not found in WordPress
+      const { getLocalSeoGuideBySlug } = await import('./local-seo-guides');
+      return getLocalSeoGuideBySlug(s);
+    },
     ['post-by-slug', slug],
     { revalidate: 604800, tags: ["wc-posts", `post-${slug}`] }
   );
@@ -764,7 +836,14 @@ export const getPosts = cache(async (first: number = 12, after: string | null = 
   pageInfo: PageInfo;
 }> => {
   const cachedFn = unstable_cache(
-    async (f, a) => getPostsInternal(f, a),
+    async (f, a) => {
+      const result = await getPostsInternal(f, a);
+      const { combineWithLocalSeoGuides } = await import('./local-seo-guides');
+      return {
+        ...result,
+        posts: combineWithLocalSeoGuides(result.posts),
+      };
+    },
     ['get-posts', String(first), String(after)],
     { revalidate: 604800, tags: ["wc-posts"] }
   );
@@ -803,17 +882,22 @@ export async function getAllPostSlugs(): Promise<{ slug: string; date: string }[
   try {
     while (hasNextPage) {
       const data: PostSlugsResponse = await wpFetch<PostSlugsResponse>(query, { first: batchSize, after });
-
-      const nodes: { slug: string; modified: string }[] = data.posts?.nodes || [];
-      results = [...results, ...nodes.map((n: { slug: string; modified: string }) => ({ slug: n.slug, date: n.modified || new Date().toISOString() }))];
-
-      hasNextPage = data.posts?.pageInfo?.hasNextPage ?? false;
-      after = data.posts?.pageInfo?.endCursor ?? null;
-      if (!hasNextPage || !after) break;
+      const nodes = data.posts?.nodes || [];
+      results = results.concat(nodes.map(n => ({ slug: n.slug, date: n.modified })));
+      hasNextPage = data.posts?.pageInfo?.hasNextPage || false;
+      after = data.posts?.pageInfo?.endCursor || null;
     }
   } catch (error) {
-    console.error('Error fetching all post slugs for sitemap:', error);
+    console.error("Error fetching all post slugs for sitemap:", error);
   }
+
+  const { LOCAL_SEO_GUIDES } = await import('./local-seo-guides');
+  const existingSlugs = new Set(results.map(r => r.slug));
+  LOCAL_SEO_GUIDES.forEach(g => {
+    if (!existingSlugs.has(g.slug)) {
+      results.push({ slug: g.slug, date: g.modified });
+    }
+  });
 
   return results;
 }

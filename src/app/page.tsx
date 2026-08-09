@@ -1,4 +1,4 @@
-import { getSmartFeaturedProducts, getLatestProducts, Product } from "@/lib/wordpress";
+import { getSmartFeaturedProducts, getLatestProducts, Product, PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
 import ProductCard from "@/components/ProductCard";
 import { HeroSection } from "@/components/HeroSection";
 import { BentoGrid } from "@/components/BentoGrid";
@@ -10,17 +10,17 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
   description:
-    "Shop 13,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. Free UK delivery on orders over £5.",
+    `Shop ${PRODUCT_COUNT_LABEL} discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. Free UK delivery on orders over £5.`,
   openGraph: {
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      "Shop 13,000+ discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.",
+      `Shop ${PRODUCT_COUNT_LABEL} discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.`,
     images: [
       {
         url: "/images/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Discount Quality Products — 13,000+ Discounted Products",
+        alt: `Discount Quality Products — ${PRODUCT_COUNT_LABEL} Discounted Products`,
       },
     ],
   },

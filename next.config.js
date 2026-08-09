@@ -14,6 +14,8 @@ const nextConfig = {
   },
 
   images: {
+    // Disable Vercel Image Optimization to eliminate usage charges and serve direct from origin
+    unoptimized: true,
     // Serve AVIF first (30–50% smaller than WebP), fall back to WebP
     formats: ['image/avif', 'image/webp'],
     // Cache optimised images for 30 days in the browser/CDN

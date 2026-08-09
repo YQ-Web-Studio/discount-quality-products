@@ -8,7 +8,7 @@ import { Search, X, ArrowRight, Zap, Box, Tag } from "lucide-react";
 import Image from "next/image";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
-import { UnifiedSearchResult } from "@/lib/wordpress";
+import { UnifiedSearchResult, PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
 
 const panelContainerVariants: Variants = {
   hidden: {},
@@ -495,7 +495,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         </div>
                         <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
                         <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
-                          Find exactly what you need across our range of 13,000+ premium products and trade accessories.
+                          Find exactly what you need across our range of {PRODUCT_COUNT_LABEL} premium products and trade accessories.
                         </p>
                       </motion.div>
                     )}
