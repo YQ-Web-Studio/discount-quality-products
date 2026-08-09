@@ -36,15 +36,25 @@ export function HeroSection() {
 
   return (
     <section className="relative h-[480px] sm:h-[580px] md:h-[650px] lg:h-[720px] 2xl:h-[820px] w-full overflow-hidden bg-zinc-950">
-      {/* Background Image Container with Gradient Overlay */}
-      <div className="absolute inset-0 z-0">
+      {/* Background Hero Image with responsive mobile/desktop variants */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        {/* Mobile Background Hero Image */}
         <Image
-          src="/images/hero-bg.webp"
-          alt="Discount Quality Products Hero"
+          src="/images/hero-v3.png"
+          alt="Discount Quality Products Storefront Hero Mobile"
           fill
           priority
           sizes="100vw"
-          className="object-cover object-center opacity-40 scale-105 animate-pulse-subtle"
+          className="object-cover object-center opacity-50 md:hidden"
+        />
+        {/* Desktop Background Hero Image */}
+        <Image
+          src="/images/hero-v5.png"
+          alt="Discount Quality Products Storefront Hero Desktop"
+          fill
+          priority
+          sizes="100vw"
+          className="hidden md:block object-cover object-center opacity-60"
         />
         {/* Modern Multi-stage Gradient Mask */}
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
