@@ -21,7 +21,7 @@ import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import { BackButton } from '@/components/ui/BackButton';
 import type { Metadata } from 'next';
-export const revalidate = 2592000;
+export const revalidate = 604800; // 7 days — compromise: 404s self-heal within a week, ISR writes stay low
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
@@ -112,7 +112,11 @@ export default async function ProductPage(props: ProductPageProps) {
     product = await getProductBySlug(slug);
   } catch (error) {
     console.error(`GraphQL fetch failed or timed out for product slug "${slug}":`, error);
-    notFound();
+    // DO NOT call notFound() here — if the backend timed out, caching a 404
+    // means this product is permanently broken until the cache TTL expires.
+    // Throwing lets Next.js render a 500 error page which has a much shorter
+    // cache lifetime and will self-heal on the next request once WP recovers.
+    throw error;
   }
 
   if (!product) notFound();

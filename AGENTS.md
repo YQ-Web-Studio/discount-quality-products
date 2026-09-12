@@ -87,9 +87,58 @@ The filter modal reuses the main product response when no attribute filters are 
 Adding a parallel `fetchAllCandidateProducts(filterProductParams)` at all times burns up to
 3 extra WooCommerce API calls per page load. The current code handles this correctly.
 
-## 5. `wpFetch` timeout must be dynamic
+## 5. `wpFetch` timeout is set to 15 seconds
 
-During build: 30s (WordPress is slow, build must not fail)
-During runtime: 10s (fail fast so users don't wait forever)
-Do NOT set a single fixed timeout of 6s or less — it breaks builds.
+The Bluehost WordPress backend can be slow. 15s is the safe timeout that prevents
+false timeouts from triggering 404/500 errors while remaining acceptable for ISR
+first-renders (user only waits once; Vercel CDN caches the result afterward).
+
+Do NOT reduce this below 10s — it causes timeouts that permanently break product pages.
+
+## 6. NEVER call `notFound()` in a `catch` block on product pages
+
+If `getProductBySlug` throws (timeout, network error, 502), the product probably exists
+but the backend is temporarily down. Calling `notFound()` in the catch block caches a 404
+response on Vercel's CDN for the page's `revalidate` TTL — **permanently breaking** that
+product page until the cache expires.
+
+✅ CORRECT — throw the error so Next.js renders a recoverable 500 via `error.tsx`:
+```ts
+try {
+  product = await getProductBySlug(slug);
+} catch (error) {
+  throw error; // → error.tsx with "Try again" button, NOT cached as 404
+}
+if (!product) notFound(); // ← Only call notFound() when product genuinely doesn't exist
+```
+
+❌ WRONG — caches a 404 for a product that actually exists:
+```ts
+try {
+  product = await getProductBySlug(slug);
+} catch (error) {
+  notFound(); // ← THIS PERMANENTLY BREAKS PRODUCT PAGES. NEVER DO THIS.
+}
+```
+
+## 7. ISR writes conservation — do NOT use `revalidateTag("wc-products")` broadly
+
+The `"wc-products"` tag is shared by EVERY cached product data entry. Calling
+`revalidateTag("wc-products")` invalidates ALL of them at once, causing thousands
+of ISR writes as users revisit those pages. This WILL exceed Vercel's ISR quota.
+
+✅ CORRECT — use per-product tags for targeted invalidation:
+```ts
+revalidateTag(`product-${slug}`);     // Invalidates 1 product
+revalidateTag(`wc-product-${slug}`);  // Invalidates 1 REST cache entry
+```
+
+❌ WRONG — nuclear option that burns thousands of ISR writes:
+```ts
+revalidateTag("wc-products"); // ← INVALIDATES EVERY PRODUCT. DO NOT DO THIS.
+```
+
+The `/api/revalidate` endpoint requires explicit tags and will return 400 if called
+with no body. This is intentional — it prevents accidental mass invalidation.
 <!-- END:performance-rules -->
+
