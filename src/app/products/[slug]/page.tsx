@@ -21,7 +21,7 @@ import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import { BackButton } from '@/components/ui/BackButton';
 import type { Metadata } from 'next';
-export const revalidate = 604800; // 7 days — compromise: 404s self-heal within a week, ISR writes stay low
+export const revalidate = 2592000; // 30 days — maximum ISR write conservation
 export const dynamicParams = true;
 
 export async function generateStaticParams() {

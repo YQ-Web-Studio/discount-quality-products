@@ -355,7 +355,7 @@ export const getProductBySlug = async (slug: string) => {
   const cachedFn = unstable_cache(
     async (s) => getProductBySlugInternal(s),
     [`wc-product-${slug}`],
-    { revalidate: 604800, tags: ["wc-products", `wc-product-${slug}`] }
+    { revalidate: 2592000, tags: ["wc-products", `wc-product-${slug}`] }
   );
   return cachedFn(slug);
 };

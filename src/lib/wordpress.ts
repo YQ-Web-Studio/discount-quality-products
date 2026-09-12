@@ -66,7 +66,7 @@ export const getTotalProductCount = cache(async (): Promise<number> => {
       return FALLBACK_PRODUCT_COUNT;
     },
     ['total-product-count'],
-    { revalidate: 604800, tags: ["wc-products"] }
+    { revalidate: 2592000, tags: ["wc-products"] }
   );
 
   return cachedFn();
@@ -369,7 +369,7 @@ export const getProducts = cache(async (first: number = 12, after: string | null
   const cachedFn = unstable_cache(
     async (f, a, c, s) => getProductsInternal(f, a, c, s),
     ['get-products', String(first), String(after), String(categorySlug), String(searchTerm)],
-    { revalidate: 604800, tags: ["wc-products"] }
+    { revalidate: 2592000, tags: ["wc-products"] }
   );
   return cachedFn(first, after, categorySlug, searchTerm);
 });
@@ -614,7 +614,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<Product | nu
   const cachedFn = unstable_cache(
     async (s: string) => getProductBySlugInternal(s),
     ['product-by-slug', slug],
-    { revalidate: 604800, tags: ["wc-products", `product-${slug}`] }
+    { revalidate: 2592000, tags: ["wc-products", `product-${slug}`] }
   );
   return cachedFn(slug);
 });
@@ -1005,7 +1005,7 @@ export const searchProducts = cache(async (search: string, first: number = 10): 
   const cachedFn = unstable_cache(
     async (s, f) => searchProductsInternal(s, f),
     ['search-products', cleanSearch, String(first)],
-    { revalidate: 604800, tags: ["wc-products"] }
+    { revalidate: 2592000, tags: ["wc-products"] }
   );
   return cachedFn(search, first);
 });
