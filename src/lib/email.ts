@@ -16,7 +16,7 @@ export async function sendEmail({
   subject,
   react,
   from = 'Discount Quality Products <noreply@mail.discountproducts.co.uk>',
-  replyTo = 'sales@fncomputers.com',
+  replyTo = 'sales@discountproducts.co.uk',
 }: SendEmailParams) {
   // Enforce filter to block any emails destined to wpengine.local domains
   const recipients = Array.isArray(to) ? to : [to];

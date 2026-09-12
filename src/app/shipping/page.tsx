@@ -107,10 +107,10 @@ export default function ShippingPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               We restrict checkout shipping options strictly to the United Kingdom. For international order inquiries, please contact us directly at{' '}
               <a
-                href="mailto:sales@fncomputers.com"
+                href="mailto:sales@discountproducts.co.uk"
                 className="text-primary hover:underline font-semibold"
               >
-                sales@fncomputers.com
+                sales@discountproducts.co.uk
               </a>{' '}
               or via our{' '}
               <Link href="/contact" className="text-primary hover:underline font-semibold">
@@ -141,10 +141,10 @@ export default function ShippingPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               If you receive your order damaged, please contact our support team immediately at{' '}
               <a
-                href="mailto:sales@fncomputers.com"
+                href="mailto:sales@discountproducts.co.uk"
                 className="text-primary hover:underline font-semibold"
               >
-                sales@fncomputers.com
+                sales@discountproducts.co.uk
               </a>{' '}
               or via our{' '}
               <Link href="/contact" className="text-primary hover:underline font-semibold">

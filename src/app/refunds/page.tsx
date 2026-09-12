@@ -62,8 +62,8 @@ export default function RefundsPage() {
             <p className="text-base text-zinc-600 leading-relaxed">
               To exercise your right to return, you must inform us of your decision by a clear
               statement via email at{' '}
-              <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
-                sales@fncomputers.com
+              <a href="mailto:sales@discountproducts.co.uk" className="text-primary hover:underline font-semibold">
+                sales@discountproducts.co.uk
               </a>{' '}
               or through our{' '}
               <Link href="/contact" className="text-primary hover:underline font-semibold">

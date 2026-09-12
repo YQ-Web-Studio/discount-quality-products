@@ -223,7 +223,7 @@ export async function POST(req: Request) {
         try {
           console.log(`[checkout] Sending order notification copy to admin for order #${newOrder.id}...`);
           await sendEmail({
-            to: 'sales@fncomputers.com',
+            to: 'sales@discountproducts.co.uk',
             subject: `[New Order] Order Confirmation - #${newOrder.id}`,
             react: React.createElement(OrderConfirmationEmail, {
               customerName: newOrder.billing?.first_name || form?.firstName || 'Customer',

@@ -74,7 +74,7 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
     try {
       console.log(`[stripe-sync] Sending order notification copy to admin for order #${order.id}...`);
       await sendEmail({
-        to: 'sales@fncomputers.com',
+        to: 'sales@discountproducts.co.uk',
         subject: `[New Order] Order Confirmation - #${order.id}`,
         react: React.createElement(OrderConfirmationEmail, {
           customerName: customerName,

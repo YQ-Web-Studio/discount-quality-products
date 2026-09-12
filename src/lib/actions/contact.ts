@@ -80,7 +80,7 @@ export async function submitContactForm(formData: FormData) {
   try {
     const { data, error } = await resend.emails.send({
       from: 'Contact Form <noreply@mail.discountproducts.co.uk>',
-      to: 'sales@fncomputers.com',
+      to: 'sales@discountproducts.co.uk',
       replyTo: email,
       subject: `New Enquiry: ${subject}`,
       text: `You have received a new message from the contact form.\n\nName: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,

@@ -123,7 +123,7 @@ export async function POST(req: Request) {
       try {
         console.log(`[woocommerce-webhook] Sending order notification copy to admin for order #${id}...`);
         await sendEmail({
-          to: 'sales@fncomputers.com',
+          to: 'sales@discountproducts.co.uk',
           subject: `[New Order] Order Confirmation - #${id}`,
           react: React.createElement(OrderConfirmationEmail, {
             customerName: customerName,

@@ -150,8 +150,8 @@ function SelectField({
             <div className="absolute bottom-full left-1/2 z-50 mb-2.5 w-72 -translate-x-1/2 scale-95 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-center text-xs font-medium text-zinc-200 shadow-xl opacity-0 transition-all duration-200 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100">
               <p className="leading-relaxed">
                 For international orders, please contact us directly at{" "}
-                <a href="mailto:sales@fncomputers.com" className="text-[#15803d] hover:underline font-semibold">
-                  sales@fncomputers.com
+                <a href="mailto:sales@discountproducts.co.uk" className="text-[#15803d] hover:underline font-semibold">
+                  sales@discountproducts.co.uk
                 </a>{" "}
                 or via our{" "}
                 <a href="/contact" className="text-[#15803d] hover:underline font-semibold">
@@ -1304,7 +1304,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                         options={COUNTRIES}
                         error={errors.country}
                         disabled={true}
-                        tooltipText="For international orders, please contact us directly at sales@fncomputers.com"
+                        tooltipText="For international orders, please contact us directly at sales@discountproducts.co.uk"
                       />
                       <Field
                         label="Phone Number (Optional)"
@@ -1406,7 +1406,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                           options={COUNTRIES}
                           error={errors.billingCountry}
                           disabled={true}
-                          tooltipText="For international orders, please contact us directly at sales@fncomputers.com"
+                          tooltipText="For international orders, please contact us directly at sales@discountproducts.co.uk"
                         />
                         <Field
                           label="Phone Number (Optional)"

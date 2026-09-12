@@ -39,8 +39,8 @@ const sections = [
     body: (
       <>
         If you are a UK or European resident, you have the right to access personal information we hold about you and to ask that your personal information be corrected, updated, or deleted. If you would like to exercise this right, please contact us at{' '}
-        <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
-          sales@fncomputers.com
+        <a href="mailto:sales@discountproducts.co.uk" className="text-primary hover:underline font-semibold">
+          sales@discountproducts.co.uk
         </a>{' '}
         or via our{' '}
         <Link href="/contact" className="text-primary hover:underline font-semibold">
@@ -58,8 +58,8 @@ const sections = [
     body: (
       <>
         For more information about our privacy practices, please contact us by email at{' '}
-        <a href="mailto:sales@fncomputers.com" className="text-primary hover:underline font-semibold">
-          sales@fncomputers.com
+        <a href="mailto:sales@discountproducts.co.uk" className="text-primary hover:underline font-semibold">
+          sales@discountproducts.co.uk
         </a>{' '}
         or via our{' '}
         <Link href="/contact" className="text-primary hover:underline font-semibold">
