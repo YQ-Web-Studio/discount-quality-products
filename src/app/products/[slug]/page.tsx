@@ -334,7 +334,7 @@ export default async function ProductPage(props: ProductPageProps) {
             )}
           </div>
           <div className="lg:col-span-6">
-            <ProductAttributes attributes={product.attributes?.nodes || []} />
+            <ProductAttributes attributes={product.attributes?.nodes || []} sku={product.sku} />
           </div>
         </div>
 
@@ -347,7 +347,7 @@ export default async function ProductPage(props: ProductPageProps) {
               No description available for this product.
             </p>
           )}
-          <ProductAttributes attributes={product.attributes?.nodes || []} />
+          <ProductAttributes attributes={product.attributes?.nodes || []} sku={product.sku} />
         </div>
       </main>
 

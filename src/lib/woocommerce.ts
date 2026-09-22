@@ -183,6 +183,7 @@ export function mapProduct(raw: WooProductRaw): MappedProduct {
 }
 
 import { unstable_cache } from "next/cache";
+import { sanitiseSearchQuery } from "./utils";
 
 // ... existing code down to WooProductsResponse ...
 export interface WooProductsResponse {
@@ -223,9 +224,14 @@ async function fetchProductsInternal(
   };
 
   const queryParams = new URLSearchParams();
-  const mergedParams = { ...defaultParams, ...params };
+  // Sanitise search to prevent MySQL fulltext failures on long/special-char queries
+  const sanitisedParams = {
+    ...defaultParams,
+    ...params,
+    ...(params.search ? { search: sanitiseSearchQuery(params.search) } : {}),
+  };
 
-  Object.entries(mergedParams).forEach(([key, value]) => {
+  Object.entries(sanitisedParams).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
       queryParams.append(key, value.toString());
     }
@@ -257,7 +263,37 @@ async function fetchProductsInternal(
     const totalPages = parseInt(response.headers.get("X-WP-TotalPages") || "0", 10);
 
     const rawProducts: WooProductRaw[] = await response.json();
-    const products = rawProducts.map(mapProduct);
+    let products = rawProducts.map(mapProduct);
+
+    // If search returned nothing, check if the search query is a SKU
+    if (products.length === 0 && params.search) {
+      const skuCandidate = params.search.trim();
+      if (skuCandidate.length >= 2 && skuCandidate.length <= 50) {
+        try {
+          const skuUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/products?sku=${encodeURIComponent(skuCandidate)}&status=publish`;
+          const skuResponse = await fetch(skuUrl, {
+            method: "GET",
+            headers: {
+              ...authHeader,
+              "Content-Type": "application/json",
+            },
+            cache: "no-store",
+          });
+          if (skuResponse.ok) {
+            const skuRaw: WooProductRaw[] = await skuResponse.json();
+            if (skuRaw.length > 0) {
+              return {
+                products: skuRaw.map(mapProduct),
+                total: skuRaw.length,
+                totalPages: 1,
+              };
+            }
+          }
+        } catch (skuErr) {
+          console.warn("WooCommerce SKU fallback search failed:", skuErr);
+        }
+      }
+    }
 
     return {
       products,

@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchProducts } from "@/lib/wordpress";
+import { sanitiseSearchQuery } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const q = searchParams.get("q")?.trim().toLowerCase() ?? "";
+  const raw = searchParams.get("q")?.trim().toLowerCase() ?? "";
 
+  if (!raw || raw.length < 2) {
+    return NextResponse.json([], { status: 200 });
+  }
+
+  // Sanitise: strip special chars and truncate to prevent MySQL fulltext failures
+  const q = sanitiseSearchQuery(raw);
   if (!q || q.length < 2) {
     return NextResponse.json([], { status: 200 });
   }

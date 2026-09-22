@@ -5,6 +5,7 @@ interface Attribute {
 
 interface ProductAttributesProps {
   attributes: Attribute[];
+  sku?: string;
 }
 
 const ATTRIBUTE_LABEL_OVERRIDES: Record<string, string> = {
@@ -69,8 +70,8 @@ function splitAttributeOptions(options: string[]): string[] {
   ).map(formatAttributeOption);
 }
 
-export function ProductAttributes({ attributes }: ProductAttributesProps) {
-  if (!attributes || attributes.length === 0) {
+export function ProductAttributes({ attributes, sku }: ProductAttributesProps) {
+  if ((!attributes || attributes.length === 0) && !sku) {
     return null;
   }
 
@@ -81,7 +82,7 @@ export function ProductAttributes({ attributes }: ProductAttributesProps) {
       <div className="rounded-2xl border border-zinc-100 bg-zinc-50/50 p-6">
         <ul className="space-y-4">
           {attributes.map((attr, idx) => (
-            <li key={idx} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 border-b border-zinc-200/60 pb-3 last:border-0 last:pb-0">
+            <li key={idx} className={`flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 ${(!sku && idx === attributes.length - 1) ? '' : 'border-b border-zinc-200/60 pb-3'}`}>
               <span className="text-sm font-semibold text-zinc-900 sm:w-1/3 shrink-0">
                 {formatAttributeName(attr.name)}
               </span>
@@ -90,6 +91,16 @@ export function ProductAttributes({ attributes }: ProductAttributesProps) {
               </span>
             </li>
           ))}
+          {sku && (
+            <li className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 pt-3">
+              <span className="text-sm font-semibold text-zinc-900 sm:w-1/3 shrink-0">
+                SKU
+              </span>
+              <span className="text-sm text-zinc-500 font-mono tracking-wide">
+                {sku}
+              </span>
+            </li>
+          )}
         </ul>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { cache } from "react";
 import { navigationCategories } from "./navigationConfig";
+import { sanitiseSearchQuery } from "./utils";
 
 
 function getWordPressGraphqlUrl() {
@@ -906,6 +907,10 @@ export async function getAllPostSlugs(): Promise<{ slug: string; date: string }[
 }
 
 async function searchProductsInternal(search: string, first: number = 10): Promise<UnifiedSearchResult[]> {
+  // Sanitise search to prevent MySQL fulltext failures on long/special-char queries
+  const sanitisedSearch = sanitiseSearchQuery(search);
+  if (!sanitisedSearch) return [];
+
   const query = `
     ${PRODUCT_CARD_FRAGMENT}
     query SearchUnified($search: String, $first: Int) {
@@ -936,9 +941,9 @@ async function searchProductsInternal(search: string, first: number = 10): Promi
   let data = await wpFetch<{
     products: { nodes: any[] };
     productCategories: { nodes: any[] };
-  }>(query, { search, first });
+  }>(query, { search: sanitisedSearch, first });
 
-  // Fuzzy Search Secondary Fallback
+  // Fuzzy Search Secondary Fallback (by tag)
   if ((!data.products?.nodes?.length) && (!data.productCategories?.nodes?.length)) {
     const fallbackQuery = `
       ${PRODUCT_CARD_FRAGMENT}
@@ -959,9 +964,42 @@ async function searchProductsInternal(search: string, first: number = 10): Promi
         }
       }
     `;
-    const fallbackData = await wpFetch<any>(fallbackQuery, { search, first });
+    const fallbackData = await wpFetch<any>(fallbackQuery, { search: sanitisedSearch, first });
     if (fallbackData) {
       data = fallbackData;
+    }
+  }
+
+  // SKU-specific fallback: if the search term looks like it could be a SKU code
+  // (no spaces, or very short), try a direct SKU lookup
+  if (!data.products?.nodes?.length) {
+    const skuCandidate = search.trim(); // Use original unsanitised term for SKU match
+    if (skuCandidate.length >= 2 && skuCandidate.length <= 50) {
+      try {
+        const skuQuery = `
+          ${PRODUCT_CARD_FRAGMENT}
+          query SearchBySku($sku: String, $first: Int) {
+            products(first: $first, where: { search: $sku, status: "PUBLISH", visibility: VISIBLE }) {
+              nodes {
+                ...ProductCardFields
+              }
+            }
+          }
+        `;
+        const skuData = await wpFetch<{ products: { nodes: any[] } }>(skuQuery, { sku: skuCandidate, first });
+        if (skuData?.products?.nodes?.length) {
+          // Check if any returned product's SKU actually matches
+          const skuLower = skuCandidate.toLowerCase();
+          const skuMatches = skuData.products.nodes.filter(
+            (p: any) => p.sku && p.sku.toLowerCase() === skuLower
+          );
+          if (skuMatches.length > 0) {
+            data.products = { nodes: skuMatches };
+          }
+        }
+      } catch {
+        // SKU fallback is best-effort; don't fail the entire search
+      }
     }
   }
 
