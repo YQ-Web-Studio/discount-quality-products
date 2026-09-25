@@ -105,6 +105,7 @@ function ToolbarDropdown({ label, options, value, onChange }: {
 /* ─── Product Card ─── */
 function ProductCard({ product }: { product: MappedProduct }) {
   const isOutOfStock = product.stockStatus === 'outofstock' || (product.manageStock && product.stockQuantity === 0);
+  const isLowStock = !isOutOfStock && product.manageStock && product.stockQuantity != null && product.stockQuantity > 0 && product.stockQuantity < 5;
   const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === String(product.databaseId))?.quantity || 0);
   const maxAvailable = (product.manageStock && product.stockQuantity != null) ? product.stockQuantity : Infinity;
   const isLimitReached = currentBasketQty >= maxAvailable;
@@ -187,6 +188,10 @@ function ProductCard({ product }: { product: MappedProduct }) {
             <span className="inline-flex items-center rounded bg-red-600/90 backdrop-blur-sm px-2 py-1 text-[10px] font-bold uppercase text-white shadow-sm">
               Sold Out
             </span>
+          ) : isLowStock ? (
+            <span className="inline-flex items-center rounded bg-amber-500/90 backdrop-blur-sm px-2 py-1 text-[10px] font-bold uppercase text-white shadow-sm">
+              Low Stock
+            </span>
           ) : packLabel && (
             <div className="flex h-7 items-center justify-center rounded-md bg-white/90 px-3 text-[11px] font-extrabold tracking-tight text-zinc-900 shadow-sm ring-1 ring-zinc-200/50 backdrop-blur-md w-fit">
               {packLabel}
@@ -228,11 +233,13 @@ function ProductCard({ product }: { product: MappedProduct }) {
           <button
             type="button"
             onClick={handleQuickAdd}
-            disabled={isOutOfStock || isLimitReached}
+            disabled={isOutOfStock || isLimitReached || isLowStock}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-[11px] font-bold uppercase tracking-widest text-zinc-900 shadow-xl ring-1 ring-zinc-200/50 backdrop-blur-sm transition-colors hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
           >
             {isOutOfStock ? (
               "Sold Out"
+            ) : isLowStock ? (
+              "Limited Stock"
             ) : isLimitReached ? (
               "Limit Reached"
             ) : (

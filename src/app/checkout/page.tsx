@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import CheckoutFlow from "./CheckoutFlow";
 import { getProductBySlug } from "@/lib/wordpress";
 
@@ -36,6 +37,22 @@ export default async function CheckoutPage(props: PageProps) {
   if (buyNowSlug) {
     const product = await getProductBySlug(buyNowSlug);
     if (product) {
+      const isOutOfStock =
+        product.stockStatus === "outofstock" ||
+        product.stockStatus === "OUT_OF_STOCK" ||
+        (product.manageStock && product.stockQuantity === 0);
+
+      const isLowStock =
+        !isOutOfStock &&
+        product.manageStock &&
+        product.stockQuantity != null &&
+        product.stockQuantity > 0 &&
+        product.stockQuantity < 5;
+
+      if (isOutOfStock || isLowStock) {
+        redirect(`/products/${buyNowSlug}`);
+      }
+
       directCheckoutItem = {
         id: product.id,
         name: product.name,

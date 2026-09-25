@@ -3,6 +3,7 @@
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { MapPin, Mail, Phone, ShieldCheck, Loader2 } from "lucide-react";
 import { useState, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,9 @@ const itemVariants: Variants = {
 };
 
 export default function ContactContent() {
+  const searchParams = useSearchParams();
+  const prefillSubject = searchParams.get("subject") || "";
+  const prefillMessage = searchParams.get("message") || "";
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -214,12 +218,12 @@ export default function ContactContent() {
 
                     <div className="space-y-1.5">
                       <label htmlFor="subject" className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-1">Subject</label>
-                      <Input id="subject" name="subject" required placeholder="Order Enquiry #12345" className="h-11 rounded-xl bg-zinc-50/50 shadow-sm border-zinc-200 focus-visible:ring-primary focus-visible:border-primary text-sm" />
+                      <Input id="subject" name="subject" required defaultValue={prefillSubject} placeholder="Order Enquiry #12345" className="h-11 rounded-xl bg-zinc-50/50 shadow-sm border-zinc-200 focus-visible:ring-primary focus-visible:border-primary text-sm" />
                     </div>
 
                     <div className="space-y-1.5">
                       <label htmlFor="message" className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-1">Message</label>
-                      <Textarea id="message" name="message" required placeholder="How can we assist you today?" className="min-h-[100px] lg:min-h-[120px] resize-none rounded-xl bg-zinc-50/50 shadow-sm border-zinc-200 focus-visible:ring-primary focus-visible:border-primary text-sm p-4" />
+                      <Textarea id="message" name="message" required defaultValue={prefillMessage} placeholder="How can we assist you today?" className="min-h-[100px] lg:min-h-[120px] resize-none rounded-xl bg-zinc-50/50 shadow-sm border-zinc-200 focus-visible:ring-primary focus-visible:border-primary text-sm p-4" />
                     </div>
 
                     <div className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">

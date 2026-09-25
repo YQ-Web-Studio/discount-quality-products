@@ -1,4 +1,4 @@
-import { fetchWooCommerceProducts } from "./woocommerce";
+import { fetchWooCommerceProductsDirect } from "./woocommerce";
 
 export interface CartItem {
   /** String form of the WooCommerce integer databaseId, e.g. "14" */
@@ -90,8 +90,8 @@ export async function validateCartTotals(
   console.log("[checkout] Validating cart with databaseIds:", itemIds);
 
   try {
-    // Fetch real live products from WooCommerce to strictly validate prices
-    const { products } = await fetchWooCommerceProducts({ include: itemIds, per_page: 100 });
+    // Fetch real live products from WooCommerce to strictly validate prices and stock in real time
+    const { products } = await fetchWooCommerceProductsDirect({ include: itemIds, per_page: 100 });
 
     let subtotal = 0;
 
@@ -105,6 +105,43 @@ export async function validateCartTotals(
           isValid: false,
           subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
           error: `Product not found: ${item.id}`
+        };
+      }
+
+      // Strictly validate stock status in real-time
+      const isOutOfStock =
+        wooProduct.stockStatus === 'outofstock' ||
+        wooProduct.stockStatus === 'OUT_OF_STOCK' ||
+        (wooProduct.manageStock && (wooProduct.stockQuantity ?? 0) <= 0);
+
+      if (isOutOfStock) {
+        return {
+          isValid: false,
+          subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+          error: `"${wooProduct.name}" is currently out of stock and cannot be purchased.`
+        };
+      }
+
+      // Products with stock < 5 require customer enquiry to prevent overselling
+      const isLowStock =
+        wooProduct.manageStock &&
+        typeof wooProduct.stockQuantity === 'number' &&
+        wooProduct.stockQuantity > 0 &&
+        wooProduct.stockQuantity < 5;
+
+      if (isLowStock) {
+        return {
+          isValid: false,
+          subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+          error: `"${wooProduct.name}" has limited stock (less than 5 remaining). Please contact us to check availability before ordering.`
+        };
+      }
+
+      if (wooProduct.manageStock && typeof wooProduct.stockQuantity === 'number' && wooProduct.stockQuantity < item.quantity) {
+        return {
+          isValid: false,
+          subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+          error: `Only ${wooProduct.stockQuantity} of "${wooProduct.name}" available in stock.`
         };
       }
 

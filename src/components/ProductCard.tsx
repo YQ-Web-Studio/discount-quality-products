@@ -22,6 +22,7 @@ interface ProductCardProps {
 export default function ProductCard({ product, priority = false }: ProductCardProps) {
   const displayPrice = product.price || product.regularPrice || 'N/A';
   const isOutOfStock = product.stockStatus === 'OUT_OF_STOCK' || product.stockStatus === 'outofstock' || (product.manageStock && product.stockQuantity === 0);
+  const isLowStock = !isOutOfStock && product.manageStock && product.stockQuantity != null && product.stockQuantity > 0 && product.stockQuantity < 5;
   const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === String(product.databaseId))?.quantity || 0);
   const maxAvailable = (product.manageStock && product.stockQuantity != null) ? product.stockQuantity : Infinity;
   const isLimitReached = currentBasketQty >= maxAvailable;
@@ -151,11 +152,13 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           <button
             type="button"
             onClick={handleQuickAdd}
-            disabled={isOutOfStock || isLimitReached}
+            disabled={isOutOfStock || isLimitReached || isLowStock}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-[11px] font-bold uppercase tracking-widest text-zinc-900 shadow-xl ring-1 ring-zinc-200/50 backdrop-blur-sm transition-colors hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
           >
             {isOutOfStock ? (
               "Sold Out"
+            ) : isLowStock ? (
+              "Limited Stock"
             ) : isLimitReached ? (
               "Limit Reached"
             ) : (
@@ -172,6 +175,10 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           {isOutOfStock ? (
             <Badge className="bg-red-600 backdrop-blur-sm text-[10px] h-6 px-2.5 border-none shadow-sm uppercase font-bold text-white w-fit">
               Sold Out
+            </Badge>
+          ) : isLowStock ? (
+            <Badge className="bg-amber-500 backdrop-blur-sm text-[10px] h-6 px-2.5 border-none shadow-sm uppercase font-bold text-white w-fit">
+              Low Stock
             </Badge>
           ) : packLabel && (
             <div className="flex h-7 items-center justify-center rounded-md bg-white/90 px-3 text-[11px] font-extrabold tracking-tight text-zinc-900 shadow-sm ring-1 ring-zinc-200/50 backdrop-blur-md w-fit">

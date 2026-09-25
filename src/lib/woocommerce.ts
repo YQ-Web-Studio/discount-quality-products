@@ -332,6 +332,15 @@ export const fetchWooCommerceProducts = async (params: any = {}) => {
 };
 
 /**
+ * Direct non-cached product fetch for real-time validation (checkout, stock checks).
+ * Always hits WooCommerce API with cache: 'no-store'.
+ */
+export async function fetchWooCommerceProductsDirect(params: any = {}): Promise<WooProductsResponse> {
+  return fetchProductsInternal(params);
+}
+
+
+/**
  * Internal Fetch a single product by slug
  */
 async function getProductBySlugInternal(slug: string): Promise<MappedProduct | null> {
