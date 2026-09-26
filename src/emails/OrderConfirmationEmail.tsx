@@ -29,6 +29,7 @@ interface OrderConfirmationEmailProps {
     thumbnail: string;
   }>;
   subtotal?: string;
+  discount?: string;
   vat?: string;
   shipping?: string;
   total?: string;
@@ -68,6 +69,7 @@ export const OrderConfirmationEmail = ({
     },
   ],
   subtotal = '£160.00',
+  discount,
   vat = '£32.00',
   shipping = '£5.00',
   total = '£197.00',
@@ -189,9 +191,19 @@ export const OrderConfirmationEmail = ({
                     <Text style={totalValueText}>{subtotal}</Text>
                   </td>
                 </tr>
+                {discount && (
+                  <tr>
+                    <td style={totalsLabelCell}>
+                      <Text style={{ ...totalLabelText, color: '#16a34a' }}>Discount</Text>
+                    </td>
+                    <td style={totalsValueCell}>
+                      <Text style={{ ...totalValueText, color: '#16a34a', fontWeight: 'bold' }}>-{discount}</Text>
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <td style={totalsLabelCell}>
-                    <Text style={totalLabelText}>20% VAT</Text>
+                    <Text style={totalLabelText}>VAT</Text>
                   </td>
                   <td style={totalsValueCell}>
                     <Text style={totalValueText}>{vat}</Text>

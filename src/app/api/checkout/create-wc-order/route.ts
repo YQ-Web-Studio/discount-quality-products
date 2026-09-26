@@ -43,6 +43,7 @@ interface CheckoutRequestBody {
   transactionId?: string;
   paypalOrderId?: string;
   payerId?: string;
+  couponCode?: string;
 }
 
 function resolveToNumericId(id: string): number {
@@ -65,21 +66,24 @@ export async function POST(req: Request) {
 
   try {
     body = (await req.json()) as CheckoutRequestBody;
-    const { form, items, shippingMethod, paymentProvider, transactionId } = body;
+    const { form, items, shippingMethod, paymentProvider, transactionId, couponCode } = body;
 
     if (!form || !items || items.length === 0) {
       return NextResponse.json({ error: "Missing order data." }, { status: 400 });
     }
 
-    // Dynamic cart validation to resolve the correct shipping details.
+    // Dynamic cart validation to resolve the correct shipping details and discount.
     const validation = await validateCartTotals(
       items.map(i => ({ id: i.id, quantity: i.quantity })),
       shippingMethod || "standard",
-      form ? { country: form.country || "GB", city: form.city, postcode: form.postcode } : undefined
+      form ? { country: form.country || "GB", city: form.city, postcode: form.postcode, email: form.email } : undefined,
+      couponCode
     );
 
     const shippingCost = validation.shippingCost;
     const shippingTitle = validation.shippingTitle || "Free Delivery";
+    const isFirstClass = shippingTitle.toLowerCase().includes("first class") || shippingTitle.toLowerCase().includes("1st class");
+    const cleanCouponCode = couponCode ? couponCode.trim().toLowerCase() : "";
 
     const line_items = items.map((item) => {
       const productId = resolveToNumericId(item.id);
@@ -132,18 +136,34 @@ export async function POST(req: Request) {
       status: "processing",
       transaction_id: transactionId,
       customer_id: session?.user?.id ? session.user.id : 0,
-      customer_note: `Payment captured securely via ${providerName}. Transaction ID: ${transactionId ?? ""}`,
+      customer_note: `Payment captured securely via ${providerName}. Transaction ID: ${transactionId ?? ""}.${cleanCouponCode ? ` Voucher: ${cleanCouponCode.toUpperCase()} applied.` : ""}`,
       billing: billing,
       shipping: delivery,
       line_items,
       shipping_lines: [
         {
-          method_id: "flat_rate",
+          method_id: isFirstClass ? "flexible_shipping_single" : "flat_rate",
+          instance_id: isFirstClass ? "3" : undefined,
           method_title: shippingTitle,
           total: shippingCost.toString(),
+          total_tax: isFirstClass ? "0.00" : undefined,
+          taxes: isFirstClass ? [] : undefined,
         },
       ],
     };
+
+    if (cleanCouponCode) {
+      orderData.coupon_lines = [{ code: cleanCouponCode }];
+    } else if (validation.discountAmount > 0) {
+      const discountExVat = (validation.discountAmount / 1.2).toFixed(2);
+      orderData.fee_lines = [
+        {
+          name: "Promotion Discount",
+          total: `-${discountExVat}`,
+          tax_status: "taxable",
+        },
+      ];
+    }
 
     if (paymentProvider === "paypal") {
       const payPalPaymentMode = process.env.NODE_ENV === "production" ? "live" : "sandbox";
@@ -191,8 +211,9 @@ export async function POST(req: Request) {
 
         const orderTotal = parseFloat(newOrder.total || '0');
         const orderTax = parseFloat(newOrder.total_tax || '0');
-        const vatVal = orderTax || (orderTotal / 6);
-        const subtotalVal = orderTotal - shippingCost - vatVal;
+        const orderDiscount = parseFloat(newOrder.discount_total || '0') || validation.discountAmount || 0;
+        const vatVal = orderTax > 0 ? orderTax : (isFirstClass ? ((orderTotal - shippingCost) / 6) : (orderTotal / 6));
+        const subtotalVal = orderTotal + orderDiscount - shippingCost - vatVal;
 
         // Customer Copy
         await sendEmail({
@@ -204,6 +225,7 @@ export async function POST(req: Request) {
             orderDate: new Date(newOrder.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
             items: emailItems,
             subtotal: `£${subtotalVal.toFixed(2)}`,
+            discount: orderDiscount > 0 ? `£${orderDiscount.toFixed(2)}` : undefined,
             shipping: `£${shippingCost.toFixed(2)}`,
             vat: `£${vatVal.toFixed(2)}`,
             total: `£${orderTotal.toFixed(2)}`,
@@ -231,6 +253,7 @@ export async function POST(req: Request) {
               orderDate: new Date(newOrder.date_created).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
               items: emailItems,
               subtotal: `£${subtotalVal.toFixed(2)}`,
+              discount: orderDiscount > 0 ? `£${orderDiscount.toFixed(2)}` : undefined,
               shipping: `£${shippingCost.toFixed(2)}`,
               vat: `£${vatVal.toFixed(2)}`,
               total: `£${orderTotal.toFixed(2)}`,

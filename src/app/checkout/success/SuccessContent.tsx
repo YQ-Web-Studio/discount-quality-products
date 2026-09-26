@@ -8,9 +8,10 @@ import { sendGAEvent } from "@next/third-parties/google";
 import { useBasket } from "@/lib/useBasket";
 
 
-// Maximum time to wait for the Stripe webhook to create the WC order (ms).
+// Maximum time to wait for the Stripe webhook before triggering fallback sync (ms).
 // Webhooks typically fire within 1–3 s of payment confirmation.
-const POLL_TIMEOUT_MS = 20_000;
+// Lowered to 3s so users who close the tab quickly still have orders created immediately.
+const POLL_TIMEOUT_MS = 3_000;
 const POLL_INTERVAL_MS = 1_500;
 
 export default function SuccessContent() {
@@ -307,8 +308,14 @@ export default function SuccessContent() {
             <div className="w-72 space-y-2.5 border-t-2 border-zinc-200 pt-4">
               <div className="flex justify-between text-zinc-600">
                 <span>Subtotal (excl. VAT)</span>
-                <span>£{(parseFloat(orderDetails.total) - parseFloat(orderDetails.shipping_total || "0") - parseFloat(orderDetails.total_tax || "0")).toFixed(2)}</span>
+                <span>£{(parseFloat(orderDetails.total) + parseFloat(orderDetails.discount_total || "0") - parseFloat(orderDetails.shipping_total || "0") - parseFloat(orderDetails.total_tax || "0")).toFixed(2)}</span>
               </div>
+              {parseFloat(orderDetails.discount_total || "0") > 0 && (
+                <div className="flex justify-between text-emerald-700 font-medium">
+                  <span>Discount {orderDetails.coupon_lines?.[0]?.code ? `(${orderDetails.coupon_lines[0].code.toUpperCase()})` : ""}</span>
+                  <span>-£{parseFloat(orderDetails.discount_total).toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-zinc-600">
                 <span>Shipping ({orderDetails.shipping_lines?.[0]?.method_title || "Standard Delivery"})</span>
                 <span>£{parseFloat(orderDetails.shipping_total || "0").toFixed(2)}</span>

@@ -214,8 +214,10 @@ export async function validateCartTotals(
     const netSubtotal = subtotal - discountAmount;
     const finalTotal = netSubtotal + shippingCost;
     // Prices from WooCommerce are VAT-inclusive.
-    // Extract the VAT portion: finalTotal / 6 (equivalent to 20/120) since both items and shipping carry VAT.
-    const vat = finalTotal / 6;
+    // Royal Mail 1st Class postage is statutory VAT-exempt.
+    // For 1st Class, VAT applies only to goods (netSubtotal / 6).
+    const isFirstClassShipping = shippingTitle.toLowerCase().includes("first class") || shippingTitle.toLowerCase().includes("1st class");
+    const vat = isFirstClassShipping ? (netSubtotal / 6) : (finalTotal / 6);
 
     return {
       isValid: true,

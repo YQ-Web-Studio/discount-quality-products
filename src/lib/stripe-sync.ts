@@ -39,8 +39,11 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
     const orderTotal = parseFloat(order.total || '0');
     const shippingCost = parseFloat(order.shipping_total || '0');
     const orderTax = parseFloat(order.total_tax || '0');
-    const vatVal = orderTax || (orderTotal / 6);
-    const subtotalVal = orderTotal - shippingCost - vatVal;
+    const discountTotal = parseFloat(order.discount_total || '0');
+    const discountTax = parseFloat(order.discount_tax || '0');
+    const totalDiscount = discountTotal + discountTax;
+    const vatVal = orderTax;
+    const subtotalVal = orderTotal - shippingCost - vatVal + discountTotal;
 
     const shippingMethodTitle = order.shipping_lines?.[0]?.method_title || "Free Delivery";
 
@@ -54,6 +57,7 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
         orderDate: new Date(order.date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
         items: emailItems,
         subtotal: `£${subtotalVal.toFixed(2)}`,
+        discount: totalDiscount > 0 ? `£${totalDiscount.toFixed(2)}` : undefined,
         shipping: `£${shippingCost.toFixed(2)}`,
         vat: `£${vatVal.toFixed(2)}`,
         total: `£${orderTotal.toFixed(2)}`,
@@ -82,6 +86,7 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
           orderDate: new Date(order.date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
           items: emailItems,
           subtotal: `£${subtotalVal.toFixed(2)}`,
+          discount: totalDiscount > 0 ? `£${totalDiscount.toFixed(2)}` : undefined,
           shipping: `£${shippingCost.toFixed(2)}`,
           vat: `£${vatVal.toFixed(2)}`,
           total: `£${orderTotal.toFixed(2)}`,
@@ -115,7 +120,7 @@ export async function processOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {
-  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
+  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_coupon, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
 
   if (!cart_items || (!cart_form && !delivery_address)) {
     console.warn(
@@ -148,6 +153,9 @@ export async function processOrderFromPaymentIntent(
   const shippingMethod = cart_shipping ?? "standard";
   const shippingCost = cart_shipping_cost ? parseFloat(cart_shipping_cost) : 0;
   const shippingTitle = cart_shipping_title || (shippingCost > 0 ? `Shipping (${shippingMethod})` : "Free Delivery");
+  const isFirstClass = shippingTitle.toLowerCase().includes("first class") || shippingTitle.toLowerCase().includes("1st class");
+  const discountAmount = cart_discount ? parseFloat(cart_discount) : 0;
+  const couponCode = cart_coupon ? cart_coupon.trim().toLowerCase() : "";
   const line_items = items.map((item) => ({ product_id: item.i, quantity: item.q }));
   const paymentMeta = buildPaymentMeta(paymentIntent.id, chargeId);
 
@@ -172,16 +180,20 @@ export async function processOrderFromPaymentIntent(
     }
 
     try {
-      const updated = await updateWooCommerceOrder(orderId, {
+      const updatePayload: any = {
         status: "processing",
         set_paid: true,
         transaction_id: chargeId || paymentIntent.id,
-        customer_note: `Payment captured securely via Stripe. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}.`,
+        customer_note: `Payment captured securely via Stripe. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}.${couponCode ? ` Voucher: ${couponCode.toUpperCase()} applied.` : ""}`,
         meta_data: [
           ...paymentMeta,
           { key: "_confirmation_email_sent", value: "yes" },
         ],
-      });
+      };
+      if (couponCode) {
+        updatePayload.coupon_lines = [{ code: couponCode }];
+      }
+      const updated = await updateWooCommerceOrder(orderId, updatePayload);
       console.log(
         `[stripe-sync] ✓ WooCommerce order #${updated.number ?? updated.id} updated to "processing" for PaymentIntent ${paymentIntent.id}.`
       );
@@ -263,22 +275,25 @@ export async function processOrderFromPaymentIntent(
         country: "GB",
       };
 
-  const orderPayload = {
+  const orderPayload: any = {
     payment_method: "stripe",
     payment_method_title: "Credit Card (Stripe)",
     set_paid: true,
     status: "processing",
     transaction_id: chargeId || paymentIntent.id,
     customer_id: wc_customer_id ? parseInt(wc_customer_id, 10) : 0,
-    customer_note: `Payment captured securely via Stripe. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}.`,
+    customer_note: `Payment captured securely via Stripe. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}.${couponCode ? ` Voucher: ${couponCode.toUpperCase()} applied.` : ""}`,
     billing: billingPayload,
     shipping: shippingPayload,
     line_items,
     shipping_lines: [
       {
-        method_id: "flat_rate",
+        method_id: isFirstClass ? "flexible_shipping_single" : "flat_rate",
+        instance_id: isFirstClass ? "3" : undefined,
         method_title: shippingTitle,
         total: shippingCost.toString(),
+        total_tax: isFirstClass ? "0.00" : undefined,
+        taxes: isFirstClass ? [] : undefined,
       },
     ],
     meta_data: [
@@ -286,6 +301,20 @@ export async function processOrderFromPaymentIntent(
       { key: "_confirmation_email_sent", value: "yes" },
     ],
   };
+
+  if (couponCode) {
+    orderPayload.coupon_lines = [{ code: couponCode }];
+  } else if (discountAmount > 0) {
+    // If discount was applied without a registered coupon code, pass as promotion fee line (ex-VAT)
+    const discountExVat = (discountAmount / 1.2).toFixed(2);
+    orderPayload.fee_lines = [
+      {
+        name: "Promotion Discount",
+        total: `-${discountExVat}`,
+        tax_status: "taxable",
+      },
+    ];
+  }
 
   try {
     const newOrder = await createWooCommerceOrder(orderPayload);

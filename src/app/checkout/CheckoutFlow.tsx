@@ -1639,6 +1639,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                                       transactionId: capData.captureId || data.orderID,
                                       paypalOrderId: data.orderID,
                                       payerId: capData.payerId,
+                                      couponCode: appliedCoupon || undefined,
                                     }),
                                   });
 

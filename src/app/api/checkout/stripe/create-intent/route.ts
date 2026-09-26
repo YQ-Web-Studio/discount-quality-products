@@ -167,6 +167,7 @@ export async function POST(req: Request) {
         cart_shipping_cost: validation.shippingCost.toString(),
         cart_shipping_title: validation.shippingTitle || "Free Delivery",
         cart_discount: validation.discountAmount.toString(),
+        cart_coupon: couponCode ? String(couponCode).trim().toUpperCase() : "",
         cart_form: cartForm,
         delivery_address: deliveryAddress ? JSON.stringify(deliveryAddress) : "",
         billing_address: billingAddress ? JSON.stringify(billingAddress) : "",
