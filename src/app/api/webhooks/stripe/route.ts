@@ -12,9 +12,7 @@ const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as 
   apiVersion: "2023-10-16" as any,
 });
 
-// Candidate secrets: environment variable or live registered webhook endpoint secret
-const LIVE_WEBHOOK_SECRET = "whsec_7Zq7XXaE9i6m97pjJX2tN78frf4lOMDX";
-const ENV_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 import { processOrderFromPaymentIntent } from "@/lib/stripe-sync";
 
@@ -33,29 +31,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing signature." }, { status: 400 });
   }
 
-  const candidateSecrets = [ENV_WEBHOOK_SECRET, LIVE_WEBHOOK_SECRET].filter(Boolean) as string[];
-
-  if (candidateSecrets.length === 0) {
+  if (!WEBHOOK_SECRET) {
     console.error("[webhook] STRIPE_WEBHOOK_SECRET is not configured.");
     return NextResponse.json({ error: "Webhook secret not configured." }, { status: 500 });
   }
 
-  // ── 2. Verify the Stripe signature against candidate secrets ─────────────
-  let event: Stripe.Event | null = null;
-  let lastError: any = null;
-
-  for (const secret of candidateSecrets) {
-    try {
-      event = stripe.webhooks.constructEvent(rawBody, signature, secret);
-      break;
-    } catch (err: any) {
-      lastError = err;
-    }
-  }
-
-  if (!event) {
-    console.error("[webhook] ⚠ Signature verification FAILED with all candidate secrets:", lastError?.message);
-    return NextResponse.json({ error: `Webhook signature invalid: ${lastError?.message}` }, { status: 400 });
+  // ── 2. Verify the Stripe signature ───────────────────────────────────────
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, WEBHOOK_SECRET);
+  } catch (err: any) {
+    console.error("[webhook] ⚠ Signature verification FAILED:", err.message);
+    return NextResponse.json({ error: `Webhook signature invalid: ${err.message}` }, { status: 400 });
   }
 
   console.log(`[webhook] Received verified event: ${event.type} (id: ${event.id})`);
