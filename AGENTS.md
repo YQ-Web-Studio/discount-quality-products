@@ -148,11 +148,17 @@ with no body. This is intentional — it prevents accidental mass invalidation.
 All contributors and AI agents working in this repository must strictly adhere to the company-standard engineering workflow:
 
 ## 1. Branching & Commit Conventions
-- Work is organized around Jira tickets under project `DQP` (e.g. `DQP-12`).
-- Never commit directly to `main`. Create feature branches: `<type>/DQP-<n>-<short-slug>` (e.g. `feat/DQP-12-checkout-vat`).
-- Commit messages must begin with `[DQP]` and follow conventional commits:
+- Work is organized around Jira tickets under the dedicated project key (`DQP`, `MA`, or `FMMS`).
+- **Never commit directly to `main`**. All work begins on an isolated branch.
+- **Branch Naming Standard:** `<type>/<TICKET-KEY>-<short-description>`
+  - Types: `feat`, `fix`, `test`, `refactor`, `perf`, `docs`, `chore`, `ci`, `spike`, `hotfix`
+  - Ticket Key: Must be uppercase (e.g., `DQP-12`, `MA-5`, `FMMS-3`)
+  - Description: 2–5 lowercase words in kebab-case (e.g., `vat-exempt-shipping`)
+  - Valid Examples: `feat/DQP-12-apple-pay`, `fix/MA-18-prayer-offset`, `docs/DQP-1-engineering-workflow`
+  - Anti-patterns to reject: `yusuf/fix-vat` ❌ (personal prefixes), `DQP-12` ❌ (missing type/slug), `feature/new-cart` ❌ (`feature` instead of `feat`), `feat/dqp-12-vat` ❌ (lowercase key).
+- **Commit Messages:** Must begin with `[PROJECT]` and follow conventional commits:
   `[DQP] type(scope): description (DQP-n)`
-- Pull request titles must match the commit format:
+- **Pull Request Titles:** Must match the commit format:
   `[DQP] type(scope): description (DQP-n)`
 
 ## 2. Mandatory Human Confirmation Gates (Hard-Gates)

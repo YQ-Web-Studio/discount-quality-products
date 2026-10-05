@@ -61,9 +61,10 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 ## 4. Jira
 
 - **Site:** `https://yqwebstudio.atlassian.net`
-- **Dedicated Projects:** Each codebase has its own dedicated Jira project key (no messy custom team filters):
+- **Dedicated Projects:** Each codebase has its own dedicated Jira project key:
   - **`DQP`**: Discount Quality Products (tickets: `DQP-1`, `DQP-2`, ...)
-  - **`MAT`**: Muslim Atlas (tickets: `MAT-1`, `MAT-2`, ...)
+  - **`MA`**: Muslim Atlas (tickets: `MA-1`, `MA-2`, ...)
+  - **`FMMS`**: Faizan-e-Madina Southend (tickets: `FMMS-1`, `FMMS-2`, ...)
 - **Boards:** Dedicated Kanban board per project capturing all tickets automatically.
 - **Columns / statuses (4-column flow):**
   - **`To Do`**: Backlog of refined, ready-to-implement tickets.
@@ -76,7 +77,7 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
     5. Final human review sign-off.
   - **`Done`**: PR approved, squash-merged to `main`, and deployed.
 - **Agent access:** The Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each developer connects their own account. No tokens are stored on disk.
-- **GitHub link:** The free "GitHub for Jira" app, linking branches, commits and PRs to tickets automatically via the ticket key (`DQP-n`).
+- **GitHub link:** The free "GitHub for Jira" app, linking branches, commits and PRs to tickets automatically via the ticket key (`DQP-n`, `MA-n`, `FMMS-n`).
 - **Status automation** (GitHub for Jira rules / MCP fallback):
   - branch created → In Progress
   - PR opened → In Review
@@ -85,7 +86,7 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 ### 4.1 Ticket template
 | Field | Content |
 |---|---|
-| Project | Target project (`DQP` or `MAT`) |
+| Project | Target project (`DQP`, `MA`, or `FMMS`) |
 | Type | Story / Bug / Task / Spike |
 | Summary | Imperative, ≤ 70 chars |
 | Description | User story ("As a…, I want…, so that…") or, for bugs, steps to reproduce / expected / actual |
@@ -98,7 +99,50 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 ## 5. Git workflow (GitHub Flow)
 
 - `main` is always deployable, and production deploys from `main`.
-- **Branches:** `<type>/<ticket-key>-<short-slug>`, e.g. `fix/DQP-42-vat-exempt`. Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `perf`, `ci`.
+
+### 5.1 Branch Naming Specification
+
+All branches across the organization (`YQ-Web-Studio` and `Muslim-Atlas`) must follow a strict, unified naming convention. This ensures automatic synchronization with Jira Kanban boards, clear repository history, and automated branch validation in git hooks.
+
+#### Pattern
+```text
+<type>/<TICKET-KEY>-<short-description>
+```
+Regex pattern: `^(feat|fix|test|refactor|perf|chore|docs|ci|spike|hotfix)\/([A-Z]+-[0-9]+-)?[a-z0-9-]+$`
+
+#### Standard Types & Examples
+
+| Type | When to Use | DQP Example | MA Example | FMMS Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `feat` | New customer-facing feature or capability | `feat/DQP-12-apple-pay-checkout` | `feat/MA-5-quran-audio-player` | `feat/FMMS-10-donation-portal` |
+| `fix` | Bug fix, UI defect, or logic correction | `fix/DQP-42-vat-exempt-shipping` | `fix/MA-18-prayer-time-offset` | `fix/FMMS-4-timetable-sync` |
+| `test` | Adding, backfilling, or updating test suites | `test/DQP-8-checkout-vitest` | `test/MA-22-hadith-search-e2e` | `test/FMMS-7-events-calendar` |
+| `refactor`| Code restructuring without feature/API changes | `refactor/DQP-20-cart-state` | `refactor/MA-14-theme-tokens` | `refactor/FMMS-9-navigation` |
+| `perf` | Caching, query speedup, ISR tuning | `perf/DQP-9-product-isr-revalidate` | `perf/MA-30-audio-streaming` | `perf/FMMS-12-hero-lcp-speed` |
+| `docs` | Documentation, specs, handbooks, READMEs | `docs/DQP-1-engineering-workflow` | `docs/MA-1-architecture-spec` | `docs/FMMS-1-project-handbook` |
+| `chore` | Tooling, dependencies, config files | `chore/DQP-3-upgrade-nextjs-16` | `chore/MA-7-eslint-flat-config` | `chore/FMMS-3-tailwind-upgrade` |
+| `ci` | GitHub Actions, test matrix, CI triggers | `ci/DQP-6-playwright-cache` | `ci/MA-4-eas-build-action` | `ci/FMMS-2-deploy-workflow` |
+| `spike` | Timeboxed technical spike / exploratory PoC | `spike/DQP-15-algolia-evaluation` | `spike/MA-9-offline-sync-engine` | `spike/FMMS-8-live-audio-stream` |
+| `hotfix` | Critical production outage or payment failure | `hotfix/DQP-99-stripe-webhook-500` | `hotfix/MA-99-auth-token-crash` | `hotfix/FMMS-99-stream-offline` |
+
+#### Branch Rules
+1. **Uppercase Project Prefix:** The Jira ticket key must always be uppercase (e.g., `DQP-1`, never `dqp-1`).
+2. **Kebab-Case Slugs:** Short description must be 2 to 5 words, lowercase, hyphen-separated (e.g. `vat-exempt-shipping`).
+3. **Never Include Personal Names:** Do not prefix branches with personal names (e.g. `yusuf/fix-vat` ❌). Ownership is tracked via GitHub and Jira assignees.
+4. **Unticketed Spikes:** If performing pure research before a Jira ticket exists, use `spike/<short-description>` (e.g. `spike/meilisearch-poc`). All production code changes require a ticket.
+5. **Jira Synchronization:** When a branch with `<PROJECT>-<NUMBER>-` is pushed to GitHub, Jira's GitHub integration automatically links the branch to the issue and transitions it from `To Do` to `In Progress`.
+
+#### Anti-Patterns to Avoid
+| Bad Branch Name | Why It Fails | Correct Format |
+| :--- | :--- | :--- |
+| `yusuf/fix-vat` | Personal namespace, missing type, missing ticket | `fix/DQP-42-vat-exempt-shipping` |
+| `DQP-12` | Missing type prefix and semantic slug | `feat/DQP-12-apple-pay-checkout` |
+| `feature/new-cart` | Full word `feature/` instead of standard `feat/`, missing ticket | `feat/DQP-15-new-cart-drawer` |
+| `fix_vat_calculation` | Uses underscores, missing type, missing ticket | `fix/DQP-42-vat-calculation` |
+| `feat/dqp-1-workflow` | Lowercase project key `dqp` (breaks Jira auto-linking) | `feat/DQP-1-workflow` |
+
+### 5.2 Commits and PRs
+
 - **Commits** (Conventional Commits with project tag and ticket key):
   ```
   [DQP] fix(checkout): exempt 1st class postage from VAT (DQP-42)
