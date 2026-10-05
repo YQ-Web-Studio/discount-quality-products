@@ -102,22 +102,21 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 
 ### 6.1 Environments
 
-| | Production | Staging | Local |
+| | Production | Local / Contributor Dev | CI Environment |
 |---|---|---|---|
-| WordPress/Woo | `admin.discountproducts.co.uk` | **One** Bluehost staging clone, shared by everyone | `@wordpress/env` (Docker) on the developer's own machine |
-| What it reflects | Released `main` | **Merged `main`** (integration) | The developer's **own branch** |
-| Who changes it | Pipeline, after owner approval | Pipeline only, after merge | The developer |
-| Frontend | Vercel Production | Vercel Preview (every PR) | `npm run dev` (reads from staging by default, or local WP for backend work) |
-| Payments | Stripe/PayPal **live** | Stripe **test mode**, PayPal **sandbox** | Same as staging |
-| Email | Resend, real customers | Resend test key; no real customer addresses | Same as staging |
-| Data | Real | **Anonymised** clone on every refresh (GDPR) | Small committed seed (~50 products, categories, shipping zones, coupons, test customers) |
-| Access | **Owner only** | Owner + contributors (Shop Manager role, mostly read-only) | Anyone |
+| WordPress/Woo | `admin.discountproducts.co.uk` (Client hosting) | `@wordpress/env` (Docker) on developer's machine | `@wordpress/env` running in GitHub Actions |
+| What it reflects | Released `main` | Developer's active branch | Head commit under test |
+| Who changes it | Owner-approved deploy script/action only | Developer | Automated test runners |
+| Frontend | Vercel Production | `npm run dev` (reads live catalog for browsing, or local WP for checkout/admin tests) | Vercel Preview (mocked/test endpoints) |
+| Payments | Stripe/PayPal **live** | Stripe **test mode**, PayPal **sandbox** | Mocked (MSW) or Stripe test mode |
+| Email | Resend, real customers | Resend test key / dev trap | Mocked / dev trap |
+| Data | Real live client data | Small committed seed fixture (~50 products, categories, shipping, coupons) | Fresh seeded fixture per run |
+| Access | **Owner only** | Anyone locally | Ephemeral CI runner |
 
-- Vercel **Production** environment variables point at production. **Preview + Development** variables point at staging with test keys. Contributors only ever receive staging/test values (shared privately, e.g. through a free Bitwarden organisation), so they can't reach production even by accident.
-- **Never use Bluehost's "deploy staging → production" button.** It can overwrite the live database (orders and customers). Changes reach production only through the pipeline in §6.3.
-- Staging refresh (production → staging clone + anonymisation script) is a documented owner-only runbook.
-- **Exactly one staging site, no matter how many developers.** Unmerged branch work is tested on each developer's local wp-env, never on staging, so Bluehost resources never grow with the number of developers and developers can't overwrite each other's changes.
-- **Capacity fallback:** if the Bluehost plan can't hold even one staging clone (check cPanel disk usage and database size first; Media Cloud offloading keeps the file copy small), drop shared staging. Vercel Preview/Development then point at a small hosted-free or local wp-env seed, and staging deploy steps become no-ops. Everything else in this spec stays the same.
+- **Zero footprint on client's Bluehost:** We do **NOT** create staging sites or extra databases on Bluehost. The client's host only runs production.
+- **Frontend catalog reads:** Pure frontend UI/catalog work can read the public GraphQL catalog directly (`https://admin.discountproducts.co.uk/graphql`), which is public and read-only.
+- **Backend / checkout / mutation work:** Any work involving orders, user sessions, coupons, or PHP code runs against local `@wordpress/env`. Contributors never receive live WooCommerce API credentials.
+- **Security & isolation:** Contributors have zero access or network paths to Bluehost. All testing is fully reproducible on any machine with Docker.
 
 ### 6.2 WordPress changes as code
 All backend changes live in the repo and show up in the PR diff:
@@ -137,13 +136,12 @@ The existing snippets get exported from the plugin into `backend/wordpress/snipp
 flowchart LR
   A["PR adds snippet/migration file"] --> B["CI: php -l, PHPUnit on wp-env, migration dry-run"]
   B --> C["Merge to main"]
-  C --> D["Auto-apply to STAGING (staging app password)"]
-  D --> E{"Owner approves"}
-  E --> F["Apply to PRODUCTION"]
+  C --> D{"Owner approves deploy"}
+  D --> E["Apply to PRODUCTION via Code Snippets REST API / Script"]
 ```
-- Public profile: the production step is a GitHub Actions job in the `production` Environment with the owner as required reviewer. The production app password exists **only** as an Environment secret, restricted to `main`.
-- Private-free profile: the production step is `npm run wp:deploy -- --env=production`, run on the owner's machine (by the owner or their agent after explicit approval).
-- **Nightly drift check:** compares production snippets and the migration log against the repo. If they differ (e.g. someone edited a snippet in the WP admin), it opens a GitHub issue / Jira ticket.
+- Snippets and migrations are validated first on local Docker `@wordpress/env`, then verified in CI.
+- Deploying to production is gated strictly on **explicit owner approval**. The production application password is never shared with contributors or third-party bots.
+- **Nightly drift check:** compares production snippets and the migration log against the repo. If they differ (e.g. someone edited a snippet directly in the WP admin), it opens a GitHub issue / Jira ticket.
 
 ## 7. Review policy
 
@@ -161,7 +159,7 @@ The rule depends only on **which GitHub account opens the PR**, never on whether
 - [ ] Acceptance criteria met
 - [ ] Tests written first (TDD) and passing; changed-line coverage ≥ 80%
 - [ ] CI green; required reviews done (contributors)
-- [ ] Backend changes applied to staging and verified, then to production after owner approval
+- [ ] Backend changes validated locally on `@wordpress/env` and CI, then applied to production upon owner approval
 - [ ] Docs / `AGENTS.md` updated if behaviour or conventions changed
 - [ ] Jira ticket moved to Done with the PR linked
 
@@ -234,11 +232,10 @@ Master copies live in the handbook and are synced to `.agents/skills/` in every 
 |---|---|---|
 | GitHub Free (public: rulesets, environments, unlimited Actions) | £0 | Private repos: permissions-based model, 2,000 min/month |
 | Jira Free + automation + GitHub for Jira | £0 | Free plan limits (10 users) |
-| Atlassian Remote MCP | £0 | |
+| Atlassian Remote MCP | £0 | Official Atlassian remote MCP |
 | CodeRabbit (public) / GitHub Models (private) | £0 | |
 | Vercel Hobby | £0 | Hobby terms are non-commercial. Existing risk for DQP; first item to pay for once there's budget |
-| Bluehost staging | £0 | Included in the current plan |
-| Vitest, Playwright, MSW, husky, commitlint, wp-env | £0 | Open source |
+| Vitest, Playwright, MSW, husky, commitlint, wp-env | £0 | Open source local Docker tools |
 
 ## 14. Rollout (sub-projects, in order)
 Each sub-project gets its own implementation plan and Jira tickets.
@@ -246,13 +243,13 @@ Each sub-project gets its own implementation plan and Jira tickets.
 2. **Handbook repo:** create `engineering-handbook` + the `.github` repos; templates, CONTRIBUTING, skills (§10), reusable workflows (skeleton).
 3. **DQP Git workflow:** husky + commitlint, PR template, ruleset, CodeRabbit config, `AGENTS.md` update.
 4. **DQP test framework + CI:** Vitest/RTL/MSW/Playwright setup, `ci.yml`, coverage gate, initial backfill tests.
-5. **DQP staging backend:** create the Bluehost staging site, anonymise data, staging WP user + app password, Vercel Preview/Development env vars → staging.
+5. **Local WP environment & Seed:** `@wordpress/env` config, seed data fixtures, and environment switcher scripts for local dev.
 6. **WordPress as code:** export snippets, sync tool, migrations runner, deploy workflows, drift check.
 7. **Muslim Atlas adoption** (separate plan, private-free profile).
 
 ## 15. Things to verify early (spikes during rollout)
 - The Atlassian MCP can set the **Team** field on create and move statuses (§4).
 - Code Snippets REST API: the free version supports create/update with application passwords on Bluehost (§6.2).
-- Bluehost staging URL/path, and that staging gets its own database and users (§6.1).
+- `@wordpress/env` setup and seed catalog load time (§6.1).
 - Vercel "Protection Bypass for Automation" is available on Hobby (§9).
 - GitHub Models free quota is enough for PR-sized diffs (private profile, §7.2).
