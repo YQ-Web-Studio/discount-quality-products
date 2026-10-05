@@ -223,9 +223,14 @@ Every pull request requires **two distinct approvals** before it can be merged i
    - Zero blind approvals: the owner verifies CI is green and CodeRabbit is approved before granting the final sign-off.
    - Once approved, the ticket advances to **`Awaiting Release`**.
 
-### 7.2 AI reviewer
+### 7.2 AI Reviewer Policy & Client Context Primacy
 - Public profile: **CodeRabbit** free tier, configured with `.coderabbit.yaml` containing the project rules (performance rules, payment safety, WordPress change safety, test quality).
 - Private-free profile: the `ai-review` reusable workflow (GitHub Models + the same rules), plus CodeRabbit summaries.
+- **Client Context Trumps Generic Advice:** CodeRabbit is an automated AI and can make errors or lack store-specific, client-specific operational context (e.g. unique WooCommerce configurations, physical warehouse handling, merchant operational preferences, or specialized postal arrangements).
+- **Critical Evaluation (Zero Blind Acceptance):** Developers and AI agents must critically evaluate every CodeRabbit comment before implementing changes. Never agree performatively or blindly execute AI suggestions. When evaluating feedback:
+  1. Cross-reference the comment against actual code, business logic, and client specifications.
+  2. If the comment identifies a genuine defect or edge case (e.g., Quick Edit state loss), implement a minimal, robust fix with covering tests.
+  3. If the comment contradicts client requirements or is based on false assumptions, reply to the comment thread with clear technical justification and resolve it.
 - Before approving, the owner can run the **`code-review` skill**, which reviews the PR against the Jira ticket's acceptance criteria. The bots can't do this because they can't see Jira.
 
 ### 7.3 Definition of Done
