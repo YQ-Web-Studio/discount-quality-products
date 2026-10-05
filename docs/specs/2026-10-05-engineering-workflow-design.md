@@ -149,11 +149,17 @@ Regex pattern: `^(feat|fix|test|refactor|perf|chore|docs|ci|spike|hotfix)\/([A-Z
   ```
   The `[PROJECT]` tag matches the repo's project code. Enforced by `commitlint` (husky `commit-msg` hook) and checked in CI.
 - **PR title:** the same format (`[DQP] fix(checkout): exempt 1st class postage from VAT (DQP-42)`), enforced by a CI check. PRs are **squash-merged**, so the PR title becomes the commit on `main`.
-- **Branch retention:** branches are **not** deleted automatically. Branches cost nothing; Vercel builds a preview for every push whether a branch is new or reused.
-  - Default: a new branch per ticket.
-  - Reuse is allowed, but only after `git fetch && git reset --hard origin/main`. Otherwise squash-merged commits come back as phantom changes. The `start-ticket` skill does this automatically.
-  - A monthly `branch-report` script lists merged or stale branches. It only reports; it never deletes.
-- **Previews:** every PR gets a Vercel preview URL (public profile), and e2e tests run against it.
+- **Branch Lifecycle & Automatic Deletion:**
+  - **One branch per ticket:** Each ticket gets a fresh, short-lived branch created off latest `main`.
+  - **Automatic remote deletion on merge:** GitHub repository setting *"Automatically delete head branches"* is enabled across all organization repositories. When a PR is squash-merged into `main`, GitHub automatically deletes the remote branch (`origin/<type>/<TICKET-KEY>-<slug>`).
+  - **Local cleanup:** After merging, developers and AI agents switch back to `main`, prune remote tracking references, and delete their local branch:
+    ```bash
+    git checkout main
+    git pull --prune
+    git branch -d <branch-name>
+    ```
+  - **Zero history loss:** Squash-merging preserves the complete functional change on `main`. The closed PR on GitHub permanently preserves all individual commit history, discussions, review feedback, and diffs, with a one-click "Restore branch" button available if needed.
+- **Previews:** Every PR gets an isolated, ephemeral Vercel preview URL automatically, and E2E tests run against it. Preview deployments are automatically retired when the branch is merged or closed.
 
 ## 6. Environments and backend (WordPress)
 

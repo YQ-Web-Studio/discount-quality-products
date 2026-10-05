@@ -156,6 +156,7 @@ All contributors and AI agents working in this repository must strictly adhere t
   - Description: 2–5 lowercase words in kebab-case (e.g., `vat-exempt-shipping`)
   - Valid Examples: `feat/DQP-12-apple-pay`, `fix/MA-18-prayer-offset`, `docs/DQP-1-engineering-workflow`
   - Anti-patterns to reject: `yusuf/fix-vat` ❌ (personal prefixes), `DQP-12` ❌ (missing type/slug), `feature/new-cart` ❌ (`feature` instead of `feat`), `feat/dqp-12-vat` ❌ (lowercase key).
+- **Branch Lifecycle & Deletion:** Branches are short-lived and dedicated to a single ticket. Once a PR is squash-merged into `main`, GitHub automatically deletes the remote branch. The agent/developer switches to `main`, pulls with pruning (`git pull --prune`), and deletes the local branch (`git branch -d <branch>`).
 - **Commit Messages:** Must begin with `[PROJECT]` and follow conventional commits:
   `[DQP] type(scope): description (DQP-n)`
 - **Pull Request Titles:** Must match the commit format:
