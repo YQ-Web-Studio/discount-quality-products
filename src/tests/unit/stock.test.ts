@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { validateCartTotals } from '@/lib/checkout';
 import * as woocommerce from '@/lib/woocommerce';
+import { GET as getStockRoute } from '@/app/api/products/stock/route';
 
 describe('Real-Time Stock & Inventory Validation Guard', () => {
   beforeEach(() => {
@@ -172,4 +173,186 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
     expect(result.isValid).toBe(false);
     expect(result.error).toBe('Product not found: 9999');
   });
+
+  describe('Verified Stock Guard Bypass (_bypass_low_stock_guard / tag: verified-stock)', () => {
+    it('allows checkout when low-stock item (< 5 units) has bypassLowStock enabled', async () => {
+      vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+        products: [
+          createProduct({
+            databaseId: 301,
+            name: 'Rare Vintage Lightbulb',
+            stockStatus: 'instock',
+            manageStock: true,
+            stockQuantity: 2, // low stock < 5
+            bypassLowStock: true, // verified by merchant!
+          }),
+        ],
+        totalPages: 1,
+        total: 1,
+      });
+
+      const result = await validateCartTotals(
+        [{ id: '301', quantity: 2 }],
+        'standard',
+        { country: 'GB', city: 'London', postcode: 'EC1A 1BB' }
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(result.subtotal).toBe(50);
+    });
+
+    it('rejects checkout when bypassLowStock is enabled but requested quantity exceeds available stock', async () => {
+      vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+        products: [
+          createProduct({
+            databaseId: 302,
+            name: 'Rare Vintage Lightbulb',
+            stockStatus: 'instock',
+            manageStock: true,
+            stockQuantity: 2,
+            bypassLowStock: true,
+          }),
+        ],
+        totalPages: 1,
+        total: 1,
+      });
+
+      const result = await validateCartTotals(
+        [{ id: '302', quantity: 3 }], // requesting 3 when only 2 available
+        'standard',
+        { country: 'GB', city: 'London', postcode: 'EC1A 1BB' }
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Only 2 of "Rare Vintage Lightbulb" available in stock.');
+    });
+
+    it('still rejects checkout when bypassLowStock is enabled but item is completely out of stock', async () => {
+      vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+        products: [
+          createProduct({
+            databaseId: 303,
+            name: 'Sold Out Item',
+            stockStatus: 'outofstock',
+            manageStock: true,
+            stockQuantity: 0,
+            bypassLowStock: true,
+          }),
+        ],
+        totalPages: 1,
+        total: 1,
+      });
+
+      const result = await validateCartTotals(
+        [{ id: '303', quantity: 1 }],
+        'standard',
+        { country: 'GB', city: 'London', postcode: 'EC1A 1BB' }
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('is currently out of stock and cannot be purchased.');
+    });
+
+    it('correctly maps bypassLowStock from WooCommerce tags (verified-stock)', () => {
+      const rawWithTag = {
+        id: 401,
+        name: 'Tagged Item',
+        slug: 'tagged-item',
+        price: '10.00',
+        regular_price: '10.00',
+        stock_status: 'instock',
+        manage_stock: true,
+        stock_quantity: 3,
+        tags: [{ id: 55, name: 'Verified Stock', slug: 'verified-stock' }],
+      } as unknown as woocommerce.WooProductRaw;
+
+      const mapped = woocommerce.mapProduct(rawWithTag);
+      expect(mapped.bypassLowStock).toBe(true);
+    });
+
+    it('correctly maps bypassLowStock from WooCommerce meta_data (_bypass_low_stock_guard)', () => {
+      const rawWithMeta = {
+        id: 402,
+        name: 'Meta Item',
+        slug: 'meta-item',
+        price: '15.00',
+        regular_price: '15.00',
+        stock_status: 'instock',
+        manage_stock: true,
+        stock_quantity: 2,
+        meta_data: [{ id: 99, key: '_bypass_low_stock_guard', value: 'yes' }],
+      } as unknown as woocommerce.WooProductRaw;
+
+      const mapped = woocommerce.mapProduct(rawWithMeta);
+      expect(mapped.bypassLowStock).toBe(true);
+    });
+
+    it('maps bypassLowStock as false when neither tag nor meta_data is present', () => {
+      const rawNormal = {
+        id: 403,
+        name: 'Normal Item',
+        slug: 'normal-item',
+        price: '20.00',
+        regular_price: '20.00',
+        stock_status: 'instock',
+        manage_stock: true,
+        stock_quantity: 2,
+      } as unknown as woocommerce.WooProductRaw;
+
+      const mapped = woocommerce.mapProduct(rawNormal);
+      expect(mapped.bypassLowStock).toBe(false);
+    });
+
+    it('returns bypassLowStock: true in /api/products/stock when product has verified low-stock bypass', async () => {
+      vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+        products: [
+          createProduct({
+            databaseId: 501,
+            slug: 'verified-low-stock-item',
+            stockStatus: 'instock',
+            manageStock: true,
+            stockQuantity: 2,
+            bypassLowStock: true,
+          }),
+        ],
+        totalPages: 1,
+        total: 1,
+      });
+
+      const req = new Request('http://localhost:3000/api/products/stock?id=501');
+      const res = await getStockRoute(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.bypassLowStock).toBe(true);
+      expect(data.stockQuantity).toBe(2);
+      expect(data.manageStock).toBe(true);
+    });
+
+    it('returns bypassLowStock: false in /api/products/stock when product does not have bypass', async () => {
+      vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+        products: [
+          createProduct({
+            databaseId: 502,
+            slug: 'standard-low-stock-item',
+            stockStatus: 'instock',
+            manageStock: true,
+            stockQuantity: 2,
+            bypassLowStock: false,
+          }),
+        ],
+        totalPages: 1,
+        total: 1,
+      });
+
+      const req = new Request('http://localhost:3000/api/products/stock?slug=standard-low-stock-item');
+      const res = await getStockRoute(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.bypassLowStock).toBe(false);
+      expect(data.stockQuantity).toBe(2);
+    });
+  });
 });
+

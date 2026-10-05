@@ -122,8 +122,9 @@ export async function validateCartTotals(
         };
       }
 
-      // Products with stock < 5 require customer enquiry to prevent overselling
+      // Products with stock < 5 require customer enquiry to prevent overselling unless verified by merchant
       const isLowStock =
+        !wooProduct.bypassLowStock &&
         wooProduct.manageStock &&
         typeof wooProduct.stockQuantity === 'number' &&
         wooProduct.stockQuantity > 0 &&

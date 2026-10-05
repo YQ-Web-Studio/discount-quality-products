@@ -17,6 +17,7 @@ interface AddToCartControlsProps {
   stockStatus?: string;
   manageStock?: boolean;
   stockQuantity?: number | null;
+  bypassLowStock?: boolean;
 }
 
 export function AddToCartControls({
@@ -28,10 +29,12 @@ export function AddToCartControls({
   stockStatus,
   manageStock,
   stockQuantity,
+  bypassLowStock,
 }: AddToCartControlsProps) {
   const [currentStockStatus, setCurrentStockStatus] = useState(stockStatus);
   const [currentManageStock, setCurrentManageStock] = useState(manageStock);
   const [currentStockQuantity, setCurrentStockQuantity] = useState(stockQuantity);
+  const [currentBypassLowStock, setCurrentBypassLowStock] = useState(bypassLowStock ?? false);
 
   useEffect(() => {
     let isMounted = true;
@@ -45,6 +48,7 @@ export function AddToCartControls({
           if (data.stockStatus) setCurrentStockStatus(data.stockStatus);
           if (typeof data.manageStock === 'boolean') setCurrentManageStock(data.manageStock);
           if (typeof data.stockQuantity === 'number' || data.stockQuantity === null) setCurrentStockQuantity(data.stockQuantity);
+          if (typeof data.bypassLowStock === 'boolean') setCurrentBypassLowStock(data.bypassLowStock);
         }
       } catch {
         // Silently fall back to initial server-rendered props
@@ -58,10 +62,9 @@ export function AddToCartControls({
   }, [productId, productSlug]);
 
   const isOutOfStock = currentStockStatus === 'OUT_OF_STOCK' || currentStockStatus === 'outofstock' || (currentManageStock && currentStockQuantity === 0);
-  const isLowStock = !isOutOfStock && currentManageStock && currentStockQuantity != null && currentStockQuantity > 0 && currentStockQuantity < 5;
+  const isLowStock = !isOutOfStock && !currentBypassLowStock && currentManageStock && currentStockQuantity != null && currentStockQuantity > 0 && currentStockQuantity < 5;
   const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === productId)?.quantity || 0);
   const maxAvailable = (currentManageStock && currentStockQuantity != null) ? currentStockQuantity : Infinity;
-  const remainingStock = maxAvailable === Infinity ? Infinity : Math.max(0, maxAvailable - currentBasketQty);
   const [quantity, setQuantity] = useState(1);
   const isLimitReached = (quantity + currentBasketQty) >= maxAvailable;
   const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle');
@@ -141,17 +144,6 @@ export function AddToCartControls({
     setIsBuyingNow(true);
 
     try {
-      const item = {
-        id: productId,
-        name: productName,
-        price: parsePriceString(productPrice),
-        priceFormatted: productPrice || 'POA',
-        image: productImage,
-        slug: productSlug,
-        manageStock: currentManageStock,
-        stockQuantity: currentStockQuantity,
-      };
-
       if (quantity + currentBasketQty > maxAvailable) {
         const inBasket = currentBasketQty;
         const left = currentStockQuantity ?? 0;

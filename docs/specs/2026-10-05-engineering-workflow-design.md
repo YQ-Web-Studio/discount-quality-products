@@ -65,23 +65,28 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
   - **`DQP`**: Discount Quality Products (tickets: `DQP-1`, `DQP-2`, ...)
   - **`MA`**: Muslim Atlas (tickets: `MA-1`, `MA-2`, ...)
   - **`FMMS`**: Faizan-e-Madina Southend (tickets: `FMMS-1`, `FMMS-2`, ...)
-- **Boards:** Dedicated Kanban board per project capturing all tickets automatically.
-- **Columns / statuses (4-column flow):**
-  - **`To Do`**: Backlog of refined, ready-to-implement tickets.
+- **Boards:** Dedicated Agile/Kanban board per project capturing all tickets automatically.
+- **Columns / statuses (6-stage lifecycle):**
+  - **`Backlog`**: Newly created tickets from client requests, bugs, or feature ideas. Created with draft Fibonacci story points, acceptance criteria, and technical plan. Sits in Backlog awaiting owner review and refinement.
+  - **`Ready for Development`** (formerly *To Do*): Refined, approved tickets reviewed by the owner. Clear for any developer or AI agent to pick up.
   - **`In Progress`**: Active implementation on branch (`feat/...`).
-  - **`In Review`**: Pull Request is open. Covers:
+  - **`Code Review`**: Pull Request is open. Covers:
     1. Automated CI execution (lint, typecheck, Vitest unit/integration tests).
     2. Automated Playwright E2E tests against live Vercel preview.
     3. AI Code Review (CodeRabbit / GitHub Models bot).
     4. Manual exploratory smoke-test on the Vercel preview by the owner.
     5. Final human review sign-off.
-  - **`Done`**: PR approved, squash-merged to `main`, and deployed.
+  - **`Awaiting Release`**: PR review has been **approved** (automatically moves here when a PR is approved). It holds tickets where code review is complete, awaiting the final release steps (merging, executing any production WordPress snippet/migration activations, and verifying production deployment).
+  - **`Released`**: All code merged to `main`, production actions executed, and everything confirmed working live on production.
 - **Agent access:** The Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each developer connects their own account. No tokens are stored on disk.
 - **GitHub link:** The free "GitHub for Jira" app, linking branches, commits and PRs to tickets automatically via the ticket key (`DQP-n`, `MA-n`, `FMMS-n`).
-- **Status automation** (GitHub for Jira rules / MCP fallback):
-  - branch created → In Progress
-  - PR opened → In Review
-  - PR merged → Done
+- **Status automation & rules:**
+  - Ticket created by agent → `Backlog`
+  - Owner approves & refines → `Ready for Development`
+  - Branch created / work started → `In Progress`
+  - PR opened → `Code Review`
+  - PR approved → **`Awaiting Release`**
+  - Production verification complete (merge + snippet/migration active) → **`Released`**
 
 ### 4.1 Ticket template
 | Field | Content |
@@ -89,6 +94,7 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 | Project | Target project (`DQP`, `MA`, or `FMMS`) |
 | Type | Story / Bug / Task / Spike |
 | Summary | Imperative, ≤ 70 chars |
+| Story Points | Fibonacci complexity estimate (`1`, `2`, `3`, `5`, `8`, `13`) |
 | Description | User story ("As a…, I want…, so that…") or, for bugs, steps to reproduce / expected / actual |
 | Acceptance Criteria | Given/When/Then list; every item must be testable |
 | Technical Implementation | Files/areas to change, approach, **plus backend changes**: snippet files, migration files, or manual runbook steps for the WordPress admin |
@@ -276,7 +282,7 @@ Master copies live in the handbook and are synced to `.agents/skills/` in every 
 | `start-ticket` | Fetches the ticket, creates or resets the branch, moves the ticket to In Progress, and comments the plan on Jira. |
 | `implement` | TDD → implement → verify. Wraps the superpowers skills (test-driven-development, systematic-debugging, verification-before-completion) and enforces the project rules in `AGENTS.md`. |
 | `wp-change` | Writes snippet/migration files, tests them on wp-env or staging, and documents any runbook steps. Never uses production credentials. |
-| `open-pr` | Runs the full local check, presents PR draft and test evidence for approval, then opens the PR and moves ticket to In Review. |
+| `open-pr` | Runs the full local check, presents PR draft and test evidence for approval, then opens the PR and moves ticket to Code Review. |
 | `code-review` | Reviews contributor PRs against acceptance criteria, correctness, security, tests, and performance. Presents review draft for human sign-off before submitting. |
 | `merge` | Verifies CI is green, presents squash-merge summary, and executes merge only upon explicit human approval. |
 
@@ -298,10 +304,12 @@ Agents must **never take autonomous action on external platforms (Jira, GitHub, 
    - *Gate:* Wait for user approval before submitting any review comments or verdicts to GitHub.
 5. **Gate 5: Merging to Main (`merge`)**
    - *Payload to show:* CI status report (all green), PR approval count, and final squash-merge commit message.
+   - *Outcome:* PR is squash-merged into `main` and remote branch deleted. The ticket remains in **`Awaiting Release`**.
    - *Gate:* Wait for user approval before merging into `main`.
-6. **Gate 6: Production WordPress Deployment (`wp-change`)**
-   - *Payload to show:* Complete PHP snippet / migration code diff and execution plan.
-   - *Gate:* Wait for explicit owner approval before running deploy scripts against production.
+6. **Gate 6: Production Verification & Release (`release`)**
+   - *Payload to show:* Complete verification checklist: live Vercel production deployment confirmed, manual WordPress snippet / migration activations executed in production wp-admin (if applicable), and live smoke-test passed.
+   - *Outcome:* Transitions the ticket from `Awaiting Release` to **`Released`**.
+   - *Gate:* Wait for explicit owner confirmation that everything is live and operational before moving the ticket to `Released`.
 
 ## 11. Contributor onboarding
 - `CONTRIBUTING.md`: prerequisites, clone/fork, `.env.example` (staging/test values), `npm ci && npm run dev`, connecting the Atlassian MCP, the workflow above and the Definition of Done.
