@@ -13,10 +13,10 @@ Every snippet file MUST declare the following header comment:
 ```php
 <?php
 /**
- * Snippet Name: VAT Exemption for 1st Class Shipping
- * Description: Prevents standard VAT from applying to Royal Mail 1st Class postage.
- * Scope: global
- * Ticket: DQP-1
+ * Snippet Name: Verified Low Stock Guard Bypass Checkbox
+ * Description: Adds a 1-click checkbox to WooCommerce product inventory settings and quick edit.
+ * Scope: admin
+ * Ticket: DQP-4
  */
 ```
 
@@ -26,8 +26,10 @@ Every snippet file MUST declare the following header comment:
 - `admin`: Runs only inside `/wp-admin`.
 - `single-use`: Meant for one-off maintenance or backfill migrations.
 
-## Safety & Hard Gates
-1. **Never edit snippets directly in the live Bluehost wp-admin.**
-2. All snippets must first be tested in the local Docker environment (`npm run wp:start`).
-3. Deployments to production must be executed via `npm run wp:sync-snippets -- --env=production` after approval at Human Confirmation Gate 6.
-4. Drift between production snippets and this directory is monitored via `npm run wp:drift-check`.
+## Safety & Deployment Procedures
+1. **Never edit snippets directly in the live Bluehost wp-admin without git versioning.**
+2. All snippets must first be validated locally or in CI (`php -l` and functional verification).
+3. **Production Deployment Procedure:**
+   - **Current Phase (Manual Runbook):** Prior to rollout of the automated sync script in subproject 6, operators must follow the step-by-step manual activation runbook in the PR/ticket to create and activate the snippet via Code Snippets on `admin.discountproducts.co.uk` after Gate 6 approval.
+   - **Automated Phase (Post Subproject 6):** Deployments will transition to `npm run wp:sync-snippets -- --env=production` once the sync tooling is deployed.
+4. **Drift Monitoring:** Production snippet drift will be monitored via `npm run wp:drift-check` once the sync tool is active.

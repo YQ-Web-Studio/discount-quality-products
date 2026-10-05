@@ -54,6 +54,10 @@ function dqp_render_verified_stock_checkbox() {
  */
 add_action('woocommerce_process_product_meta', 'dqp_save_verified_stock_checkbox');
 function dqp_save_verified_stock_checkbox($post_id) {
+    if (!current_user_can('edit_product', $post_id)) {
+        return;
+    }
+
     $bypass = isset($_POST['_bypass_low_stock_guard']) ? 'yes' : 'no';
     update_post_meta($post_id, '_bypass_low_stock_guard', $bypass);
     update_post_meta($post_id, 'bypass_low_stock_guard', $bypass);
@@ -67,31 +71,80 @@ function dqp_save_verified_stock_checkbox($post_id) {
 }
 
 /**
- * Add checkbox to WooCommerce Quick Edit screen.
+ * Add custom column to Product list to show verified stock status and provide data for Quick Edit.
+ */
+add_filter('manage_edit-product_columns', 'dqp_add_verified_stock_product_column', 20);
+function dqp_add_verified_stock_product_column($columns) {
+    $columns['dqp_verified_stock'] = __('Verified Stock', 'dqp');
+    return $columns;
+}
+
+add_action('manage_product_posts_custom_column', 'dqp_render_verified_stock_product_column', 10, 2);
+function dqp_render_verified_stock_product_column($column, $post_id) {
+    if ($column === 'dqp_verified_stock') {
+        $bypass = get_post_meta($post_id, '_bypass_low_stock_guard', true);
+        $is_verified = ($bypass === 'yes' || has_term('verified-stock', 'product_tag', $post_id)) ? 'yes' : 'no';
+        echo '<span class="dqp-verified-stock-status" data-verified="' . esc_attr($is_verified) . '">';
+        if ($is_verified === 'yes') {
+            echo '<mark class="order-status status-completed" style="background:#e5f6ea;color:#1e7e34;font-weight:600;padding:2px 6px;border-radius:4px;">&#10003; ' . esc_html__('Verified', 'dqp') . '</mark>';
+        } else {
+            echo '<span style="color:#999;">&mdash;</span>';
+        }
+        echo '</span>';
+    }
+}
+
+/**
+ * Add checkbox and hidden presence indicator to WooCommerce Quick Edit screen.
  */
 add_action('woocommerce_product_quick_edit_end', 'dqp_quick_edit_verified_stock');
 function dqp_quick_edit_verified_stock() {
     ?>
     <div class="inline-edit-group">
         <label class="alignleft">
-            <input type="checkbox" name="_bypass_low_stock_guard" value="yes">
+            <input type="hidden" name="dqp_verified_stock_quick_edit_present" value="1">
+            <input type="checkbox" name="_bypass_low_stock_guard" value="yes" class="dqp-quick-edit-bypass-checkbox">
             <span class="checkbox-title"><?php esc_html_e('Verified Low Stock (Allow purchase < 5 units)', 'dqp'); ?></span>
         </label>
     </div>
+    <script type="text/javascript">
+    jQuery(function($) {
+        var wp_inline_edit = inlineEditPost.edit;
+        inlineEditPost.edit = function(id) {
+            wp_inline_edit.apply(this, arguments);
+            var postId = 0;
+            if (typeof(id) === 'object') {
+                postId = parseInt(this.getId(id));
+            }
+            if (postId > 0) {
+                var $postRow = $('#post-' + postId);
+                var $editRow = $('#edit-' + postId);
+                var isVerified = $postRow.find('.dqp-verified-stock-status').data('verified');
+                $editRow.find('.dqp-quick-edit-bypass-checkbox').prop('checked', isVerified === 'yes');
+            }
+        };
+    });
+    </script>
     <?php
 }
 
 /**
- * Save Quick Edit value.
+ * Save Quick Edit value safely without resetting when not present.
  */
 add_action('woocommerce_product_quick_edit_save', 'dqp_save_quick_edit_verified_stock');
 function dqp_save_quick_edit_verified_stock($product) {
-    $post_id = $product->get_id();
-    if (isset($_POST['_bypass_low_stock_guard'])) {
-        $bypass = 'yes';
-    } else {
-        $bypass = 'no';
+    // Only proceed if Quick Edit actually rendered this field
+    if (!isset($_POST['dqp_verified_stock_quick_edit_present'])) {
+        return;
     }
+
+    $post_id = $product->get_id();
+    if (!current_user_can('edit_product', $post_id)) {
+        return;
+    }
+
+    $bypass = !empty($_POST['_bypass_low_stock_guard']) ? 'yes' : 'no';
+
     update_post_meta($post_id, '_bypass_low_stock_guard', $bypass);
     update_post_meta($post_id, 'bypass_low_stock_guard', $bypass);
 
