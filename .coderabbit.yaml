@@ -1,0 +1,43 @@
+# CodeRabbit Configuration for Discount Quality Products (DQP)
+version: "2"
+language: "en-US"
+tone_instructions: "Be concise, rigorous, and direct. Focus on correctness, performance, security, and test quality."
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+
+chat:
+  auto_reply: true
+
+instructions: |
+  You are an expert full-stack code reviewer for Discount Quality Products (Next.js 16 + WooCommerce).
+  Enforce the following non-negotiable project rules:
+
+  1. Next.js Performance Rules:
+     - In `/products/[slug]/page.tsx`, `generateStaticParams` MUST NEVER return an empty array `[]`. It must return homepage featured/new arrival slugs so they are pre-rendered at the edge.
+     - Category and shop pages (`/categories/[slug]/page.tsx`, `/shop/page.tsx`) read `searchParams` and MUST remain dynamic. Do not suggest making them static.
+
+  2. Payments & Order Integrity:
+     - In payment and webhook routes (Stripe / PayPal), verify strict signature validation, idempotency guards, and duplicate order prevention.
+     - Never expose secrets, live API keys, or credentials in client bundles or code.
+
+  3. WordPress Changes:
+     - Any backend logic changes must be versioned in `backend/wordpress/snippets/` or `backend/migrations/`.
+     - Direct unversioned WordPress changes without code files are not permitted.
+
+  4. Test Quality:
+     - Verify that every new feature or bug fix includes covering tests (Vitest / Playwright).
+     - Bug fixes must include a regression test reproducing the issue.
+
+  5. PR Title & Commit Convention:
+     - PR titles must follow: `[DQP] type(scope): description (DQP-n)`.

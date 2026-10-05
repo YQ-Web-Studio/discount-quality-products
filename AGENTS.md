@@ -142,3 +142,40 @@ The `/api/revalidate` endpoint requires explicit tags and will return 400 if cal
 with no body. This is intentional — it prevents accidental mass invalidation.
 <!-- END:performance-rules -->
 
+<!-- BEGIN:engineering-workflow -->
+# 🏢 ORGANIZATION ENGINEERING WORKFLOW & HARD GATES
+
+All contributors and AI agents working in this repository must strictly adhere to the company-standard engineering workflow:
+
+## 1. Branching & Commit Conventions
+- Work is organized around Jira tickets under the dedicated project key (`DQP`, `MA`, or `FMMS`).
+- **Never commit directly to `main`**. All work begins on an isolated branch.
+- **Branch Naming Standard:** `<type>/<TICKET-KEY>-<short-description>`
+  - Types: `feat`, `fix`, `test`, `refactor`, `perf`, `docs`, `chore`, `ci`, `spike`, `hotfix`
+  - Ticket Key: Must be uppercase (e.g., `DQP-12`, `MA-5`, `FMMS-3`)
+  - Description: 2–5 lowercase words in kebab-case (e.g., `vat-exempt-shipping`)
+  - Valid Examples: `feat/DQP-12-apple-pay`, `fix/MA-18-prayer-offset`, `docs/DQP-1-engineering-workflow`
+  - Anti-patterns to reject: `yusuf/fix-vat` ❌ (personal prefixes), `DQP-12` ❌ (missing type/slug), `feature/new-cart` ❌ (`feature` instead of `feat`), `feat/dqp-12-vat` ❌ (lowercase key).
+- **Branch Lifecycle & Deletion:** Branches are short-lived and dedicated to a single ticket. Once a PR is squash-merged into `main`, GitHub automatically deletes the remote branch. The agent/developer switches to `main`, pulls with pruning (`git pull --prune`), and deletes the local branch (`git branch -d <branch>`).
+- **Commit Messages:** Must begin with `[PROJECT]` and follow conventional commits:
+  `[DQP] type(scope): description (DQP-n)`
+- **Pull Request Titles:** Must match the commit format:
+  `[DQP] type(scope): description (DQP-n)`
+
+## 2. Mandatory Human Confirmation Gates (Hard-Gates)
+Agents must **never take autonomous action on external platforms (Jira, GitHub, Bluehost) without explicit user confirmation**. Always display the payload and wait for approval:
+1. **Gate 1 (Jira):** Present draft ticket summary, description, and criteria → wait for confirmation.
+2. **Gate 2 (Branch):** Present branch name and Jira status transition → wait for confirmation.
+3. **Gate 3 (PR):** Present PR title, description, test evidence, and diff overview → wait for confirmation before opening PR.
+4. **Gate 4 (Review):** Present review comments and suggested verdict → wait for confirmation before submitting review.
+5. **Gate 5 (Merge):** Confirm all CI checks are green and present squash-merge summary → wait for confirmation before merging.
+6. **Gate 6 (WordPress Deploy):** Present PHP snippet/migration diff → wait for owner approval before touching production.
+
+## 3. Testing & TDD Standard
+- All business logic, bug fixes, and features must follow Test-Driven Development (TDD).
+- Changed-line test coverage must be >= 80%.
+- Bug fixes must include a regression test reproducing the issue.
+- Never mock production calls against live client WordPress or payment gateways in tests. Use Vitest, MSW, or local `@wordpress/env`.
+<!-- END:engineering-workflow -->
+
+
