@@ -36,7 +36,7 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
         }),
       ],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     const result = await validateCartTotals(
@@ -61,7 +61,7 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
         }),
       ],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     const result = await validateCartTotals(
@@ -86,7 +86,7 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
         }),
       ],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     const result = await validateCartTotals(
@@ -111,7 +111,7 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
         }),
       ],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     const result = await validateCartTotals(
@@ -135,7 +135,7 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
         }),
       ],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
@@ -160,7 +160,7 @@ describe('Real-Time Stock & Inventory Validation Guard', () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [],
       totalPages: 0,
-      totalProducts: 0,
+      total: 0,
     });
 
     const result = await validateCartTotals(

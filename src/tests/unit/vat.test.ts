@@ -29,7 +29,7 @@ describe('VAT & Postage Calculation Engine', () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [mockProduct(101, 'Test Item 1', '£60.00')],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
@@ -74,7 +74,7 @@ describe('VAT & Postage Calculation Engine', () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [mockProduct(102, 'Test Item 2', '£60.00')],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
@@ -121,7 +121,7 @@ describe('VAT & Postage Calculation Engine', () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [mockProduct(103, 'Discounted Item', '£100.00')],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
@@ -158,7 +158,7 @@ describe('VAT & Postage Calculation Engine', () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [mockProduct(104, 'Test Item', '£50.00')],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
@@ -184,7 +184,7 @@ describe('VAT & Postage Calculation Engine', () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [mockProduct(105, 'Test Item', '£30.00')],
       totalPages: 1,
-      totalProducts: 1,
+      total: 1,
     });
 
     const result = await validateCartTotals(
