@@ -50,7 +50,7 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 |---|---|---|
 | Who can see the code | Public | Org members & invited contributors only |
 | Contributor access | **Write** collaborator, branches directly in the repo | **Write** collaborator, branches directly in the repo |
-| Workflow | Branch (`feat/YQWEB-...`) → PR → Review → Merge | Branch (`feat/YQWEB-...`) → PR → Review → Merge |
+| Workflow | Branch (`feat/<ticket>-...`) → PR → Review → Merge | Branch (`feat/<ticket>-...`) → PR → Review → Merge |
 | Protecting `main` | GitHub **ruleset**: PR required, required status checks | Local `husky` pre-push hook blocks direct push to `main` + team/agent workflow standards |
 | Required CI | Enforced by GitHub ruleset | Status checks on PR, verified before merge |
 | Production approval gate | GitHub Environment `production` with owner approval | Owner-controlled deployments / credentials |
@@ -60,12 +60,24 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 
 ## 4. Jira
 
-- **Site:** `https://yqwebstudio.atlassian.net`, **space/project key:** `YQWEB`, so tickets are numbered `YQWEB-123`.
-- **Boards:** one Kanban board per project (DQP, …). Boards filter by the **Team** field: each project has a Jira Team, and every ticket must have its Team set.
-- **Columns / statuses:** `To Do → In Progress → In Review → Done`. Configuring these is part of rollout if they don't exist yet.
-- **Agent access:** the Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each person connects their own account, so actions are recorded against the right user. No tokens are stored on disk.
-- **GitHub link:** the free "GitHub for Jira" app, which shows branches, commits and PRs on tickets via the `YQWEB-n` key.
-- **Status automation** (free Jira automation rules, or the skills move tickets through the MCP as a fallback):
+- **Site:** `https://yqwebstudio.atlassian.net`
+- **Dedicated Projects:** Each codebase has its own dedicated Jira project key (no messy custom team filters):
+  - **`DQP`**: Discount Quality Products (tickets: `DQP-1`, `DQP-2`, ...)
+  - **`MAT`**: Muslim Atlas (tickets: `MAT-1`, `MAT-2`, ...)
+- **Boards:** Dedicated Kanban board per project capturing all tickets automatically.
+- **Columns / statuses (4-column flow):**
+  - **`To Do`**: Backlog of refined, ready-to-implement tickets.
+  - **`In Progress`**: Active implementation on branch (`feat/...`).
+  - **`In Review`**: Pull Request is open. Covers:
+    1. Automated CI execution (lint, typecheck, Vitest unit/integration tests).
+    2. Automated Playwright E2E tests against live Vercel preview.
+    3. AI Code Review (CodeRabbit / GitHub Models bot).
+    4. Manual exploratory smoke-test on the Vercel preview by the owner.
+    5. Final human review sign-off.
+  - **`Done`**: PR approved, squash-merged to `main`, and deployed.
+- **Agent access:** The Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each developer connects their own account. No tokens are stored on disk.
+- **GitHub link:** The free "GitHub for Jira" app, linking branches, commits and PRs to tickets automatically via the ticket key (`DQP-n`).
+- **Status automation** (GitHub for Jira rules / MCP fallback):
   - branch created → In Progress
   - PR opened → In Review
   - PR merged → Done
@@ -73,8 +85,8 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 ### 4.1 Ticket template
 | Field | Content |
 |---|---|
+| Project | Target project (`DQP` or `MAT`) |
 | Type | Story / Bug / Task / Spike |
-| Team | Project team (e.g. DQP). **Required.** |
 | Summary | Imperative, ≤ 70 chars |
 | Description | User story ("As a…, I want…, so that…") or, for bugs, steps to reproduce / expected / actual |
 | Acceptance Criteria | Given/When/Then list; every item must be testable |
@@ -86,13 +98,13 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 ## 5. Git workflow (GitHub Flow)
 
 - `main` is always deployable, and production deploys from `main`.
-- **Branches:** `<type>/YQWEB-<n>-<short-slug>`, e.g. `fix/YQWEB-42-vat-exempt`. Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `perf`, `ci`.
+- **Branches:** `<type>/<ticket-key>-<short-slug>`, e.g. `fix/DQP-42-vat-exempt`. Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `perf`, `ci`.
 - **Commits** (Conventional Commits with project tag and ticket key):
   ```
-  [DQP] fix(checkout): exempt 1st class postage from VAT (YQWEB-42)
+  [DQP] fix(checkout): exempt 1st class postage from VAT (DQP-42)
   ```
-  The `[PROJECT]` tag must match the repo's project code. Enforced by `commitlint` (husky `commit-msg` hook) and checked again in CI.
-- **PR title:** the same format, enforced by a CI check. PRs are **squash-merged**, so the PR title becomes the commit on `main`.
+  The `[PROJECT]` tag matches the repo's project code. Enforced by `commitlint` (husky `commit-msg` hook) and checked in CI.
+- **PR title:** the same format (`[DQP] fix(checkout): exempt 1st class postage from VAT (DQP-42)`), enforced by a CI check. PRs are **squash-merged**, so the PR title becomes the commit on `main`.
 - **Branch retention:** branches are **not** deleted automatically. Branches cost nothing; Vercel builds a preview for every push whether a branch is new or reused.
   - Default: a new branch per ticket.
   - Reuse is allowed, but only after `git fetch && git reset --hard origin/main`. Otherwise squash-merged commits come back as phantom changes. The `start-ticket` skill does this automatically.
@@ -125,7 +137,7 @@ All backend changes live in the repo and show up in the PR diff:
 | Kind | Example | Location | Mechanism |
 |---|---|---|---|
 | Code snippet | VAT filter, custom endpoint | `backend/wordpress/snippets/<slug>.php` with a header block (name, description, scope, ticket) | Synced to the Code Snippets plugin through its REST API (`/wp-json/code-snippets/v1/snippets`). Snippets are tagged `managed-by-git`. |
-| Config/data migration | Shipping zone, Woo setting, coupon | `backend/migrations/NNNN-YQWEB-n-<slug>.ts` | Idempotent script using the WooCommerce/WordPress REST API. Applied migrations are recorded in a WP option, so none runs twice. |
+| Config/data migration | Shipping zone, Woo setting, coupon | `backend/migrations/NNNN-DQP-n-<slug>.ts` | Idempotent script using the WooCommerce/WordPress REST API. Applied migrations are recorded in a WP option, so none runs twice. |
 | Manual runbook (last resort) | Settings that can't be scripted | `## Runbook` section in the ticket and PR | Done by hand: staging first, then the owner on production |
 
 **Why the REST API rather than SSH:** Bluehost staging lives on the **same cPanel account** as production, so any SSH key for staging also gives access to production. Application passwords are **per WordPress site**, so a staging credential can't affect production. SSH stays an owner-only tool.
