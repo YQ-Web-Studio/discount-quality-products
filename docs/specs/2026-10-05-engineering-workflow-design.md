@@ -69,13 +69,11 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 - **Columns / statuses (6-stage lifecycle):**
   - **`Backlog`**: Newly created tickets from client requests, bugs, or feature ideas. Created with draft Fibonacci story points, acceptance criteria, and technical plan. Sits in Backlog awaiting owner review and refinement.
   - **`Ready for Development`** (formerly *To Do*): Refined, approved tickets reviewed by the owner. Clear for any developer or AI agent to pick up.
-  - **`In Progress`**: Active implementation on branch (`feat/...`).
-  - **`Code Review`**: Pull Request is open. Covers:
-    1. Automated CI execution (lint, typecheck, Vitest unit/integration tests).
-    2. Automated Playwright E2E tests against live Vercel preview.
-    3. AI Code Review (CodeRabbit / GitHub Models bot).
-    4. Manual exploratory smoke-test on the Vercel preview by the owner.
-    5. Final human review sign-off.
+  - **`In Progress`**: Active implementation on branch (`feat/...`). When a PR is opened, the ticket remains in `In Progress` while automated CI runs and CodeRabbit completes its review.
+  - **`Code Review`**: All automated CI checks are **GREEN** and CodeRabbit has **APPROVED**. A ticket can only transition from `In Progress` into `Code Review` once CI is verified green and CodeRabbit has approved. Within `Code Review`:
+    1. Human review and sign-off are performed.
+    2. Manual exploratory smoke-test on the Vercel preview (if applicable).
+    3. Reviewer signs off and approves PR.
   - **`Awaiting Release`**: PR review has been **approved** (automatically moves here when a PR is approved). It holds tickets where code review is complete, awaiting the final release steps (merging, executing any production WordPress snippet/migration activations, and verifying production deployment).
   - **`Released`**: All code merged to `main`, production actions executed, and everything confirmed working live on production.
 - **Agent access:** The Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each developer connects their own account. No tokens are stored on disk.
@@ -84,7 +82,8 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
   - Ticket created by agent → `Backlog`
   - Owner approves & refines → `Ready for Development`
   - Branch created / work started → `In Progress`
-  - PR opened → `Code Review`
+  - PR opened → Remains `In Progress` (CI & CodeRabbit in flight)
+  - CI green + CodeRabbit approved → **`Code Review`**
   - PR approved → **`Awaiting Release`**
   - Production verification complete (merge + snippet/migration active) → **`Released`**
 
@@ -282,7 +281,7 @@ Master copies live in the handbook and are synced to `.agents/skills/` in every 
 | `start-ticket` | Fetches the ticket, creates or resets the branch, moves the ticket to In Progress, and comments the plan on Jira. |
 | `implement` | TDD → implement → verify. Wraps the superpowers skills (test-driven-development, systematic-debugging, verification-before-completion) and enforces the project rules in `AGENTS.md`. |
 | `wp-change` | Writes snippet/migration files, tests them on wp-env or staging, and documents any runbook steps. Never uses production credentials. |
-| `open-pr` | Runs the full local check, presents PR draft and test evidence for approval, then opens the PR and moves ticket to Code Review. |
+| `open-pr` | Runs the full local check, presents PR draft and test evidence for approval, then opens the PR. Ticket remains in In Progress until CI and CodeRabbit are green, at which point it transitions to Code Review. |
 | `code-review` | Reviews contributor PRs against acceptance criteria, correctness, security, tests, and performance. Presents review draft for human sign-off before submitting. |
 | `merge` | Verifies CI is green, presents squash-merge summary, and executes merge only upon explicit human approval. |
 
