@@ -202,19 +202,44 @@ flowchart LR
 - Playwright traces and screenshots are uploaded as artifacts when a run fails.
 - E2E against protected Vercel previews uses Vercel's "Protection Bypass for Automation" secret.
 
-## 10. Agent skills
+## 10. Agent skills and Mandatory Human Confirmation Gates
 
 Master copies live in the handbook and are synced to `.agents/skills/` in every repo. `AGENTS.md` points every agent (Antigravity, Claude Code, Cursor, Copilot) at them.
 
+### 10.1 Skills Overview
+
 | Skill | Responsibility |
 |---|---|
-| `jira-ticket` | Turns an idea or bug into a ticket using §4.1 (including technical implementation and backend changes). Shows the draft to the human, then creates it through the Atlassian MCP with Team set. |
+| `jira-ticket` | Turns an idea or bug into a ticket using §4.1 (including technical implementation and backend changes). Presents draft for approval, then creates it through the Atlassian MCP with Team set. |
 | `start-ticket` | Fetches the ticket, creates or resets the branch, moves the ticket to In Progress, and comments the plan on Jira. |
 | `implement` | TDD → implement → verify. Wraps the superpowers skills (test-driven-development, systematic-debugging, verification-before-completion) and enforces the project rules in `AGENTS.md`. |
 | `wp-change` | Writes snippet/migration files, tests them on wp-env or staging, and documents any runbook steps. Never uses production credentials. |
-| `open-pr` | Runs the full local check, opens the PR from the template (summary, ticket link, screenshots, backend checklist, test evidence, AI-usage note) and moves the ticket to In Review. |
-| `code-review` | Reviews contributor PRs against the ticket's acceptance criteria, correctness, security, tests, performance rules and WordPress safety. Posts inline comments and a verdict; the owner gives final approval. |
-| `merge` | Checks all checks are green and the required approvals are in, squash-merges, moves the ticket to Done and triggers or reminds about the production backend approval. |
+| `open-pr` | Runs the full local check, presents PR draft and test evidence for approval, then opens the PR and moves ticket to In Review. |
+| `code-review` | Reviews contributor PRs against acceptance criteria, correctness, security, tests, and performance. Presents review draft for human sign-off before submitting. |
+| `merge` | Verifies CI is green, presents squash-merge summary, and executes merge only upon explicit human approval. |
+
+### 10.2 Mandatory Human Confirmation Gates (Hard-Gates)
+
+Agents must **never take autonomous action on external platforms (Jira, GitHub, Bluehost) without explicit user confirmation**. The agent must present what it intends to do, display the payload, and wait for a clear confirmation before executing:
+
+1. **Gate 1: Jira Ticket Creation (`jira-ticket`)**
+   - *Payload to show:* Ticket Type, Summary, Description, Acceptance Criteria, Technical Plan, Backend checklist.
+   - *Gate:* Wait for user approval before creating or modifying Jira tickets.
+2. **Gate 2: Branch Creation & Status Change (`start-ticket`)**
+   - *Payload to show:* Target branch name, existing commits/status, Jira status transition.
+   - *Gate:* Wait for user approval before switching branches or moving tickets.
+3. **Gate 3: Opening Pull Requests (`open-pr`)**
+   - *Payload to show:* PR Title (with project tag & ticket), PR Description, changed files list, local test verification evidence, and UI screenshots (if applicable).
+   - *Gate:* Wait for user approval before pushing the branch to `origin` and creating the PR on GitHub.
+4. **Gate 4: Submitting Code Review Comments (`code-review`)**
+   - *Payload to show:* Detailed list of inline comments, security/correctness findings, and proposed overall verdict (Approve / Request Changes / Comment).
+   - *Gate:* Wait for user approval before submitting any review comments or verdicts to GitHub.
+5. **Gate 5: Merging to Main (`merge`)**
+   - *Payload to show:* CI status report (all green), PR approval count, and final squash-merge commit message.
+   - *Gate:* Wait for user approval before merging into `main`.
+6. **Gate 6: Production WordPress Deployment (`wp-change`)**
+   - *Payload to show:* Complete PHP snippet / migration code diff and execution plan.
+   - *Gate:* Wait for explicit owner approval before running deploy scripts against production.
 
 ## 11. Contributor onboarding
 - `CONTRIBUTING.md`: prerequisites, clone/fork, `.env.example` (staging/test values), `npm ci && npm run dev`, connecting the Atlassian MCP, the workflow above and the Definition of Done.
