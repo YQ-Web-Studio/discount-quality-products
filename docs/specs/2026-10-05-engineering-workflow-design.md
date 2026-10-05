@@ -104,16 +104,20 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 
 | | Production | Staging | Local |
 |---|---|---|---|
-| WordPress/Woo | `admin.discountproducts.co.uk` | Bluehost staging clone | Optional `@wordpress/env` (Docker) |
-| Frontend | Vercel Production | Vercel Preview (every PR) | `npm run dev` |
+| WordPress/Woo | `admin.discountproducts.co.uk` | **One** Bluehost staging clone, shared by everyone | `@wordpress/env` (Docker) on the developer's own machine |
+| What it reflects | Released `main` | **Merged `main`** (integration) | The developer's **own branch** |
+| Who changes it | Pipeline, after owner approval | Pipeline only, after merge | The developer |
+| Frontend | Vercel Production | Vercel Preview (every PR) | `npm run dev` (reads from staging by default, or local WP for backend work) |
 | Payments | Stripe/PayPal **live** | Stripe **test mode**, PayPal **sandbox** | Same as staging |
 | Email | Resend, real customers | Resend test key; no real customer addresses | Same as staging |
-| Customer data | Real | **Anonymised** on every refresh (GDPR) | Seed fixtures |
-| Access | **Owner only** | Owner + contributors (Shop Manager role) | Anyone |
+| Data | Real | **Anonymised** clone on every refresh (GDPR) | Small committed seed (~50 products, categories, shipping zones, coupons, test customers) |
+| Access | **Owner only** | Owner + contributors (Shop Manager role, mostly read-only) | Anyone |
 
 - Vercel **Production** environment variables point at production. **Preview + Development** variables point at staging with test keys. Contributors only ever receive staging/test values (shared privately, e.g. through a free Bitwarden organisation), so they can't reach production even by accident.
 - **Never use Bluehost's "deploy staging → production" button.** It can overwrite the live database (orders and customers). Changes reach production only through the pipeline in §6.3.
 - Staging refresh (production → staging clone + anonymisation script) is a documented owner-only runbook.
+- **Exactly one staging site, no matter how many developers.** Unmerged branch work is tested on each developer's local wp-env, never on staging, so Bluehost resources never grow with the number of developers and developers can't overwrite each other's changes.
+- **Capacity fallback:** if the Bluehost plan can't hold even one staging clone (check cPanel disk usage and database size first; Media Cloud offloading keeps the file copy small), drop shared staging. Vercel Preview/Development then point at a small hosted-free or local wp-env seed, and staging deploy steps become no-ops. Everything else in this spec stays the same.
 
 ### 6.2 WordPress changes as code
 All backend changes live in the repo and show up in the PR diff:
