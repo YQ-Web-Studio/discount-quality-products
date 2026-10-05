@@ -48,14 +48,15 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 
 | Concern | **Public profile** (DQP) | **Private-free profile** (Muslim Atlas) |
 |---|---|---|
-| Who can see the code | Everyone | Org members + invited collaborators only |
-| Contributor access | **Write** collaborator, pushes branches to the main repo | **Read** collaborator, works from a **fork** and opens PRs from it |
-| Protecting `main` | GitHub **ruleset**: PR required, required checks, 1 approval, owner on bypass list | **Permissions:** contributors cannot push or merge at all. Only the owner merges. |
-| Required CI | Enforced by the ruleset | Enforced by the owner's `merge` skill, which refuses to merge unless all checks are green |
-| Production approval gate | GitHub Environment `production` with owner as required reviewer | Production credentials are **never on GitHub**; production deploys run from the owner's machine |
-| CI minutes | Unlimited | 2,000 min/month: path filters, `concurrency` cancel, caching, e2e only on ready-for-review PRs |
-| AI reviewer | CodeRabbit (free for public repos) | `ai-review` GitHub Action using **GitHub Models** (free quota, `GITHUB_TOKEN`, no training on data); CodeRabbit free gives PR summaries only |
-| Hosting deploys | Vercel Git integration | Project-specific (Muslim Atlas uses Expo/EAS) |
+| Who can see the code | Public | Org members & invited contributors only |
+| Contributor access | **Write** collaborator, branches directly in the repo | **Write** collaborator, branches directly in the repo |
+| Workflow | Branch (`feat/YQWEB-...`) → PR → Review → Merge | Branch (`feat/YQWEB-...`) → PR → Review → Merge |
+| Protecting `main` | GitHub **ruleset**: PR required, required status checks | Local `husky` pre-push hook blocks direct push to `main` + team/agent workflow standards |
+| Required CI | Enforced by GitHub ruleset | Status checks on PR, verified before merge |
+| Production approval gate | GitHub Environment `production` with owner approval | Owner-controlled deployments / credentials |
+| CI minutes | Unlimited | 2,000 min/month: path filters, `concurrency` cancel, caching |
+| AI reviewer | CodeRabbit (free for public repos) | `ai-review` GitHub Action using GitHub Models / local agent review |
+| Hosting deploys | Vercel Git integration | Project-specific (Expo / EAS) |
 
 ## 4. Jira
 
