@@ -1,0 +1,79 @@
+{
+  "categories": [
+    { "name": "Lighting & Bulbs", "slug": "lighting-bulbs" },
+    { "name": "Computing & Tech", "slug": "computing-tech" },
+    { "name": "Coins & Collectables", "slug": "coins-collectables" },
+    { "name": "DVDs & Media", "slug": "dvds-media" },
+    { "name": "Electrical Fittings", "slug": "electrical-fittings" }
+  ],
+  "products": [
+    {
+      "name": "E27 Vintage Edison LED Filament Bulb 4W Amber",
+      "slug": "e27-vintage-edison-led-filament-bulb-4w-amber",
+      "regular_price": "6.99",
+      "category_slug": "lighting-bulbs",
+      "stock_quantity": 25,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "High-Speed Braided USB-C to USB-C Cable 2m",
+      "slug": "high-speed-braided-usb-c-cable-2m",
+      "regular_price": "4.49",
+      "category_slug": "computing-tech",
+      "stock_quantity": 50,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "1953 Queen Elizabeth II Coronation Commemorative Crown",
+      "slug": "1953-coronation-commemorative-crown",
+      "regular_price": "14.99",
+      "category_slug": "coins-collectables",
+      "stock_quantity": 8,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "The Great British Railway Journey BBC Series 1 DVD Set",
+      "slug": "great-british-railway-journey-series-1-dvd",
+      "regular_price": "9.99",
+      "category_slug": "dvds-media",
+      "stock_quantity": 12,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "Double Switched Wall Socket White Moulded 13A",
+      "slug": "double-switched-wall-socket-white-13a",
+      "regular_price": "3.89",
+      "category_slug": "electrical-fittings",
+      "stock_quantity": 30,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "Limited Collector Rare 1937 Brass Threepence Coin",
+      "slug": "limited-collector-1937-brass-threepence-coin",
+      "regular_price": "45.00",
+      "category_slug": "coins-collectables",
+      "stock_quantity": 2,
+      "manage_stock": true,
+      "status": "publish"
+    }
+  ],
+  "coupons": [
+    {
+      "code": "THANKYOU10",
+      "amount": "10",
+      "discount_type": "percent",
+      "description": "10% off entire order"
+    },
+    {
+      "code": "WELCOME5",
+      "amount": "5",
+      "discount_type": "fixed_cart",
+      "description": "£5 off initial order"
+    }
+  ]
+}

@@ -12,6 +12,11 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "wp:start": "wp-env start",
+    "wp:stop": "wp-env stop",
+    "wp:seed": "tsx backend/tools/seed-local-wp.ts",
+    "wp:sync-snippets": "tsx backend/tools/sync-snippets.ts",
+    "wp:drift-check": "tsx backend/tools/drift-check.ts",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -59,6 +64,7 @@
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.1",
     "@vitest/coverage-v8": "^4.1.11",
+    "@wordpress/env": "^11.16.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "husky": "^9.1.7",
@@ -66,6 +72,7 @@
     "lint-staged": "^16.4.0",
     "msw": "^2.15.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^4.1.11"
   }
