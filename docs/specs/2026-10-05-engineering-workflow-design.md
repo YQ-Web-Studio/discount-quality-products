@@ -239,7 +239,7 @@ Every pull request requires **two distinct approvals** before it can be merged i
 - [ ] CI green; required reviews done (contributors)
 - [ ] Backend changes validated locally on `@wordpress/env` and CI, then applied to production upon owner approval
 - [ ] Docs / `AGENTS.md` updated if behaviour or conventions changed
-- [ ] Jira ticket moved to Done with the PR linked
+- [ ] Jira ticket moved to Released with the PR linked and live verification complete
 
 ## 8. Testing strategy
 

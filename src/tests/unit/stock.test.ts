@@ -6,6 +6,24 @@ import { GET as getStockRoute } from '@/app/api/products/stock/route';
 describe('Real-Time Stock & Inventory Validation Guard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/wp-json/wc/store/v1/')) {
+        return new Response(
+          JSON.stringify({
+            shipping_rates: [
+              {
+                shipping_rates: [
+                  { rate_id: 'standard', name: 'Standard Delivery', price: '0' },
+                ],
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
   });
 
   const createProduct = (overrides: Partial<woocommerce.MappedProduct> = {}): woocommerce.MappedProduct => ({
