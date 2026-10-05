@@ -1,5 +1,5 @@
 # CodeRabbit Configuration for Discount Quality Products (DQP)
-version: "2"
+version: 2
 language: "en-US"
 tone_instructions: "Be concise, rigorous, and direct. Focus on correctness, performance, security, and test quality."
 
