@@ -135,7 +135,7 @@ Regex pattern: `^(feat|fix|test|refactor|perf|chore|docs|ci|spike|hotfix)\/([A-Z
 2. **Kebab-Case Slugs:** Short description must be 2 to 5 words, lowercase, hyphen-separated (e.g. `vat-exempt-shipping`).
 3. **Never Include Personal Names:** Do not prefix branches with personal names (e.g. `yusuf/fix-vat` ❌). Ownership is tracked via GitHub and Jira assignees.
 4. **Unticketed Spikes:** If performing pure research before a Jira ticket exists, use `spike/<short-description>` (e.g. `spike/meilisearch-poc`). All production code changes require a ticket.
-5. **Jira Synchronization:** When a branch with `<PROJECT>-<NUMBER>-` is pushed to GitHub, Jira's GitHub integration automatically links the branch to the issue and transitions it from `To Do` to `In Progress`.
+5. **Jira Synchronization:** When a branch with `<PROJECT>-<NUMBER>-` is pushed to GitHub, Jira's GitHub integration automatically links the branch to the issue and transitions it from `Ready for Development` to `In Progress`.
 
 #### Anti-Patterns to Avoid
 | Bad Branch Name | Why It Fails | Correct Format |
@@ -213,10 +213,15 @@ flowchart LR
 
 ## 7. Review policy
 
-### 7.1 Who needs review
-The rule depends only on **which GitHub account opens the PR**, never on whether an agent wrote the code (everyone is expected to use agents):
-- **Owner's account** (the owner, or the owner's agent): no review; merge once CI is green.
-- **Any other account:** **two reviewers**, the **AI reviewer** (automatic) and the **owner** (human approval).
+### 7.1 Dual Approval Policy (2 Approvals Required Before Merge)
+Every pull request requires **two distinct approvals** before it can be merged into `main`:
+1. **AI Reviewer (CodeRabbit):** Automated review enforcing Next.js performance rules, payment security, WordPress change integrity, and test coverage.
+   - Operates with `request_changes_workflow: true`.
+   - If CodeRabbit finds issues or posts inline comments, it automatically issues a **Changes Requested** review.
+   - Once all comments are addressed, resolved, and verified on the latest commit, CodeRabbit automatically converts to **Approved**.
+2. **Owner Reviewer (`Yusuf Qureshi`):** Human review verifying business requirements, user experience, and Jira acceptance criteria.
+   - Zero blind approvals: the owner verifies CI is green and CodeRabbit is approved before granting the final sign-off.
+   - Once approved, the ticket advances to **`Awaiting Release`**.
 
 ### 7.2 AI reviewer
 - Public profile: **CodeRabbit** free tier, configured with `.coderabbit.yaml` containing the project rules (performance rules, payment safety, WordPress change safety, test quality).
