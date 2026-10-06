@@ -101,9 +101,15 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 | Test Plan | Unit / integration / e2e tests to add |
 | Definition of Done | Standard checklist (§7.3) |
 
+### 4.2 Ticket Definition & Agent Execution Guidelines
+- **Rigorous Definitions:** All tickets must be highly detailed. They must clearly state the actual problem to be solved and include comprehensive Functional Requirements (FRs) and Acceptance Criteria (ACs).
+- **Agent Critical Verification (No Gospel Rule):** When AI agents take on a ticket, they **must not treat the ticket claims as absolute gospel**. Because tickets may be AI-generated, agents must independently verify the claims against the codebase, assess the technical reality, and proactively consider if there are better, simpler, or more robust implementation options.
+- **Baseline Assumption:** While agents must rigorously verify, they should still treat the ticket as *mostly correct* as a starting baseline (since tickets should have been reviewed during creation).
+
 ## 5. Git workflow (GitHub Flow)
 
 - `main` is always deployable, and production deploys from `main`.
+- **Lead Override:** Small, non-disruptive changes (such as documentation updates, typo fixes, or configuration tweaks) can be committed and pushed directly to `main` by the Lead Engineer without requiring a full PR and branch lifecycle.
 
 ### 5.1 Branch Naming Specification
 
