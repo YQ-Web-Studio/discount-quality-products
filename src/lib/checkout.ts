@@ -17,40 +17,6 @@ export interface ValidationResult {
   error?: string;
 }
 
-/**
- * Server-side coupon validation.
- * Currently supports the THANKYOU10 code (10% off subtotal).
- * TODO: Migrate to WooCommerce Coupons REST API for dynamic coupon management.
- */
-function validateCoupon(
-  couponCode: string | undefined,
-  subtotal: number,
-  customerEmail?: string
-): { discount: number; error?: string } {
-  if (!couponCode) return { discount: 0 };
-
-  const code = couponCode.trim().toUpperCase();
-
-  if (code === "THANKYOU10") {
-    // Server-side blocklist of emails that have already used this code
-    const USED_COUPON_EMAILS = [
-      "used@discountproducts.co.uk",
-      "alreadyused@gmail.com",
-      "customer@example.com",
-    ];
-
-    if (customerEmail) {
-      const emailLower = customerEmail.trim().toLowerCase();
-      if (USED_COUPON_EMAILS.includes(emailLower)) {
-        return { discount: 0, error: "This coupon code has already been used with this email address." };
-      }
-    }
-
-    return { discount: subtotal * 0.1 }; // 10% discount
-  }
-
-  return { discount: 0, error: "Invalid coupon code." };
-}
 
 export async function validateCartTotals(
   items: CartItem[],
@@ -153,15 +119,6 @@ export async function validateCartTotals(
       subtotal += actualPrice * item.quantity;
     }
 
-    // Validate coupon server-side
-    const couponResult = validateCoupon(couponCode, subtotal, address?.email);
-    if (couponResult.error && couponCode) {
-      // Only reject if a code was explicitly provided and is invalid
-      // For empty/missing codes, just continue with zero discount
-      console.warn(`[checkout] Coupon validation failed: ${couponResult.error}`);
-    }
-    const discountAmount = couponResult.discount;
-
     // Enforce strictly UK shipping at validation level
     if (address && address.country && address.country.toUpperCase() !== "GB" && address.country !== "United Kingdom") {
       return {
@@ -175,12 +132,26 @@ export async function validateCartTotals(
       };
     }
 
-    // Determine shipping cost dynamically from WooCommerce Store API
+    // Determine shipping cost and exact coupon discount dynamically from WooCommerce Store API
     let shippingCost = 0;
     let shippingTitle = "Free Delivery";
+    let discountAmount = 0;
+
     if (address && address.country) {
       try {
-        const rates = await fetchWooCommerceShippingRates(items, address);
+        const session = await fetchWooCommerceCartSession(items, address, couponCode);
+
+        if (couponCode && session.couponError) {
+          console.warn(`[checkout] Coupon validation failed: ${session.couponError}`);
+          return {
+            isValid: false,
+            subtotal: 0, discountAmount: 0, vat: 0, shippingCost: 0, finalTotal: 0,
+            error: session.couponError
+          };
+        }
+
+        discountAmount = session.couponDiscount;
+        const rates = session.shippingRates;
         const matchedRate = rates.find(r => r.id === shippingMethod) || rates[0];
         if (matchedRate) {
           const label = matchedRate.label;
@@ -243,6 +214,7 @@ export interface ShippingAddress {
   country: string;
   city: string;
   postcode: string;
+  email?: string;
 }
 
 export interface ShippingRate {
@@ -252,11 +224,17 @@ export interface ShippingRate {
   eta: string;
 }
 
+export interface CartSessionResult {
+  shippingRates: ShippingRate[];
+  couponDiscount: number;
+  couponError?: string;
+}
+
 /**
- * Dynamically queries the WooCommerce Store API cart session to fetch the
- * actual shipping rates for a specific cart items payload and shipping address.
+ * Dynamically queries the WooCommerce Store API cart session to apply coupons
+ * and fetch the actual shipping rates for a specific cart items payload.
  */
-export async function fetchWooCommerceShippingRates(items: CartItem[], address: ShippingAddress): Promise<ShippingRate[]> {
+export async function fetchWooCommerceCartSession(items: CartItem[], address: ShippingAddress, couponCode?: string): Promise<CartSessionResult> {
   // Enforce strictly UK shipping
   if (address.country && address.country.toUpperCase() !== "GB" && address.country !== "United Kingdom") {
     throw new Error("Shipping is strictly restricted to the United Kingdom.");
@@ -332,11 +310,46 @@ export async function fetchWooCommerceShippingRates(items: CartItem[], address: 
         city: address.city,
         postcode: address.postcode,
       },
+      billing_address: {
+        email: address.email || "",
+      }
     },
     nonce
   );
 
-  const cartJson = updateRes.json;
+  nonce = updateRes.nonce;
+  let cartJson = updateRes.json;
+
+  // 3.5 Apply coupon if provided
+  let couponDiscount = 0;
+  let couponError: string | undefined = undefined;
+
+  if (couponCode) {
+    const applyUrl = `${baseUrl.replace(/\/$/, "")}/wp-json/wc/store/v1/cart/apply-coupon`;
+    const applyRes = await fetch(applyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Cart-Token": cartToken,
+        "Nonce": nonce,
+      },
+      body: JSON.stringify({ code: couponCode }),
+      cache: "no-store",
+    });
+
+    const applyJson = await applyRes.json();
+    if (!applyRes.ok) {
+      // Decode HTML entities in WooCommerce error messages (e.g. &quot; -> ")
+      couponError = applyJson.message?.replace(/&quot;/g, '"') || "Invalid coupon code.";
+    } else {
+      cartJson = applyJson; // Use the updated cart containing the discount
+    }
+  }
+
+  if (!couponError && cartJson.totals && cartJson.totals.total_discount) {
+    couponDiscount = parseInt(cartJson.totals.total_discount, 10) / 100;
+  }
 
   // 4. Extract shipping rates
   const shippingRates: ShippingRate[] = [];
@@ -382,5 +395,9 @@ export async function fetchWooCommerceShippingRates(items: CartItem[], address: 
     }
   }
 
-  return shippingRates;
+  return {
+    shippingRates,
+    couponDiscount,
+    couponError,
+  };
 }
