@@ -78,14 +78,15 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
   - **`Released`**: All code merged to `main`, production actions executed, and everything confirmed working live on production.
 - **Agent access:** The Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each developer connects their own account. No tokens are stored on disk.
 - **GitHub link:** The free "GitHub for Jira" app, linking branches, commits and PRs to tickets automatically via the ticket key (`DQP-n`, `MA-n`, `FMMS-n`).
-- **Status automation & rules:**
+- **Strict Status Automation & Lifecycle Rules:**
   - Ticket created by agent → `Backlog`
   - Owner approves & refines → `Ready for Development`
   - Branch created / work started → `In Progress`
-  - PR opened → Remains `In Progress` (CI & CodeRabbit in flight)
-  - CI green + CodeRabbit approved → **`Code Review`**
-  - PR approved → **`Awaiting Release`**
-  - Production verification complete (merge + snippet/migration active) → **`Released`**
+  - PR opened → **Remains `In Progress`** (A ticket MUST stay in `In Progress` while CI runs and CodeRabbit reviews. It MUST NOT be moved to Code Review or Done at this stage).
+  - CI is Green AND CodeRabbit has Approved → **`Code Review`** (A ticket can ONLY be moved here once CI and AI review are fully passed).
+  - PR explicitly approved by the owner (`Yusuf Qureshi`) → **`Awaiting Release`**
+  - Merge into main (if possible) → **Remains `Awaiting Release`** until manually confirmed working on production.
+  - Production verification complete & manual confirmation → **`Done`** (Tickets MUST NOT be moved to Done by agents automatically upon opening a PR or merging; it requires manual verification).
 
 ### 4.1 Ticket template
 | Field | Content |
