@@ -44,6 +44,7 @@ export default async function CheckoutPage(props: PageProps) {
 
       const isLowStock =
         !isOutOfStock &&
+        (!product.bypassLowStock || quantity > (product.stockQuantity ?? 0)) &&
         product.manageStock &&
         product.stockQuantity != null &&
         product.stockQuantity > 0 &&
