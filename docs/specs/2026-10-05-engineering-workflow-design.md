@@ -102,6 +102,7 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 | Definition of Done | Standard checklist (§7.3) |
 
 ### 4.2 Ticket Definition & Agent Execution Guidelines
+- **Ticket Assignment:** Before starting work on any ticket, agents must explicitly assign the Jira issue to the user/developer who is supervising or pairing on the task.
 - **Rigorous Definitions:** All tickets must be highly detailed. They must clearly state the actual problem to be solved and include comprehensive Functional Requirements (FRs) and Acceptance Criteria (ACs).
 - **Agent Critical Verification (No Gospel Rule):** When AI agents take on a ticket, they **must not treat the ticket claims as absolute gospel**. Because tickets may be AI-generated, agents must independently verify the claims against the codebase, assess the technical reality, and proactively consider if there are better, simpler, or more robust implementation options.
 - **Baseline Assumption:** While agents must rigorously verify, they should still treat the ticket as *mostly correct* as a starting baseline (since tickets should have been reviewed during creation).
