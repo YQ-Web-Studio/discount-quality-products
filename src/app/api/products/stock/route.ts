@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const params: any = { per_page: 1 };
+    const params: Record<string, string | number> = { per_page: 1 };
     if (id) {
       params.include = id;
     } else if (slug) {
@@ -34,6 +34,7 @@ export async function GET(req: Request) {
         stockStatus: product.stockStatus,
         manageStock: product.manageStock,
         stockQuantity: product.stockQuantity,
+        bypassLowStock: Boolean(product.bypassLowStock),
       },
       {
         headers: {
@@ -41,8 +42,9 @@ export async function GET(req: Request) {
         },
       }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     console.error("[api/products/stock] Error fetching real-time stock:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

@@ -117,6 +117,8 @@ export interface WooProductRaw {
   stock_status: string;
   manage_stock?: boolean;
   stock_quantity?: number;
+  tags?: { id?: number; name?: string; slug?: string }[];
+  meta_data?: { id?: number; key: string; value: unknown }[];
 }
 
 export interface MappedProduct {
@@ -138,6 +140,7 @@ export interface MappedProduct {
   stockStatus: string;
   manageStock: boolean;
   stockQuantity: number | null;
+  bypassLowStock?: boolean;
 }
 
 /**
@@ -156,6 +159,21 @@ function formatPrice(amountStr: string): string | null {
 export function mapProduct(raw: WooProductRaw): MappedProduct {
   const conditionAttr = raw.attributes?.find(
     (attr) => attr.name.toLowerCase() === "condition"
+  );
+
+  const bypassByTag = Boolean(
+    raw.tags?.some(
+      (t) =>
+        t.slug?.toLowerCase() === "verified-stock" ||
+        t.name?.toLowerCase() === "verified stock"
+    )
+  );
+  const bypassByMeta = Boolean(
+    raw.meta_data?.some(
+      (m) =>
+        (m.key === "_bypass_low_stock_guard" || m.key === "bypass_low_stock_guard") &&
+        (m.value === "yes" || m.value === true || m.value === "1")
+    )
   );
 
   return {
@@ -179,6 +197,7 @@ export function mapProduct(raw: WooProductRaw): MappedProduct {
     stockStatus: raw.stock_status || "instock",
     manageStock: raw.manage_stock ?? false,
     stockQuantity: raw.stock_quantity ?? null,
+    bypassLowStock: bypassByTag || bypassByMeta,
   };
 }
 
@@ -263,7 +282,7 @@ async function fetchProductsInternal(
     const totalPages = parseInt(response.headers.get("X-WP-TotalPages") || "0", 10);
 
     const rawProducts: WooProductRaw[] = await response.json();
-    let products = rawProducts.map(mapProduct);
+    const products = rawProducts.map(mapProduct);
 
     // If search returned nothing, check if the search query is a SKU
     if (products.length === 0 && params.search) {
