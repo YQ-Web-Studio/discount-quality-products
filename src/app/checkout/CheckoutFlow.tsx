@@ -758,15 +758,40 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }, [form.country, form.billingCountry]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const couponValidationSnapshotRef = useRef<string>("");
+  const shippingLookupRequestIdRef = useRef<number>(0);
+
   const [shippingRates, setShippingRates] = useState<{ id: string; label: string; price: number; eta: string }[]>([]);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shipping, setShipping] = useState("");
 
-  // Live WooCommerce Cart Shipping Evaluation Lookup
+  // Live WooCommerce Cart Shipping & Coupon Evaluation Lookup
   useEffect(() => {
     if (!form.country) return;
 
+    const currentSnapshot = JSON.stringify({
+      items: computedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+      country: form.country,
+      city: form.city || "",
+      postcode: form.postcode || "",
+      email: form.email || "",
+      coupon: appliedCoupon,
+    });
+
+    // If checkout inputs changed while a coupon was applied, clear stale coupon discount while pending
+    if (appliedCoupon && couponValidationSnapshotRef.current && couponValidationSnapshotRef.current !== currentSnapshot) {
+      setCouponDiscount(0);
+    }
+
     const controller = new AbortController();
+    const requestId = ++shippingLookupRequestIdRef.current;
+
     const delayDebounceFn = setTimeout(async () => {
       setShippingLoading(true);
       try {
@@ -779,30 +804,55 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
               country: form.country,
               city: form.city || "",
               postcode: form.postcode || "",
+              email: form.email || "",
             },
+            couponCode: appliedCoupon || undefined,
           }),
           signal: controller.signal,
         });
 
         if (res.ok) {
           const data = await res.json();
+          // Ensure older lookups cannot overwrite newer results
+          if (requestId !== shippingLookupRequestIdRef.current) return;
+
           const rates = data.shippingRates || [];
           setShippingRates(rates);
           if (rates.length > 0) {
-            // Automatically select first rate if none is selected or the selected one isn't in new rates
-            if (!shipping || !rates.some((r: any) => r.id === shipping)) {
-              setShipping(rates[0].id);
-            }
+            setShipping((prevShipping) => {
+              if (!prevShipping || !rates.some((r: any) => r.id === prevShipping)) {
+                return rates[0].id;
+              }
+              return prevShipping;
+            });
           } else {
             setShipping("");
           }
+
+          if (appliedCoupon) {
+            if (data.couponError) {
+              setAppliedCoupon(null);
+              setCouponDiscount(0);
+              setCouponError(data.couponError);
+              setCouponSuccess(null);
+            } else if (typeof data.couponDiscount === "number") {
+              setCouponDiscount(data.couponDiscount);
+              setCouponSuccess(`Coupon "${appliedCoupon}" applied successfully! (-£${data.couponDiscount.toFixed(2)})`);
+              setCouponError(null);
+            }
+          } else {
+            setCouponDiscount(0);
+          }
+          couponValidationSnapshotRef.current = currentSnapshot;
         }
       } catch (err: any) {
         if (err.name !== "AbortError") {
           console.error("Failed to load shipping rates:", err);
         }
       } finally {
-        setShippingLoading(false);
+        if (requestId === shippingLookupRequestIdRef.current) {
+          setShippingLoading(false);
+        }
       }
     }, 500);
 
@@ -810,8 +860,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
       clearTimeout(delayDebounceFn);
       controller.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.country, form.city, form.postcode, computedItems]);
+  }, [form.country, form.city, form.postcode, form.email, computedItems, appliedCoupon]);
   const [processing, setProcessing] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [clientSecret, setClientSecret] = useState("");
@@ -896,13 +945,6 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     return matched ? matched.label : "";
   }, [shippingRates, shipping]);
 
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
-  const [couponDiscount, setCouponDiscount] = useState<number>(0);
-  const [couponError, setCouponError] = useState<string | null>(null);
-  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
-  const [couponCode, setCouponCode] = useState("");
-  const [couponLoading, setCouponLoading] = useState(false);
-
   const discountAmount = useMemo(() => {
     return appliedCoupon ? couponDiscount : 0;
   }, [appliedCoupon, couponDiscount]);
@@ -944,6 +986,14 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
         if (data.shippingRates && data.shippingRates.length > 0) {
           setShippingRates(data.shippingRates);
         }
+        couponValidationSnapshotRef.current = JSON.stringify({
+          items: computedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+          country: form.country || "GB",
+          city: form.city || "",
+          postcode: form.postcode || "",
+          email: form.email || "",
+          coupon: data.couponCode,
+        });
       } else {
         setAppliedCoupon(null);
         setCouponDiscount(0);
@@ -961,6 +1011,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     setCouponDiscount(0);
     setCouponSuccess(null);
     setCouponError(null);
+    couponValidationSnapshotRef.current = "";
   };
 
   const [fetchingSecret, setFetchingSecret] = useState(false);
@@ -1598,8 +1649,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               label: "pay",
                               height: 48
                             }}
-                            disabled={processing || !agreedToTerms}
-                            forceReRender={[computedSubtotal, shipping, processing]}
+                            disabled={processing || !agreedToTerms || shippingLoading}
+                            forceReRender={[computedSubtotal, shipping, processing, appliedCoupon, couponDiscount]}
                             createOrder={async () => {
                               if (!validateDetails()) {
                                 throw new Error("Please complete your delivery details before paying with PayPal.");

@@ -9,6 +9,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing items or coupon code." }, { status: 400 });
     }
 
+    if (items.length > 50) {
+      return NextResponse.json({ error: "Cart exceeds maximum allowed items (50)." }, { status: 400 });
+    }
+
     const effectiveAddress = {
       country: address?.country || "GB",
       city: address?.city || "",

@@ -66,4 +66,55 @@ describe('Shipping Rates API Route (/api/checkout/shipping-rates)', () => {
     const json = await res.json();
     expect(json.error).toBe('WooCommerce API unavailable');
   });
+
+  it('passes couponCode to fetchWooCommerceCartSession and returns coupon results', async () => {
+    const mockRates = [
+      { id: 'free_shipping', label: 'Free Delivery', price: 0, eta: '3–5 working days' },
+    ];
+
+    const fetchSessionSpy = vi.spyOn(checkoutLib, 'fetchWooCommerceCartSession').mockResolvedValue({
+      shippingRates: mockRates,
+      couponDiscount: 15.5,
+      couponError: undefined,
+    });
+
+    const req = new Request('http://localhost/api/checkout/shipping-rates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ id: '101', quantity: 1 }],
+        address: { country: 'GB', city: 'London', postcode: 'SW1A 1AA', email: 'customer@example.com' },
+        couponCode: 'FREESHIP15',
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.shippingRates).toEqual(mockRates);
+    expect(json.couponDiscount).toBe(15.5);
+    expect(json.couponError).toBeUndefined();
+    expect(fetchSessionSpy).toHaveBeenCalledWith(
+      [{ id: '101', quantity: 1 }],
+      { country: 'GB', city: 'London', postcode: 'SW1A 1AA', email: 'customer@example.com' },
+      'FREESHIP15'
+    );
+  });
+
+  it('rejects requests exceeding maximum allowed items (50)', async () => {
+    const items = Array.from({ length: 51 }, (_, i) => ({ id: String(i + 1), quantity: 1 }));
+    const req = new Request('http://localhost/api/checkout/shipping-rates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items,
+        address: { country: 'GB', city: 'London', postcode: 'SW1A 1AA' },
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe('Cart exceeds maximum allowed items (50).');
+  });
 });

@@ -71,4 +71,22 @@ describe('Apply Coupon API Route (/api/checkout/apply-coupon)', () => {
     expect(json.isValid).toBe(false);
     expect(json.error).toBe('Coupon code "EXPIRED" has expired.');
   });
+
+  it('rejects carts exceeding maximum allowed items (50)', async () => {
+    const items = Array.from({ length: 51 }, (_, i) => ({ id: String(i + 1), quantity: 1 }));
+    const req = new Request('http://localhost/api/checkout/apply-coupon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items,
+        address: { country: 'GB', city: 'London', postcode: 'SW1A 1AA' },
+        couponCode: 'SUMMER20',
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe('Cart exceeds maximum allowed items (50).');
+  });
 });
