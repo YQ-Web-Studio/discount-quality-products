@@ -56,15 +56,57 @@ describe('PayPal capture-order: cart validation before funds are captured', () =
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('captures funds only after the cart validates', async () => {
+  it('rejects with 400 and never captures when PayPal order amount does not match validated cart final total', async () => {
+    vi.spyOn(checkoutLib, 'validateCartTotals').mockResolvedValue({
+      isValid: true,
+      subtotal: 100, discountAmount: 10, vat: 15, shippingCost: 0, finalTotal: 90,
+      shippingTitle: 'Free Delivery',
+    });
+
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/oauth2/token')) {
+        return new Response(JSON.stringify({ access_token: 'token' }), { status: 200 });
+      }
+      if (urlStr.includes('/v2/checkout/orders/PAYPAL-ORDER-1') && !urlStr.includes('/capture')) {
+        // PayPal order has a tampered/mismatched amount (£50 instead of expected £90)
+        return new Response(
+          JSON.stringify({
+            id: 'PAYPAL-ORDER-1',
+            purchase_units: [{ amount: { currency_code: 'GBP', value: '50.00' } }],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+
+    const res = await POST(makeRequest(validCart));
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('Payment amount mismatch');
+    expect(paypalCaptureCalls(fetchSpy)).toHaveLength(0);
+  });
+
+  it('captures funds only after the cart validates and amount matches', async () => {
     vi.spyOn(checkoutLib, 'validateCartTotals').mockResolvedValue({
       isValid: true,
       subtotal: 100, discountAmount: 10, vat: 15, shippingCost: 0, finalTotal: 90,
       shippingTitle: 'Free Delivery',
     });
     const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
-      if (String(url).includes('/oauth2/token')) {
+      const urlStr = String(url);
+      if (urlStr.includes('/oauth2/token')) {
         return new Response(JSON.stringify({ access_token: 'token' }), { status: 200 });
+      }
+      if (urlStr.includes('/v2/checkout/orders/PAYPAL-ORDER-1') && !urlStr.includes('/capture')) {
+        return new Response(
+          JSON.stringify({
+            id: 'PAYPAL-ORDER-1',
+            purchase_units: [{ amount: { currency_code: 'GBP', value: '90.00' } }],
+          }),
+          { status: 200 }
+        );
       }
       return new Response(
         JSON.stringify({

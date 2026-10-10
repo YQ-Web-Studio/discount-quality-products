@@ -897,66 +897,71 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }, [shippingRates, shipping]);
 
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
 
   const discountAmount = useMemo(() => {
-    if (appliedCoupon === "THANKYOU10") {
-      return computedSubtotal * 0.1; // 10% discount
-    }
-    return 0;
-  }, [appliedCoupon, computedSubtotal]);
+    return appliedCoupon ? couponDiscount : 0;
+  }, [appliedCoupon, couponDiscount]);
 
-  const finalTotal = computedSubtotal - discountAmount + shippingCost;
+  const finalTotal = Math.max(0, computedSubtotal - discountAmount + shippingCost);
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!couponCode.trim()) return;
+    const code = couponCode.trim();
+    if (!code) return;
 
     setCouponLoading(true);
     setCouponError(null);
     setCouponSuccess(null);
 
-    const code = couponCode.trim().toUpperCase();
+    try {
+      const res = await fetch("/api/checkout/apply-coupon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: computedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+          address: {
+            country: form.country || "GB",
+            city: form.city || "",
+            postcode: form.postcode || "",
+            email: form.email || "",
+          },
+          couponCode: code,
+        }),
+      });
 
-    if (code === "THANKYOU10") {
-      const USED_COUPON_EMAILS = ["used@discountproducts.co.uk", "alreadyused@gmail.com", "customer@example.com"];
-      const currentEmail = form.email.trim().toLowerCase();
-      if (currentEmail && USED_COUPON_EMAILS.includes(currentEmail)) {
-        setCouponError("This coupon code has already been used with this email address.");
-        setCouponLoading(false);
-        return;
+      const data = await res.json();
+      if (res.ok && data.isValid) {
+        const discount = data.couponDiscount || 0;
+        setAppliedCoupon(data.couponCode);
+        setCouponDiscount(discount);
+        setCouponSuccess(`Coupon "${data.couponCode}" applied successfully! (-£${discount.toFixed(2)})`);
+        setCouponCode("");
+        if (data.shippingRates && data.shippingRates.length > 0) {
+          setShippingRates(data.shippingRates);
+        }
+      } else {
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+        setCouponError(data.error || "Invalid coupon code.");
       }
-
-      setAppliedCoupon(code);
-      setCouponSuccess(`Coupon "${code}" applied successfully! (10% Off)`);
-      setCouponCode("");
-    } else {
-      setCouponError("Invalid coupon code.");
+    } catch {
+      setCouponError("Unable to validate coupon code at this time.");
+    } finally {
+      setCouponLoading(false);
     }
-    setCouponLoading(false);
   };
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
+    setCouponDiscount(0);
     setCouponSuccess(null);
     setCouponError(null);
   };
-
-  // Email-validation edge case: automatically validate and strip coupon if email changes to an already-used one
-  useEffect(() => {
-    if (appliedCoupon === "THANKYOU10" && form.email) {
-      const emailLower = form.email.trim().toLowerCase();
-      const USED_COUPON_EMAILS = ["used@discountproducts.co.uk", "alreadyused@gmail.com", "customer@example.com"];
-      if (USED_COUPON_EMAILS.includes(emailLower)) {
-        setAppliedCoupon(null);
-        setCouponSuccess(null);
-        setCouponError("This discount code has already been used with this email address.");
-      }
-    }
-  }, [form.email, appliedCoupon]);
 
   const [fetchingSecret, setFetchingSecret] = useState(false);
   const preparedCheckoutSnapshotRef = useRef<string | null>(null);

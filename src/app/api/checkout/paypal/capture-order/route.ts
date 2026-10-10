@@ -93,6 +93,39 @@ export async function POST(req: Request) {
       (process.env.NODE_ENV === "production"
         ? "https://api-m.paypal.com"
         : "https://api-m.sandbox.paypal.com");
+
+    // Verify that the PayPal order purchase-unit amount matches the validated finalTotal
+    const orderDetailsRes = await fetch(`${baseUrl}/v2/checkout/orders/${orderID}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!orderDetailsRes.ok) {
+      return NextResponse.json(
+        { error: "Failed to verify PayPal order details prior to capture." },
+        { status: 400 }
+      );
+    }
+
+    const orderDetails = await orderDetailsRes.json();
+    const purchaseUnit = orderDetails.purchase_units?.[0];
+    const payPalAmountStr = purchaseUnit?.amount?.value;
+    const payPalCurrency = purchaseUnit?.amount?.currency_code;
+    const payPalAmount = parseFloat(payPalAmountStr || "0");
+    const expectedAmountStr = validation.finalTotal.toFixed(2);
+
+    if (payPalCurrency !== "GBP" || Math.abs(payPalAmount - validation.finalTotal) > 0.01) {
+      return NextResponse.json(
+        {
+          error: `Payment amount mismatch. PayPal: ${payPalCurrency || "unknown"} ${payPalAmountStr}, Expected: GBP ${expectedAmountStr}`,
+        },
+        { status: 400 }
+      );
+    }
+
     const response = await fetch(`${baseUrl}/v2/checkout/orders/${orderID}/capture`, {
       method: "POST",
       headers: {
