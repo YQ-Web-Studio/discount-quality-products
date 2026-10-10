@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateCartTotals } from "@/lib/checkout";
 
 type PayPalCaptureResponse = {
   status?: string;
@@ -53,10 +54,37 @@ async function readPayPalResponse(response: Response): Promise<PayPalCaptureResp
 
 export async function POST(req: Request) {
   try {
-    const { orderID } = await req.json();
+    const { orderID, items, shippingMethod, form, couponCode } = (await req.json()) as {
+      orderID?: string;
+      items?: Array<{ id: string; quantity: number }>;
+      shippingMethod?: string;
+      form?: { country?: string; city: string; postcode: string; email?: string };
+      couponCode?: string;
+    };
 
     if (!orderID) {
       return NextResponse.json({ error: "Missing PayPal Order ID." }, { status: 400 });
+    }
+
+    if (!items || items.length === 0) {
+      return NextResponse.json({ error: "Missing basket items." }, { status: 400 });
+    }
+
+    // Validate the cart BEFORE capturing funds. Once PayPal captures, money has moved,
+    // so an invalid cart (rejected coupon, stock change) must be caught here, not in
+    // create-wc-order afterwards.
+    const validation = await validateCartTotals(
+      items.map((i) => ({ id: i.id, quantity: i.quantity })),
+      shippingMethod || "standard",
+      form ? { country: form.country || "GB", city: form.city, postcode: form.postcode, email: form.email } : undefined,
+      couponCode
+    );
+
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: validation.error || "Cart validation failed before payment capture." },
+        { status: 400 }
+      );
     }
 
     const accessToken = await generatePayPalAccessToken();
@@ -65,6 +93,39 @@ export async function POST(req: Request) {
       (process.env.NODE_ENV === "production"
         ? "https://api-m.paypal.com"
         : "https://api-m.sandbox.paypal.com");
+
+    // Verify that the PayPal order purchase-unit amount matches the validated finalTotal
+    const orderDetailsRes = await fetch(`${baseUrl}/v2/checkout/orders/${orderID}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!orderDetailsRes.ok) {
+      return NextResponse.json(
+        { error: "Failed to verify PayPal order details prior to capture." },
+        { status: 400 }
+      );
+    }
+
+    const orderDetails = await orderDetailsRes.json();
+    const purchaseUnit = orderDetails.purchase_units?.[0];
+    const payPalAmountStr = purchaseUnit?.amount?.value;
+    const payPalCurrency = purchaseUnit?.amount?.currency_code;
+    const payPalAmount = parseFloat(payPalAmountStr || "0");
+    const expectedAmountStr = validation.finalTotal.toFixed(2);
+
+    if (payPalCurrency !== "GBP" || Math.abs(payPalAmount - validation.finalTotal) > 0.01) {
+      return NextResponse.json(
+        {
+          error: `Payment amount mismatch. PayPal: ${payPalCurrency || "unknown"} ${payPalAmountStr}, Expected: GBP ${expectedAmountStr}`,
+        },
+        { status: 400 }
+      );
+    }
+
     const response = await fetch(`${baseUrl}/v2/checkout/orders/${orderID}/capture`, {
       method: "POST",
       headers: {

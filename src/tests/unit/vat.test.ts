@@ -124,19 +124,41 @@ describe('VAT & Postage Calculation Engine', () => {
       total: 1,
     });
 
-    vi.spyOn(global, 'fetch').mockImplementation(async () => {
-      return new Response(
-        JSON.stringify({
-          shipping_rates: [
-            {
-              shipping_rates: [
-                { rate_id: 'standard', name: 'Standard Delivery', price: '0' },
-              ],
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' } }
-      );
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/apply-coupon')) {
+        return new Response(
+          JSON.stringify({
+            totals: {
+              total_discount: '833', // £8.33 net discount
+              total_discount_tax: '167' // £1.67 tax discount -> Total £10.00
+            }
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' } }
+        );
+      }
+      if (urlStr.includes('/update-customer')) {
+        return new Response(
+          JSON.stringify({
+            shipping_rates: [
+              {
+                shipping_rates: [
+                  { rate_id: 'standard', name: 'Standard Delivery', price: '0' },
+                ],
+              },
+            ],
+            totals: {
+              total_discount: '833',
+              total_discount_tax: '167'
+            }
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' } }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' },
+      });
     });
 
     const result = await validateCartTotals(
@@ -154,14 +176,41 @@ describe('VAT & Postage Calculation Engine', () => {
     expect(result.vat).toBeCloseTo(15, 2);
   });
 
-  it('blocks THANKYOU10 coupon reuse for emails on the blocklist', async () => {
+  it('rejects checkout when WooCommerce API returns coupon validation error (e.g. usage limit reached)', async () => {
     vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
       products: [mockProduct(104, 'Test Item', '£50.00')],
       totalPages: 1,
       total: 1,
     });
 
-    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+    let customerEmailReceived = '';
+
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/update-customer') && init?.body) {
+        const body = JSON.parse(init.body as string);
+        customerEmailReceived = body?.billing_address?.email;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' },
+        });
+      }
+      if (urlStr.includes('/apply-coupon')) {
+        if (customerEmailReceived === 'used@discountproducts.co.uk') {
+          return new Response(
+            JSON.stringify({
+              message: 'Coupon usage limit has been reached.'
+            }),
+            { status: 400, headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            totals: { total_discount: '1000' }
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' } }
+        );
+      }
       return new Response(JSON.stringify({}), {
         status: 200,
         headers: { 'Content-Type': 'application/json', Nonce: 'mock-nonce' },
@@ -175,9 +224,48 @@ describe('VAT & Postage Calculation Engine', () => {
       'THANKYOU10'
     );
 
-    expect(result.isValid).toBe(true);
-    expect(result.discountAmount).toBe(0);
-    expect(result.finalTotal).toBe(50);
+    expect(result.isValid).toBe(false);
+    expect(result.error).toBe('Coupon usage limit has been reached.');
+  });
+
+  it('rejects checkout with coupon when shipping address is missing', async () => {
+    vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+      products: [mockProduct(106, 'Test Item', '£50.00')],
+      totalPages: 1,
+      total: 1,
+    });
+
+    const result = await validateCartTotals(
+      [{ id: '106', quantity: 1 }],
+      'standard',
+      undefined,
+      'THANKYOU10'
+    );
+
+    expect(result.isValid).toBe(false);
+    expect(result.error).toBe('Shipping address is required to apply a coupon code.');
+  });
+
+  it('rejects checkout when Store API encounters network or server error during coupon validation', async () => {
+    vi.spyOn(woocommerce, 'fetchWooCommerceProductsDirect').mockResolvedValue({
+      products: [mockProduct(107, 'Test Item', '£50.00')],
+      totalPages: 1,
+      total: 1,
+    });
+
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      throw new Error('Connection refused');
+    });
+
+    const result = await validateCartTotals(
+      [{ id: '107', quantity: 1 }],
+      'standard',
+      { country: 'GB', city: 'London', postcode: 'SW1A 1AA' },
+      'THANKYOU10'
+    );
+
+    expect(result.isValid).toBe(false);
+    expect(result.error).toBe('Unable to validate coupon code. Please try again.');
   });
 
   it('rejects checkout when destination country is outside the United Kingdom', async () => {
