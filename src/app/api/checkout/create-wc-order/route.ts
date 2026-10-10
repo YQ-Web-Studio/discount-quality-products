@@ -80,6 +80,13 @@ export async function POST(req: Request) {
       couponCode
     );
 
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: validation.error || "Cart validation failed." },
+        { status: 400 }
+      );
+    }
+
     const shippingCost = validation.shippingCost;
     const shippingTitle = validation.shippingTitle || "Free Delivery";
     const isFirstClass = shippingTitle.toLowerCase().includes("first class") || shippingTitle.toLowerCase().includes("1st class");

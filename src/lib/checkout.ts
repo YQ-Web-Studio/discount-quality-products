@@ -137,6 +137,18 @@ export async function validateCartTotals(
     let shippingTitle = "Free Delivery";
     let discountAmount = 0;
 
+    if (couponCode && (!address || !address.country)) {
+      return {
+        isValid: false,
+        subtotal: 0,
+        discountAmount: 0,
+        vat: 0,
+        shippingCost: 0,
+        finalTotal: 0,
+        error: "Shipping address is required to apply a coupon code.",
+      };
+    }
+
     if (address && address.country) {
       try {
         const session = await fetchWooCommerceCartSession(items, address, couponCode);
@@ -174,7 +186,19 @@ export async function validateCartTotals(
             shippingCost = price;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (couponCode) {
+          console.error("Failed to validate coupon via Store API:", err);
+          return {
+            isValid: false,
+            subtotal: 0,
+            discountAmount: 0,
+            vat: 0,
+            shippingCost: 0,
+            finalTotal: 0,
+            error: "Unable to validate coupon code. Please try again.",
+          };
+        }
         console.error("Failed to dynamically fetch WooCommerce shipping rates:", err);
         // Fallback standard rate if API fails
         shippingCost = 0;
@@ -347,8 +371,10 @@ export async function fetchWooCommerceCartSession(items: CartItem[], address: Sh
     }
   }
 
-  if (!couponError && cartJson.totals && cartJson.totals.total_discount) {
-    couponDiscount = parseInt(cartJson.totals.total_discount, 10) / 100;
+  if (!couponError && cartJson.totals) {
+    const discountCents = parseInt(cartJson.totals.total_discount || "0", 10);
+    const discountTaxCents = parseInt(cartJson.totals.total_discount_tax || "0", 10);
+    couponDiscount = (discountCents + discountTaxCents) / 100;
   }
 
   // 4. Extract shipping rates
