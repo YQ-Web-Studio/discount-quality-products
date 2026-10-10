@@ -1622,7 +1622,13 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                                 const capRes = await fetch("/api/checkout/paypal/capture-order", {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ orderID: data.orderID }),
+                                  body: JSON.stringify({
+                                    orderID: data.orderID,
+                                    items: computedItems,
+                                    shippingMethod: shipping,
+                                    form: { ...form, showBillingAddress },
+                                    couponCode: appliedCoupon || undefined,
+                                  }),
                                 });
 
                                 const capData = await capRes.json();

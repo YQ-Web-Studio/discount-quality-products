@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateCartTotals } from "@/lib/checkout";
 
 type PayPalCaptureResponse = {
   status?: string;
@@ -53,10 +54,37 @@ async function readPayPalResponse(response: Response): Promise<PayPalCaptureResp
 
 export async function POST(req: Request) {
   try {
-    const { orderID } = await req.json();
+    const { orderID, items, shippingMethod, form, couponCode } = (await req.json()) as {
+      orderID?: string;
+      items?: Array<{ id: string; quantity: number }>;
+      shippingMethod?: string;
+      form?: { country?: string; city: string; postcode: string; email?: string };
+      couponCode?: string;
+    };
 
     if (!orderID) {
       return NextResponse.json({ error: "Missing PayPal Order ID." }, { status: 400 });
+    }
+
+    if (!items || items.length === 0) {
+      return NextResponse.json({ error: "Missing basket items." }, { status: 400 });
+    }
+
+    // Validate the cart BEFORE capturing funds. Once PayPal captures, money has moved,
+    // so an invalid cart (rejected coupon, stock change) must be caught here, not in
+    // create-wc-order afterwards.
+    const validation = await validateCartTotals(
+      items.map((i) => ({ id: i.id, quantity: i.quantity })),
+      shippingMethod || "standard",
+      form ? { country: form.country || "GB", city: form.city, postcode: form.postcode, email: form.email } : undefined,
+      couponCode
+    );
+
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: validation.error || "Cart validation failed before payment capture." },
+        { status: 400 }
+      );
     }
 
     const accessToken = await generatePayPalAccessToken();
