@@ -46,24 +46,24 @@ Skill sync: a `sync-handbook` script (and GitHub Action in the handbook) opens a
 
 Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later just means switching profile.
 
-| Concern | **Public profile** (DQP) | **Private-free profile** (Muslim Atlas) |
+| Concern | **Public profile** (DQP & Muslim Atlas) | **Private-free profile** (Future private projects) |
 |---|---|---|
-| Who can see the code | Public | Org members & invited contributors only |
+| Who can see the code | Public (`YQ-Web-Studio/discount-quality-products`, `Muslim-Atlas/app`, `Muslim-Atlas/website`) | Org members & invited contributors only |
 | Contributor access | **Write** collaborator, branches directly in the repo | **Write** collaborator, branches directly in the repo |
 | Workflow | Branch (`feat/<ticket>-...`) → PR → Review → Merge | Branch (`feat/<ticket>-...`) → PR → Review → Merge |
-| Protecting `main` | GitHub **ruleset**: PR required, required status checks | Local `husky` pre-push hook blocks direct push to `main` + team/agent workflow standards |
+| Protecting `main` | GitHub **ruleset**: PR required, required status checks, auto-delete head branches | Local `husky` pre-push hook blocks direct push to `main` + team/agent workflow standards |
 | Required CI | Enforced by GitHub ruleset | Status checks on PR, verified before merge |
 | Production approval gate | GitHub Environment `production` with owner approval | Owner-controlled deployments / credentials |
 | CI minutes | Unlimited | 2,000 min/month: path filters, `concurrency` cancel, caching |
 | AI reviewer | CodeRabbit (free for public repos) | `ai-review` GitHub Action using GitHub Models / local agent review |
-| Hosting deploys | Vercel Git integration | Project-specific (Expo / EAS) |
+| Hosting deploys | Vercel Git integration (DQP, MA Website) / EAS Build (MA App) | Project-specific (Expo / EAS) |
 
 ## 4. Jira
 
 - **Site:** `https://yqwebstudio.atlassian.net`
 - **Dedicated Projects:** Each codebase has its own dedicated Jira project key:
   - **`DQP`**: Discount Quality Products (tickets: `DQP-1`, `DQP-2`, ...)
-  - **`MA`**: Muslim Atlas (tickets: `MA-1`, `MA-2`, ...)
+  - **`MA`**: Muslim Atlas (tickets: `MA-1`, `MA-2`, ...). Unifies both `Muslim-Atlas/app` and `Muslim-Atlas/website` repositories on a single board, differentiated by Jira components (`App` and `Website`) and quick filters.
   - **`FMMS`**: Faizan-e-Madina Southend (tickets: `FMMS-1`, `FMMS-2`, ...)
 - **Boards:** Dedicated Agile/Kanban board per project capturing all tickets automatically.
 - **Columns / statuses (6-stage lifecycle):**
@@ -79,8 +79,8 @@ Each repo declares one profile in `AGENTS.md`. Upgrading to a paid plan later ju
 - **Agent access:** The Atlassian official Remote MCP server (`https://mcp.atlassian.com/v1/sse`) with OAuth. Each developer connects their own account. No tokens are stored on disk.
 - **GitHub link:** The free "GitHub for Jira" app, linking branches, commits and PRs to tickets automatically via the ticket key (`DQP-n`, `MA-n`, `FMMS-n`).
 - **Strict Status Automation & Lifecycle Rules:**
-  - Ticket created by agent → `Backlog`
-  - Owner approves & refines → `Ready for Development`
+  - Ticket created by agent → `Backlog` (correct issue type for the work — Story / Bug / Task / Spike — and the Jira native Story Points field always set, whatever the type. Agents must **NEVER** move tickets into `Ready for Development` unless explicitly instructed by the owner).
+  - Owner explicitly approves & promotes → `Ready for Development`
   - Branch created / work started → `In Progress`
   - PR opened → **Remains `In Progress`** (A ticket MUST stay in `In Progress` while CI runs and CodeRabbit reviews. It MUST NOT be moved to Code Review or Done at this stage).
   - CI is Green AND CodeRabbit has Approved → **`Code Review`** (A ticket can ONLY be moved here once CI and AI review are fully passed).

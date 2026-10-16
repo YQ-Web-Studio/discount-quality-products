@@ -5,6 +5,14 @@
 ## Linked Jira Ticket
 - Jira Ticket: [DQP-](https://yqwebstudio.atlassian.net/browse/DQP-)
 
+## Steps to View / Test the Feature
+<!-- Provide clear step-by-step instructions for the reviewer or QA to view, interact with, and verify this feature or fix in local / preview environment.
+Include any backend / WP-Admin prerequisites or test data setup (e.g. how to create coupons in WooCommerce, configure product stock, or set up users/settings). -->
+1. **Prerequisites / Backend Setup** (if applicable): e.g. WP-Admin > Marketing > Coupons > Add Coupon (`code`, discount type, usage limits, publish)
+2. **Navigate to**: e.g. `/checkout`, `/products/[slug]`, etc.
+3. **Action**: e.g. Add item to basket, enter coupon code `...`, fill address `...`
+4. **Verify**: e.g. Verify discount is applied, correct shipping rates appear, etc.
+
 ## Type of Change
 - [ ] `feat`: New feature or capability
 - [ ] `fix`: Bug fix

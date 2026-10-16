@@ -164,7 +164,7 @@ All contributors and AI agents working in this repository must strictly adhere t
 
 ## 2. Mandatory Human Confirmation Gates (Hard-Gates)
 Agents must **never take autonomous action on external platforms (Jira, GitHub, Bluehost) without explicit user confirmation**. Always display the payload and wait for approval:
-1. **Gate 1 (Jira):** Present draft ticket summary, description, and criteria → wait for confirmation.
+1. **Gate 1 (Jira):** Present draft ticket summary, description, criteria, and Fibonacci story points → wait for confirmation. All new tickets are created in **`Backlog`** with the correct issue type (Story / Bug / Task / Spike) and the Jira native Story Points field always set. Agents must **NEVER** transition a ticket into `Ready for Development` unless the owner explicitly instructs to do so.
 2. **Gate 2 (Branch):** Present branch name and Jira status transition → wait for confirmation.
 3. **Gate 3 (PR):** Present PR title, description, test evidence, and diff overview → wait for confirmation before opening PR.
 4. **Gate 4 (Review):** Present review comments and suggested verdict → wait for confirmation before submitting review.
