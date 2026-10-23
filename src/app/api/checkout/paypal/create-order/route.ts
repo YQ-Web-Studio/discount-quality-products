@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { validateCartTotals } from "@/lib/checkout";
+import { createWooCommerceOrder } from "@/lib/woocommerce";
+import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
+import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 
 type PayPalCreateOrderResponse = {
   id?: string;
@@ -55,19 +58,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const session = await getCurrentWordPressSession();
+    let wcOrderId: number | undefined;
+
+    if (form && items && items.length > 0) {
+      try {
+        const pendingPayload = buildPendingOrderPayload({
+          items,
+          form,
+          shippingCost: validation.shippingCost,
+          shippingTitle: validation.shippingTitle || "Free Delivery",
+          paymentProvider: "paypal",
+          couponCode,
+          customerId: session?.user?.id ? Number(session.user.id) : 0,
+        });
+
+        const pendingOrder = await createWooCommerceOrder(pendingPayload);
+        wcOrderId = pendingOrder.id;
+        console.log(`[paypal/create-order] Pre-created pending WooCommerce order #${wcOrderId}`);
+      } catch (orderErr) {
+        console.warn("[paypal/create-order] Notice: could not pre-create pending order:", orderErr);
+      }
+    }
+
     const accessToken = await generatePayPalAccessToken();
     const finalTotalValue = validation.finalTotal.toFixed(2);
 
+    const purchaseUnit: Record<string, any> = {
+      amount: {
+        currency_code: "GBP",
+        value: finalTotalValue,
+      },
+    };
+
+    if (wcOrderId) {
+      purchaseUnit.custom_id = String(wcOrderId);
+    }
+
     const payload = {
       intent: "CAPTURE",
-      purchase_units: [
-        {
-          amount: {
-            currency_code: "GBP",
-            value: finalTotalValue,
-          },
-        },
-      ],
+      purchase_units: [purchaseUnit],
       payment_source: {
         paypal: {
           experience_context: {
@@ -97,7 +127,7 @@ export async function POST(req: Request) {
     const data = await readPayPalResponse(response);
 
     if (response.ok && data.id) {
-      return NextResponse.json({ id: data.id, totalCalculated: validation.finalTotal });
+      return NextResponse.json({ id: data.id, wcOrderId, totalCalculated: validation.finalTotal });
     }
 
     console.error("[paypal/create-order] Failed to create order", {

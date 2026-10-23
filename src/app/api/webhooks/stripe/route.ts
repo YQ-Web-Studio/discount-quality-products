@@ -14,7 +14,7 @@ const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as 
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
-import { processOrderFromPaymentIntent } from "@/lib/stripe-sync";
+import { processOrderFromPaymentIntent, handleFailedPaymentIntent } from "@/lib/stripe-sync";
 
 /**
  * POST /api/webhooks/stripe
@@ -90,6 +90,9 @@ export async function POST(req: Request) {
     } catch (err) {
       console.warn("[webhook] Cache revalidation failed:", err);
     }
+  } else if (event.type === "payment_intent.payment_failed") {
+    const rawPaymentIntent = event.data.object as Stripe.PaymentIntent;
+    await handleFailedPaymentIntent(rawPaymentIntent);
   } else {
     console.log(`[webhook] Unhandled event type ignored: ${event.type}`);
   }

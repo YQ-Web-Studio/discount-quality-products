@@ -120,7 +120,8 @@ export async function processOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {
-  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_coupon, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id } = paymentIntent.metadata ?? {};
+  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_coupon, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id, orderId: metaOrderId } = paymentIntent.metadata ?? {};
+  const resolvedOrderId = metaOrderId || wc_order_id;
 
   if (!cart_items || (!cart_form && !delivery_address)) {
     console.warn(
@@ -160,8 +161,8 @@ export async function processOrderFromPaymentIntent(
   const paymentMeta = buildPaymentMeta(paymentIntent.id, chargeId);
 
   // ── Path A: update the linked WooCommerce order if one already exists ────
-  if (wc_order_id) {
-    const orderId = parseInt(wc_order_id, 10);
+  if (resolvedOrderId) {
+    const orderId = parseInt(resolvedOrderId, 10);
 
     // ── Idempotency check: if the order was already promoted by a prior
     //    webhook delivery or the success-page fallback, return it as-is
@@ -180,6 +181,9 @@ export async function processOrderFromPaymentIntent(
     }
 
     try {
+      // In Path A: Promote order to processing with payment metadata.
+      // Do NOT re-apply coupon_lines: coupons are already applied on the pending order,
+      // and re-sending them triggers post-payment coupon validation errors in WooCommerce.
       const updatePayload: any = {
         status: "processing",
         set_paid: true,
@@ -190,9 +194,6 @@ export async function processOrderFromPaymentIntent(
           { key: "_confirmation_email_sent", value: "yes" },
         ],
       };
-      if (couponCode) {
-        updatePayload.coupon_lines = [{ code: couponCode }];
-      }
       const updated = await updateWooCommerceOrder(orderId, updatePayload);
       console.log(
         `[stripe-sync] ✓ WooCommerce order #${updated.number ?? updated.id} updated to "processing" for PaymentIntent ${paymentIntent.id}.`
@@ -334,3 +335,29 @@ export async function processOrderFromPaymentIntent(
     return null;
   }
 }
+
+/**
+ * Handles failed Stripe payment intents by marking linked pending orders as failed.
+ * Does not decrement inventory or send order confirmation.
+ */
+export async function handleFailedPaymentIntent(paymentIntent: Stripe.PaymentIntent): Promise<void> {
+  const rawOrderId = paymentIntent.metadata?.orderId || paymentIntent.metadata?.wc_order_id;
+  if (!rawOrderId) return;
+  const orderId = parseInt(rawOrderId, 10);
+  if (isNaN(orderId)) return;
+
+  try {
+    const existing = await fetchWooCommerceOrder(orderId);
+    if (!existing || existing.status !== "pending") {
+      return;
+    }
+    await updateWooCommerceOrder(orderId, {
+      status: "failed",
+      customer_note: `Stripe payment failed: ${paymentIntent.last_payment_error?.message || "Payment unconfirmed or declined."}`,
+    });
+    console.log(`[stripe-sync] Order #${orderId} marked as failed following payment failure.`);
+  } catch (err) {
+    console.warn(`[stripe-sync] Could not mark order #${orderId} as failed:`, err);
+  }
+}
+

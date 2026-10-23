@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
+import { createWooCommerceOrder, updateWooCommerceOrder } from "@/lib/woocommerce";
+import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
   apiVersion: "2023-10-16" as any,
@@ -38,14 +40,25 @@ export async function POST(req: Request) {
   try {
     const { items, shippingMethod, form, couponCode, previousPaymentIntentId } = await req.json();
 
-    // ── Cleanup: Cancel the previous Payment Intent if the customer is retrying
-    //    checkout. This prevents orphaned incomplete PIs from piling up in Stripe. ──
+    // ── Cleanup: Cancel the previous Payment Intent and mark superseded pending order cancelled ──
     if (previousPaymentIntentId) {
       try {
         const oldPi = await stripe.paymentIntents.retrieve(previousPaymentIntentId);
         if (oldPi.status === "requires_payment_method" || oldPi.status === "requires_confirmation" || oldPi.status === "requires_action") {
           await stripe.paymentIntents.cancel(previousPaymentIntentId);
           console.log(`[stripe-intent] Cancelled previous PI ${previousPaymentIntentId}`);
+        }
+        const oldOrderId = oldPi.metadata?.orderId || oldPi.metadata?.wc_order_id;
+        if (oldOrderId) {
+          try {
+            await updateWooCommerceOrder(parseInt(oldOrderId, 10), {
+              status: "cancelled",
+              customer_note: `Checkout session replaced by new payment intent.`,
+            });
+            console.log(`[stripe-intent] Cancelled previous pending order #${oldOrderId}`);
+          } catch (cancelErr) {
+            console.warn(`[stripe-intent] Could not cancel previous order #${oldOrderId}:`, cancelErr);
+          }
         }
       } catch (err) {
         // Non-critical: the old PI may have already expired or been cancelled
@@ -148,12 +161,30 @@ export async function POST(req: Request) {
       }
     }
 
-    // Create the Stripe PaymentIntent and embed the cart snapshot for webhook-side
-    // WooCommerce order creation after payment has actually completed.
-    // NOTE: We intentionally do NOT pre-create a WooCommerce order here.
-    // The WC order is created only upon confirmed payment (via the Stripe webhook
-    // or the success-page fallback). This prevents orphaned "pending" orders when
-    // users pay via PayPal or abandon checkout.
+    // ── Atomic Pending-Order-First Lifecycle (DQP-5) ─────────────────────
+    // Pre-create WooCommerce pending order so coupons, tax, and order items are
+    // validated and committed before payment capture.
+    let pendingOrderId: number | undefined;
+    if (form && items && items.length > 0) {
+      try {
+        const pendingPayload = buildPendingOrderPayload({
+          items,
+          form,
+          shippingCost: validation.shippingCost,
+          shippingTitle: validation.shippingTitle || "Free Delivery",
+          paymentProvider: "stripe",
+          couponCode,
+          customerId: session?.user?.id ? Number(session.user.id) : 0,
+        });
+
+        const pendingOrder = await createWooCommerceOrder(pendingPayload);
+        pendingOrderId = pendingOrder.id;
+        console.log(`[stripe-intent] Pre-created pending WooCommerce order #${pendingOrderId}`);
+      } catch (orderErr) {
+        console.warn("[stripe-intent] Notice: could not pre-create pending order:", orderErr);
+      }
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInPence,
       currency: "gbp",
@@ -172,6 +203,8 @@ export async function POST(req: Request) {
         delivery_address: deliveryAddress ? JSON.stringify(deliveryAddress) : "",
         billing_address: billingAddress ? JSON.stringify(billingAddress) : "",
         wc_customer_id: session?.user?.id ? String(session.user.id) : "",
+        orderId: pendingOrderId ? String(pendingOrderId) : "",
+        wc_order_id: pendingOrderId ? String(pendingOrderId) : "",
       },
     });
 
@@ -198,6 +231,7 @@ export async function POST(req: Request) {
       clientSecret: paymentIntent.client_secret,
       totalCalculated: validation.finalTotal,
       paymentIntentId: paymentIntent.id,
+      orderId: pendingOrderId,
       savedCards,
     });
   } catch (error: unknown) {

@@ -356,6 +356,7 @@ function StripePaymentForm({
   showBillingAddress,
   savedCards,
   clientSecret,
+  orderId,
   agreedToTerms,
   onSuccess,
 }: {
@@ -364,9 +365,11 @@ function StripePaymentForm({
   showBillingAddress: boolean;
   savedCards: any[];
   clientSecret: string;
+  orderId?: number | null;
   agreedToTerms: boolean;
-  onSuccess: ({ paymentIntentId }?: {
+  onSuccess: ({ paymentIntentId, orderId }?: {
     paymentIntentId?: string;
+    orderId?: number | null;
   }) => void;
 }) {
   const stripe = useStripe();
@@ -408,7 +411,7 @@ function StripePaymentForm({
       alert(error.message || "Payment failed. Please try a different card.");
       setProcessing(false);
     } else if (paymentIntent && paymentIntent.status === "succeeded") {
-      onSuccess({ paymentIntentId: paymentIntent.id });
+      onSuccess({ paymentIntentId: paymentIntent.id, orderId });
     } else {
       setProcessing(false);
     }
@@ -455,7 +458,7 @@ function StripePaymentForm({
       elements,
       clientSecret,
       confirmParams: {
-        return_url: window.location.origin + "/checkout/success",
+        return_url: window.location.origin + `/checkout/success${orderId ? `?order=${orderId}` : ""}`,
         payment_method_data: {
           billing_details: {
             name: billingName || undefined,
@@ -472,7 +475,7 @@ function StripePaymentForm({
       alert(error.message || "Payment failed. Please check your card details and try again.");
       setProcessing(false);
     } else if (paymentIntent && paymentIntent.status === "succeeded") {
-      onSuccess({ paymentIntentId: paymentIntent.id });
+      onSuccess({ paymentIntentId: paymentIntent.id, orderId });
     } else {
       setProcessing(false);
     }
@@ -869,6 +872,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   // Track the active PI so we can cancel it if the customer
   // retries checkout (prevents orphaned payment intents).
   const activePaymentIntentIdRef = useRef<string>("");
+  // Track pre-created WooCommerce order ID (DQP-5) for immediate success confirmation
+  const activeOrderIdRef = useRef<number | null>(null);
 
   // Restore previous checkout session from sessionStorage (survives page refreshes)
   useEffect(() => {
@@ -1107,6 +1112,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
           activePaymentIntentIdRef.current = data.paymentIntentId;
           try { sessionStorage.setItem("dqp_active_pi", data.paymentIntentId); } catch {}
         }
+        if (data.orderId) {
+          activeOrderIdRef.current = Number(data.orderId);
+        }
       } else {
         alert(data.error || "Failed to initialise payment. Please check your basket.");
       }
@@ -1148,13 +1156,15 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     void initialiseCardPayment();
   }, [currentStep, clientSecret, fetchingSecret, initialiseCardPayment, processing, validateDetails]);
 
-  function handleSuccess({ paymentIntentId, orderId, orderNumber }: { paymentIntentId?: string; orderId?: number; orderNumber?: string | null } = {}) {
+  function handleSuccess({ paymentIntentId, orderId, orderNumber }: { paymentIntentId?: string; orderId?: number | null; orderNumber?: string | null } = {}) {
+    const resolvedOrderId = orderNumber || (orderId ? String(orderId) : (activeOrderIdRef.current ? String(activeOrderIdRef.current) : undefined));
+
     // ── GA4: persist purchase payload to sessionStorage before basket is cleared ──
     // The basket is cleared immediately below and will be gone by the time the
     // success page mounts, so we snapshot the data here and consume it there.
     try {
       const ga4PurchasePayload = {
-        transaction_id: orderNumber ?? orderId?.toString() ?? paymentIntentId ?? '',
+        transaction_id: resolvedOrderId ?? paymentIntentId ?? '',
         value: finalTotal,
         currency: 'GBP',
         shipping: shippingCost,
@@ -1175,15 +1185,16 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     if (!directCheckoutItem) {
       clearBasket();
     }
-    if (orderNumber) {
-      router.push(`/checkout/success?order=${encodeURIComponent(orderNumber)}`);
-    } else if (paymentIntentId) {
-      router.push(`/checkout/success?pi=${encodeURIComponent(paymentIntentId)}`);
-    } else if (orderId) {
-      router.push(`/checkout/success?order=${orderId}`);
-    } else {
-      router.push("/checkout/success");
+
+    const params = new URLSearchParams();
+    if (resolvedOrderId) {
+      params.set("order", resolvedOrderId);
     }
+    if (paymentIntentId) {
+      params.set("pi", paymentIntentId);
+    }
+    const query = params.toString();
+    router.push(query ? `/checkout/success?${query}` : "/checkout/success");
   }
 
   /* ─── Empty basket ─── */
@@ -1690,6 +1701,10 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                                 const capData = await capRes.json();
 
                                 if (capData.success) {
+                                  if (capData.orderId) {
+                                    handleSuccess({ orderId: capData.orderId });
+                                    return;
+                                  }
                                   const wcRes = await fetch("/api/checkout/create-wc-order", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
@@ -1766,6 +1781,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                                 showBillingAddress={showBillingAddress}
                                 clientSecret={clientSecret}
                                 savedCards={savedCards}
+                                orderId={activeOrderIdRef.current}
                                 agreedToTerms={agreedToTerms}
                                 onSuccess={handleSuccess}
                               />

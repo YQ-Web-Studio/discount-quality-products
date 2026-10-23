@@ -23,6 +23,7 @@
     "test:env:stop": "wp-env stop",
     "test:env:clean": "wp-env clean all",
     "test:webhook": "tsx backend/tools/simulate-stripe-webhook.ts",
+    "reconcile:stripe": "tsx backend/tools/reconcile-stripe-orders.ts",
     "prepare": "husky"
   },
   "lint-staged": {

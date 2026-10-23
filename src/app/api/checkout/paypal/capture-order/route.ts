@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { validateCartTotals } from "@/lib/checkout";
+import { createWooCommerceOrder, updateWooCommerceOrder, fetchWooCommerceOrder } from "@/lib/woocommerce";
+import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
+import { sendConfirmationEmailForOrder } from "@/lib/stripe-sync";
 
 type PayPalCaptureResponse = {
   status?: string;
@@ -54,11 +57,12 @@ async function readPayPalResponse(response: Response): Promise<PayPalCaptureResp
 
 export async function POST(req: Request) {
   try {
-    const { orderID, items, shippingMethod, form, couponCode } = (await req.json()) as {
+    const { orderID, wcOrderId, items, shippingMethod, form, couponCode } = (await req.json()) as {
       orderID?: string;
+      wcOrderId?: number | string;
       items?: Array<{ id: string; quantity: number }>;
       shippingMethod?: string;
-      form?: { country?: string; city: string; postcode: string; email?: string };
+      form?: any;
       couponCode?: string;
     };
 
@@ -142,14 +146,42 @@ export async function POST(req: Request) {
       
       const payerId = (data.payer as any)?.payer_id ?? "";
 
-      if (!captureId) {
-        console.warn("[paypal/capture-order] Capture completed but no capture identifier was returned", {
-          body: data,
-        });
+      let resolvedOrderId: number | undefined = wcOrderId ? Number(wcOrderId) : undefined;
+      const customId = purchaseUnit?.custom_id || (data.purchase_units?.[0] as any)?.custom_id;
+      if (!resolvedOrderId && customId) {
+        const parsed = parseInt(String(customId), 10);
+        if (!isNaN(parsed)) resolvedOrderId = parsed;
+      }
+
+      if (resolvedOrderId) {
+        try {
+          console.log(`[paypal/capture-order] Promoting pending WooCommerce order #${resolvedOrderId} to processing...`);
+          await updateWooCommerceOrder(resolvedOrderId, {
+            status: "processing",
+            set_paid: true,
+            transaction_id: captureId,
+          });
+
+          // Send confirmation email
+          const order = await fetchWooCommerceOrder(resolvedOrderId);
+          if (order && form?.email) {
+            await sendConfirmationEmailForOrder(order, {
+              fn: form.firstName,
+              ln: form.lastName,
+              em: form.email,
+              a1: form.address1,
+              ct: form.city,
+              pc: form.postcode,
+            });
+          }
+        } catch (updateErr) {
+          console.error(`[paypal/capture-order] Warning promoting order #${resolvedOrderId}:`, updateErr);
+        }
       }
 
       return NextResponse.json({
         success: true,
+        orderId: resolvedOrderId,
         captureId,
         payerId,
         captureDetails: data,
