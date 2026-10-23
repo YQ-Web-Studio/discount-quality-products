@@ -17,6 +17,12 @@
     "wp:seed": "tsx backend/tools/seed-local-wp.ts",
     "wp:sync-snippets": "tsx backend/tools/sync-snippets.ts",
     "wp:drift-check": "tsx backend/tools/drift-check.ts",
+    "test:env:setup": "npm run test:env:start && npm run test:env:seed",
+    "test:env:start": "wp-env start",
+    "test:env:seed": "tsx backend/tools/seed-local-wp.ts",
+    "test:env:stop": "wp-env stop",
+    "test:env:clean": "wp-env clean all",
+    "test:webhook": "tsx backend/tools/simulate-stripe-webhook.ts",
     "prepare": "husky"
   },
   "lint-staged": {
