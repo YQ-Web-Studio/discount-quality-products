@@ -4,6 +4,7 @@ import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { validateCartTotals } from "@/lib/checkout";
+import { verifyPaymentServerSide } from "@/lib/server-payment-verify";
 import React from "react";
 
 interface CheckoutCustomerForm {
@@ -84,6 +85,30 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: validation.error || "Cart validation failed." },
         { status: 400 }
+      );
+    }
+
+    // ── Server-Side Payment Verification Guard (DQP-5) ────────────────────────
+    // Reject any request where the payment cannot be verified server-side with
+    // PayPal or Stripe, or where the captured amount does not match finalTotal.
+    if (!transactionId) {
+      return NextResponse.json(
+        { error: "Missing required payment transaction reference." },
+        { status: 400 }
+      );
+    }
+
+    const paymentVerification = await verifyPaymentServerSide({
+      provider: paymentProvider || "unknown",
+      transactionId,
+      expectedAmount: validation.finalTotal,
+    });
+
+    if (!paymentVerification.verified) {
+      console.warn(`[create-wc-order] Security rejection: unverified payment "${transactionId}": ${paymentVerification.error}`);
+      return NextResponse.json(
+        { error: `Payment verification failed: ${paymentVerification.error || "Invalid or unverified transaction reference."}` },
+        { status: 403 }
       );
     }
 
