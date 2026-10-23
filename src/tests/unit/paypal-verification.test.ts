@@ -102,5 +102,51 @@ describe('server-side payment verification (DQP-5)', () => {
       expect(result.verified).toBe(false);
       expect(result.error).toBeDefined();
     });
+
+    it('rejects unsupported payment providers', async () => {
+      const result = await verifyPaymentServerSide({
+        provider: 'crypto_coin',
+        transactionId: 'valid_tx_12345',
+        expectedAmount: 89.02,
+      });
+
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain('Unsupported payment provider');
+    });
+
+    it('returns error if Stripe secret key is not configured', async () => {
+      const originalSecret = process.env.STRIPE_SECRET_KEY;
+      delete process.env.STRIPE_SECRET_KEY;
+
+      const result = await verifyPaymentServerSide({
+        provider: 'stripe',
+        transactionId: 'pi_test_123456789',
+        expectedAmount: 89.02,
+      });
+
+      process.env.STRIPE_SECRET_KEY = originalSecret;
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain('Stripe secret key not configured');
+    });
+
+    it('returns error if PayPal credentials are not configured', async () => {
+      const origId = process.env.PAYPAL_CLIENT_ID;
+      const origSecret = process.env.PAYPAL_CLIENT_SECRET;
+      delete process.env.PAYPAL_CLIENT_ID;
+      delete process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+      delete process.env.PAYPAL_CLIENT_SECRET;
+
+      const result = await verifyPaymentServerSide({
+        provider: 'paypal',
+        transactionId: 'capture_12345',
+        expectedAmount: 89.02,
+      });
+
+      if (origId) process.env.PAYPAL_CLIENT_ID = origId;
+      if (origSecret) process.env.PAYPAL_CLIENT_SECRET = origSecret;
+
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain('PayPal credentials not configured');
+    });
   });
 });

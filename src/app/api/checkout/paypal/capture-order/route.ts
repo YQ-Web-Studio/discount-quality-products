@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { validateCartTotals } from "@/lib/checkout";
 import { createWooCommerceOrder, updateWooCommerceOrder, fetchWooCommerceOrder } from "@/lib/woocommerce";
-import { sendEmail } from "@/lib/email";
-import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
-import React from "react";
+import { sendConfirmationEmailForOrder } from "@/lib/stripe-sync";
 
 type PayPalCaptureResponse = {
   status?: string;
@@ -149,7 +147,7 @@ export async function POST(req: Request) {
       const payerId = (data.payer as any)?.payer_id ?? "";
 
       let resolvedOrderId: number | undefined = wcOrderId ? Number(wcOrderId) : undefined;
-      const customId = purchaseUnit?.custom_id || data.purchase_units?.[0]?.custom_id;
+      const customId = purchaseUnit?.custom_id || (data.purchase_units?.[0] as any)?.custom_id;
       if (!resolvedOrderId && customId) {
         const parsed = parseInt(String(customId), 10);
         if (!isNaN(parsed)) resolvedOrderId = parsed;
@@ -167,25 +165,13 @@ export async function POST(req: Request) {
           // Send confirmation email
           const order = await fetchWooCommerceOrder(resolvedOrderId);
           if (order && form?.email) {
-            await sendEmail({
-              to: form.email,
-              subject: `Order Confirmation - #${order.id}`,
-              react: React.createElement(OrderConfirmationEmail, {
-                orderId: order.id,
-                customerName: `${form.firstName || ""} ${form.lastName || ""}`.trim() || "Valued Customer",
-                shippingAddress: {
-                  street: form.address1 || "",
-                  city: form.city || "",
-                  postalCode: form.postcode || "",
-                  country: form.country || "United Kingdom",
-                },
-                items: (order.line_items || []).map((li: any) => ({
-                  name: li.name,
-                  quantity: li.quantity,
-                  price: (parseFloat(li.total || "0") + parseFloat(li.total_tax || "0")).toFixed(2),
-                })),
-                total: parseFloat(order.total || "0").toFixed(2),
-              }),
+            await sendConfirmationEmailForOrder(order, {
+              fn: form.firstName,
+              ln: form.lastName,
+              em: form.email,
+              a1: form.address1,
+              ct: form.city,
+              pc: form.postcode,
             });
           }
         } catch (updateErr) {

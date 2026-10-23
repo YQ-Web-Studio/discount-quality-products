@@ -135,6 +135,36 @@ npm run test:webhook -- --event=payment_intent.payment_failed --orderId=1001 --a
 
 ---
 
+---
+
+## Historical Stripe Order Reconciliation Runbook (DQP-5)
+
+When a customer is charged in Stripe but order processing failed or timed out (e.g. the 9 Oct 2026 incident with Andrew Cook `acook@fiveacresgarage.co.uk`), use the reconciliation CLI to audit and restore orphan charges.
+
+### 1. Audit / Dry-Run Mode (Safe)
+Audits Stripe charges against WooCommerce without modifying any orders or charging cards:
+
+```bash
+# Audit all Stripe charges since a specific ISO date
+npm run reconcile:stripe -- --since=2026-10-01
+
+# Audit a specific PaymentIntent or Charge
+npm run reconcile:stripe -- --pi=pi_3UOeBh4Tt6mIhQxV1cNLUZOX
+```
+
+### 2. Live Recovery Execution
+Once verified in dry-run mode, pass `--execute` to create missing orders in WooCommerce in `processing` status with full line items, delivery metadata, and transaction IDs:
+
+```bash
+# Recover specific missing order
+npm run reconcile:stripe -- --pi=pi_3UOeBh4Tt6mIhQxV1cNLUZOX --execute
+
+# Recover all orphans since an incident date
+npm run reconcile:stripe -- --since=2026-10-01 --execute
+```
+
+---
+
 ## Troubleshooting
 
 ### 1. Port 8888 is already in use
@@ -145,3 +175,4 @@ If `wp-env start` fails with `Cannot connect to the Docker daemon`, start Docker
 
 ### 3. Missing REST API keys or Unauthorized (401)
 Run `npm run test:env:seed` to reinject `ck_local_test` and `cs_local_test` into the WooCommerce database and regenerate `.env.test.local`.
+
