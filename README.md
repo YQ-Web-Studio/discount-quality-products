@@ -82,6 +82,17 @@ npm run build
 npm run start
 ```
 
+### 6. Local & CI Testing Environment
+For full instructions on launching the local WordPress Docker container, seeding edge-case products/coupons, and simulating Stripe webhooks, see the [Contributor Testing Runbook](docs/testing.md).
+
+```bash
+# One-command isolated setup (Docker + WooCommerce + deterministic fixtures):
+npm run test:env:setup
+
+# Simulate signed Stripe webhook events locally without cloud accounts:
+npm run test:webhook -- --event=payment_intent.succeeded --orderId=1001 --amount=8902
+```
+
 ---
 
 ## License
