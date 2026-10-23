@@ -17,6 +17,38 @@
       "status": "publish"
     },
     {
+      "name": "Out of Stock Replacement Lamp 60W",
+      "slug": "out-of-stock-replacement-lamp",
+      "regular_price": "12.50",
+      "category_slug": "lighting-bulbs",
+      "stock_quantity": 0,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "Low Stock Dimmable Spotlight Bulb 5W",
+      "slug": "low-stock-dimmable-spotlight-bulb",
+      "regular_price": "8.99",
+      "category_slug": "lighting-bulbs",
+      "stock_quantity": 2,
+      "manage_stock": true,
+      "status": "publish"
+    },
+    {
+      "name": "Verified Low Stock GU10 Halogen Bulb 50W",
+      "slug": "verified-low-stock-gu10-halogen-bulb",
+      "regular_price": "4.99",
+      "category_slug": "lighting-bulbs",
+      "stock_quantity": 2,
+      "manage_stock": true,
+      "status": "publish",
+      "tags": ["verified-stock"],
+      "meta_data": [
+        { "key": "_bypass_low_stock_guard", "value": "yes" },
+        { "key": "bypass_low_stock_guard", "value": "yes" }
+      ]
+    },
+    {
       "name": "High-Speed Braided USB-C to USB-C Cable 2m",
       "slug": "high-speed-braided-usb-c-cable-2m",
       "regular_price": "4.49",
@@ -67,13 +99,41 @@
       "code": "THANKYOU10",
       "amount": "10",
       "discount_type": "percent",
-      "description": "10% off entire order"
+      "description": "10% off entire order",
+      "usage_limit_per_user": 1,
+      "minimum_amount": "0.00"
     },
     {
       "code": "WELCOME5",
       "amount": "5",
       "discount_type": "fixed_cart",
-      "description": "£5 off initial order"
+      "description": "£5 off initial order",
+      "usage_limit_per_user": 1,
+      "minimum_amount": "0.00"
+    },
+    {
+      "code": "EXPIRED20",
+      "amount": "20",
+      "discount_type": "percent",
+      "description": "Expired promotional coupon",
+      "date_expires": "2020-01-01T00:00:00",
+      "usage_limit_per_user": 1,
+      "minimum_amount": "0.00"
+    },
+    {
+      "code": "LIMITREACHED",
+      "amount": "15",
+      "discount_type": "percent",
+      "description": "Coupon with usage limit exhausted",
+      "usage_limit": 0,
+      "minimum_amount": "0.00"
+    },
+    {
+      "code": "MINSPEND50",
+      "amount": "10",
+      "discount_type": "fixed_cart",
+      "description": "£10 off orders over £50",
+      "minimum_amount": "50.00"
     }
   ]
 }
