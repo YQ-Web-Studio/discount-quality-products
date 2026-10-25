@@ -240,6 +240,16 @@ export function buildRecoveryOrderPayload(params: {
   return payload;
 }
 
+export function isEligibleReconciliationOrder(order?: { id: number; status?: string } | null): boolean {
+  if (!order) return false;
+  const normalizedStatus = order.status?.toLowerCase().trim();
+  return (
+    normalizedStatus !== 'cancelled' &&
+    normalizedStatus !== 'failed' &&
+    normalizedStatus !== 'refunded'
+  );
+}
+
 export function matchChargeWithOrders(
   chargeId: string,
   paymentIntentId: string,
@@ -255,25 +265,23 @@ export function matchChargeWithOrders(
   customerEmail?: string,
   claimedOrderIds?: Set<number>
 ): number | null {
+  // Pass 1: Prioritize exact matches (transaction_id or meta_data) across ALL orders
   for (const order of existingOrders) {
-    // 0. Skip already claimed orders in this run to avoid duplicate assignments
     if (claimedOrderIds?.has(order.id)) {
       continue;
     }
 
-    // Skip cancelled, failed, or refunded orders
-    const normalizedStatus = order.status?.toLowerCase().trim();
-    if (normalizedStatus === 'cancelled' || normalizedStatus === 'failed' || normalizedStatus === 'refunded') {
+    if (!isEligibleReconciliationOrder(order)) {
       continue;
     }
 
-    // 1. Check direct transaction_id match
+    // 1a. Check direct transaction_id match
     if (order.transaction_id && (order.transaction_id === chargeId || order.transaction_id === paymentIntentId)) {
       claimedOrderIds?.add(order.id);
       return order.id;
     }
 
-    // 2. Check direct meta_data match
+    // 1b. Check direct meta_data match
     if (order.meta_data && Array.isArray(order.meta_data)) {
       const matchMeta = order.meta_data.some(
         (m) =>
@@ -287,8 +295,18 @@ export function matchChargeWithOrders(
         return order.id;
       }
     }
+  }
 
-    // 3. Fallback: Check customer email and exact amount
+  // Pass 2: Fallback to customer email and exact amount heuristic
+  for (const order of existingOrders) {
+    if (claimedOrderIds?.has(order.id)) {
+      continue;
+    }
+
+    if (!isEligibleReconciliationOrder(order)) {
+      continue;
+    }
+
     // Ensure order does NOT belong to a different Stripe payment
     const hasConflictingStripeId =
       (order.transaction_id &&
@@ -353,7 +371,7 @@ export function parseReconcileCliArgs(argv: string[]): ReconcileCliOptions {
   };
 }
 
-export async function runReconciliation(): Promise<void> {
+export async function runReconciliation(customStripe?: Stripe): Promise<void> {
   loadEnvironment();
 
   const options = parseReconcileCliArgs(process.argv.slice(2));
@@ -366,16 +384,18 @@ export async function runReconciliation(): Promise<void> {
   }
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) {
+  if (!stripeKey && !customStripe) {
     console.warn('[reconcile] Warning: STRIPE_SECRET_KEY is not configured in environment.');
     console.log('[reconcile] Reconciliation requires a valid Stripe key.');
     return;
   }
 
-  const stripe = new Stripe(stripeKey, {
-    apiVersion: '2023-10-16' as any,
-    maxNetworkRetries: 3,
-  });
+  const stripe =
+    customStripe ||
+    new Stripe(stripeKey!, {
+      apiVersion: '2023-10-16' as any,
+      maxNetworkRetries: 3,
+    });
 
   // Pre-load recent WooCommerce orders for high-speed, rate-limit-friendly deduplication
   console.log('[reconcile] Pre-loading existing WooCommerce orders for deduplication...');
@@ -428,6 +448,8 @@ export async function runReconciliation(): Promise<void> {
 
     const customerEmail = charge.billing_details?.email || charge.receipt_email || '';
     let lookupFailed = false;
+    let existingIneligibleOrderId: number | null = null;
+    let existingIneligibleStatus: string | undefined = undefined;
 
     // 1. Check in-memory index
     let matchedOrderId = matchChargeWithOrders(charge.id, piId, existingOrders, charge.amount, customerEmail, claimedOrderIds);
@@ -437,8 +459,13 @@ export async function runReconciliation(): Promise<void> {
       try {
         const orderFromPi = await searchWooCommerceOrderByPaymentIntent(piId);
         if (orderFromPi && !claimedOrderIds.has(orderFromPi.id)) {
-          matchedOrderId = orderFromPi.id;
-          claimedOrderIds.add(orderFromPi.id);
+          if (isEligibleReconciliationOrder(orderFromPi)) {
+            matchedOrderId = orderFromPi.id;
+            claimedOrderIds.add(orderFromPi.id);
+          } else {
+            existingIneligibleOrderId = orderFromPi.id;
+            existingIneligibleStatus = orderFromPi.status;
+          }
         }
       } catch (err) {
         console.warn(`[reconcile] Error looking up PI ${piId} in WooCommerce:`, err);
@@ -451,8 +478,13 @@ export async function runReconciliation(): Promise<void> {
       try {
         const orderFromCharge = await searchWooCommerceOrderByPaymentIntent(charge.id);
         if (orderFromCharge && !claimedOrderIds.has(orderFromCharge.id)) {
-          matchedOrderId = orderFromCharge.id;
-          claimedOrderIds.add(orderFromCharge.id);
+          if (isEligibleReconciliationOrder(orderFromCharge)) {
+            matchedOrderId = orderFromCharge.id;
+            claimedOrderIds.add(orderFromCharge.id);
+          } else if (!existingIneligibleOrderId) {
+            existingIneligibleOrderId = orderFromCharge.id;
+            existingIneligibleStatus = orderFromCharge.status;
+          }
         }
       } catch (err) {
         console.warn(`[reconcile] Error looking up Charge ${charge.id} in WooCommerce:`, err);
@@ -463,6 +495,8 @@ export async function runReconciliation(): Promise<void> {
     if (matchedOrderId) {
       verifiedCount++;
       console.log(`✓ [Verified] PI ${piId} (Charge: ${charge.id}) -> Order #${matchedOrderId} (£${(charge.amount / 100).toFixed(2)})`);
+    } else if (existingIneligibleOrderId) {
+      console.warn(`⚠ [SKIPPED] Found order #${existingIneligibleOrderId} for PI ${piId} with ineligible status '${existingIneligibleStatus}'; skipping recovery to avoid duplicate order creation.`);
     } else if (lookupFailed) {
       console.warn(`⚠ [SKIPPED] Lookup failed due to WooCommerce error for Charge ${charge.id} (PI: ${piId}); skipping recovery to avoid duplicate order creation.`);
     } else {

@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import Stripe from 'stripe';
+import * as woocommerce from '../../../src/lib/woocommerce';
 import {
   parsePaymentIntentMetadata,
   buildRecoveryOrderPayload,
   matchChargeWithOrders,
   parseReconcileCliArgs,
+  isEligibleReconciliationOrder,
+  runReconciliation,
 } from '../../../backend/tools/reconcile-stripe-orders';
 
 describe('reconcile-stripe-orders engine', () => {
@@ -290,6 +294,47 @@ describe('reconcile-stripe-orders engine', () => {
       expect(matchChargeWithOrders('ch_6', 'pi_6', orders, undefined, 'user@example.com')).toBeNull();
     });
 
+    it('prioritizes a later exact Stripe ID match over an earlier heuristic email/amount match', () => {
+      const orders = [
+        {
+          id: 101,
+          total: '11.99',
+          billing: { email: 'customer@example.com' },
+        },
+        {
+          id: 102,
+          transaction_id: 'ch_exact_match_999',
+          total: '11.99',
+          billing: { email: 'customer@example.com' },
+        },
+      ];
+
+      const claimed = new Set<number>();
+      const match = matchChargeWithOrders(
+        'ch_exact_match_999',
+        'pi_exact_match_999',
+        orders,
+        1199,
+        'customer@example.com',
+        claimed
+      );
+
+      // Must select the exact match (102), not the earlier heuristic match (101)
+      expect(match).toBe(102);
+      expect(claimed.has(102)).toBe(true);
+      expect(claimed.has(101)).toBe(false);
+    });
+
+    it('validates isEligibleReconciliationOrder rejects cancelled, failed, and refunded statuses', () => {
+      expect(isEligibleReconciliationOrder({ id: 1, status: 'cancelled' })).toBe(false);
+      expect(isEligibleReconciliationOrder({ id: 2, status: 'failed' })).toBe(false);
+      expect(isEligibleReconciliationOrder({ id: 3, status: 'refunded' })).toBe(false);
+      expect(isEligibleReconciliationOrder({ id: 4, status: 'processing' })).toBe(true);
+      expect(isEligibleReconciliationOrder({ id: 5, status: 'completed' })).toBe(true);
+      expect(isEligibleReconciliationOrder({ id: 6, status: 'pending' })).toBe(true);
+      expect(isEligibleReconciliationOrder(null)).toBe(false);
+    });
+
     it('returns null when charge is an orphan missing from WooCommerce', () => {
       const orders = [{ id: 1001, transaction_id: 'ch_unrelated' }];
       const match = matchChargeWithOrders('ch_3UOeBh4Tt6mIhQxV1b5sx7M7', 'pi_3UOeBh4Tt6mIhQxV1cNLUZOX', orders);
@@ -327,6 +372,95 @@ describe('reconcile-stripe-orders engine', () => {
       expect(parseReconcileCliArgs(['--include-pre-sep26', '--since=2026-10-05']).sinceTimestamp).toBe(
         Math.floor(new Date('2026-10-05').getTime() / 1000)
       );
+    });
+  });
+
+  describe('runReconciliation error and status handling', () => {
+    const originalArgv = process.argv;
+    const originalStripeKey = process.env.STRIPE_SECRET_KEY;
+
+    beforeEach(() => {
+      vi.restoreAllMocks();
+      process.env.STRIPE_SECRET_KEY = 'sk_test_mock_secret_key_123';
+      process.argv = ['node', 'reconcile-stripe-orders.ts', '--since=2026-10-01'];
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      process.argv = originalArgv;
+      if (originalStripeKey !== undefined) {
+        process.env.STRIPE_SECRET_KEY = originalStripeKey;
+      } else {
+        delete process.env.STRIPE_SECRET_KEY;
+      }
+    });
+
+    it('does not call createWooCommerceOrder when live WooCommerce lookup throws', async () => {
+      const mockCharge = {
+        id: 'ch_error_charge_123',
+        status: 'succeeded',
+        payment_intent: 'pi_error_pi_123',
+        amount: 2500,
+        created: 1727740800,
+        billing_details: { email: 'network-error@example.com', name: 'Network Error' },
+      };
+
+      const mockStripe = {
+        charges: {
+          list: vi.fn().mockResolvedValue({
+            data: [mockCharge],
+            has_more: false,
+          }),
+        },
+        paymentIntents: {
+          retrieve: vi.fn(),
+        },
+      } as unknown as Stripe;
+
+      vi.spyOn(woocommerce, 'fetchWooCommerceOrders').mockResolvedValue([]);
+      vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockRejectedValue(
+        new Error('WooCommerce API 503 Service Unavailable')
+      );
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockResolvedValue({ id: 9999 } as any);
+
+      await runReconciliation(mockStripe);
+
+      expect(createOrderSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not call createWooCommerceOrder when live lookup finds an ineligible order (cancelled/failed/refunded)', async () => {
+      const mockCharge = {
+        id: 'ch_cancelled_charge_123',
+        status: 'succeeded',
+        payment_intent: 'pi_cancelled_pi_123',
+        amount: 3000,
+        created: 1727740800,
+        billing_details: { email: 'cancelled@example.com', name: 'Cancelled Customer' },
+      };
+
+      const mockStripe = {
+        charges: {
+          list: vi.fn().mockResolvedValue({
+            data: [mockCharge],
+            has_more: false,
+          }),
+        },
+        paymentIntents: {
+          retrieve: vi.fn(),
+        },
+      } as unknown as Stripe;
+
+      vi.spyOn(woocommerce, 'fetchWooCommerceOrders').mockResolvedValue([]);
+      vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockResolvedValue({
+        id: 7777,
+        status: 'cancelled',
+        total: '30.00',
+      } as any);
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockResolvedValue({ id: 9999 } as any);
+
+      await runReconciliation(mockStripe);
+
+      expect(createOrderSpy).not.toHaveBeenCalled();
     });
   });
 });
