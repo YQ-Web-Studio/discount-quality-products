@@ -222,7 +222,11 @@ export function buildRecoveryOrderPayload(params: {
   };
 
   // Safe discount application without coupon_lines to avoid rest_cannot_apply_coupon error
-  if (params.discountAmount && params.discountAmount > 0) {
+  if (
+    typeof params.discountAmount === 'number' &&
+    Number.isFinite(params.discountAmount) &&
+    params.discountAmount > 0
+  ) {
     const discountExVat = (params.discountAmount / 1.2).toFixed(2);
     payload.fee_lines = [
       {
@@ -236,26 +240,48 @@ export function buildRecoveryOrderPayload(params: {
   return payload;
 }
 
+export function isEligibleReconciliationOrder(order?: { id: number; status?: string } | null): boolean {
+  if (!order) return false;
+  const normalizedStatus = order.status?.toLowerCase().trim();
+  return (
+    normalizedStatus !== 'cancelled' &&
+    normalizedStatus !== 'failed' &&
+    normalizedStatus !== 'refunded'
+  );
+}
+
 export function matchChargeWithOrders(
   chargeId: string,
   paymentIntentId: string,
   existingOrders: Array<{
     id: number;
+    status?: string;
     transaction_id?: string;
     total?: string;
     billing?: { email?: string };
     meta_data?: Array<{ key: string; value: string }>;
   }>,
   chargeAmountPence?: number,
-  customerEmail?: string
+  customerEmail?: string,
+  claimedOrderIds?: Set<number>
 ): number | null {
+  // Pass 1: Prioritize exact matches (transaction_id or meta_data) across ALL orders
   for (const order of existingOrders) {
-    // 1. Check transaction_id
+    if (claimedOrderIds?.has(order.id)) {
+      continue;
+    }
+
+    if (!isEligibleReconciliationOrder(order)) {
+      continue;
+    }
+
+    // 1a. Check direct transaction_id match
     if (order.transaction_id && (order.transaction_id === chargeId || order.transaction_id === paymentIntentId)) {
+      claimedOrderIds?.add(order.id);
       return order.id;
     }
 
-    // 2. Check meta_data
+    // 1b. Check direct meta_data match
     if (order.meta_data && Array.isArray(order.meta_data)) {
       const matchMeta = order.meta_data.some(
         (m) =>
@@ -265,15 +291,41 @@ export function matchChargeWithOrders(
           (m.key === '_stripe_source_id' && m.value === chargeId)
       );
       if (matchMeta) {
+        claimedOrderIds?.add(order.id);
         return order.id;
       }
     }
+  }
 
-    // 3. Check customer email and exact amount
-    if (chargeAmountPence && customerEmail && order.billing?.email) {
+  // Pass 2: Fallback to customer email and exact amount heuristic
+  for (const order of existingOrders) {
+    if (claimedOrderIds?.has(order.id)) {
+      continue;
+    }
+
+    if (!isEligibleReconciliationOrder(order)) {
+      continue;
+    }
+
+    // Ensure order does NOT belong to a different Stripe payment
+    const hasConflictingStripeId =
+      (order.transaction_id &&
+        (order.transaction_id.startsWith('ch_') || order.transaction_id.startsWith('pi_')) &&
+        order.transaction_id !== chargeId &&
+        order.transaction_id !== paymentIntentId) ||
+      (order.meta_data &&
+        Array.isArray(order.meta_data) &&
+        order.meta_data.some(
+          (m) =>
+            ((m.key === '_stripe_charge_id' || m.key === '_stripe_source_id') && m.value && m.value !== chargeId) ||
+            ((m.key === '_stripe_payment_intent_id' || m.key === '_stripe_intent_id') && m.value && m.value !== paymentIntentId)
+        ));
+
+    if (!hasConflictingStripeId && typeof chargeAmountPence === 'number' && customerEmail && order.billing?.email) {
       const emailMatch = order.billing.email.toLowerCase().trim() === customerEmail.toLowerCase().trim();
       const amountDiff = Math.abs(parseFloat(order.total || '0') - chargeAmountPence / 100);
       if (emailMatch && amountDiff < 0.05) {
+        claimedOrderIds?.add(order.id);
         return order.id;
       }
     }
@@ -290,8 +342,17 @@ export function parseReconcileCliArgs(argv: string[]): ReconcileCliOptions {
   };
 
   const sinceStr = getArg('since');
+  const includePreSep26 = argv.includes('--all') || argv.includes('--include-pre-sep26');
+
   // Default to 2026-09-26 00:00:00 UTC
   let sinceTimestamp = Math.floor(new Date('2026-09-26T00:00:00Z').getTime() / 1000);
+
+  if (includePreSep26) {
+    // Scan since 2026-09-01
+    sinceTimestamp = Math.floor(new Date('2026-09-01T00:00:00Z').getTime() / 1000);
+  }
+
+  // Explicit --since takes precedence over both default and --include-pre-sep26 / --all
   if (sinceStr) {
     const parsedDate = new Date(sinceStr).getTime();
     if (!isNaN(parsedDate)) {
@@ -300,12 +361,6 @@ export function parseReconcileCliArgs(argv: string[]): ReconcileCliOptions {
   }
 
   const execute = argv.includes('--execute');
-  const includePreSep26 = argv.includes('--all') || argv.includes('--include-pre-sep26');
-  if (includePreSep26 && !sinceStr) {
-    // Scan since 2026-09-01
-    sinceTimestamp = Math.floor(new Date('2026-09-01T00:00:00Z').getTime() / 1000);
-  }
-
   const targetPi = getArg('pi');
 
   return {
@@ -316,7 +371,7 @@ export function parseReconcileCliArgs(argv: string[]): ReconcileCliOptions {
   };
 }
 
-export async function runReconciliation(): Promise<void> {
+export async function runReconciliation(customStripe?: Stripe): Promise<void> {
   loadEnvironment();
 
   const options = parseReconcileCliArgs(process.argv.slice(2));
@@ -329,16 +384,18 @@ export async function runReconciliation(): Promise<void> {
   }
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) {
+  if (!stripeKey && !customStripe) {
     console.warn('[reconcile] Warning: STRIPE_SECRET_KEY is not configured in environment.');
     console.log('[reconcile] Reconciliation requires a valid Stripe key.');
     return;
   }
 
-  const stripe = new Stripe(stripeKey, {
-    apiVersion: '2023-10-16' as any,
-    maxNetworkRetries: 3,
-  });
+  const stripe =
+    customStripe ||
+    new Stripe(stripeKey!, {
+      apiVersion: '2023-10-16' as any,
+      maxNetworkRetries: 3,
+    });
 
   // Pre-load recent WooCommerce orders for high-speed, rate-limit-friendly deduplication
   console.log('[reconcile] Pre-loading existing WooCommerce orders for deduplication...');
@@ -377,6 +434,8 @@ export async function runReconciliation(): Promise<void> {
   let verifiedCount = 0;
   const recoveredOrders: Array<{ orderId: number; chargeId: string; piId: string; customer: string; amount: string }> = [];
 
+  const claimedOrderIds = new Set<number>();
+
   for (const charge of allCharges) {
     if (charge.status !== 'succeeded') continue;
 
@@ -388,37 +447,58 @@ export async function runReconciliation(): Promise<void> {
     }
 
     const customerEmail = charge.billing_details?.email || charge.receipt_email || '';
+    let lookupFailed = false;
+    let existingIneligibleOrderId: number | null = null;
+    let existingIneligibleStatus: string | undefined = undefined;
 
     // 1. Check in-memory index
-    let matchedOrderId = matchChargeWithOrders(charge.id, piId, existingOrders, charge.amount, customerEmail);
+    let matchedOrderId = matchChargeWithOrders(charge.id, piId, existingOrders, charge.amount, customerEmail, claimedOrderIds);
 
     // 2. If no in-memory match, check live WooCommerce search by PI
     if (!matchedOrderId) {
       try {
         const orderFromPi = await searchWooCommerceOrderByPaymentIntent(piId);
-        if (orderFromPi) {
-          matchedOrderId = orderFromPi.id;
+        if (orderFromPi && !claimedOrderIds.has(orderFromPi.id)) {
+          if (isEligibleReconciliationOrder(orderFromPi)) {
+            matchedOrderId = orderFromPi.id;
+            claimedOrderIds.add(orderFromPi.id);
+          } else {
+            existingIneligibleOrderId = orderFromPi.id;
+            existingIneligibleStatus = orderFromPi.status;
+          }
         }
-      } catch {
-        // Continue
+      } catch (err) {
+        console.warn(`[reconcile] Error looking up PI ${piId} in WooCommerce:`, err);
+        lookupFailed = true;
       }
     }
 
-    // 3. If still no match, check live WooCommerce search by Charge ID
-    if (!matchedOrderId) {
+    // 3. If still no match and lookups haven't failed, check live WooCommerce search by Charge ID
+    if (!matchedOrderId && !lookupFailed) {
       try {
         const orderFromCharge = await searchWooCommerceOrderByPaymentIntent(charge.id);
-        if (orderFromCharge) {
-          matchedOrderId = orderFromCharge.id;
+        if (orderFromCharge && !claimedOrderIds.has(orderFromCharge.id)) {
+          if (isEligibleReconciliationOrder(orderFromCharge)) {
+            matchedOrderId = orderFromCharge.id;
+            claimedOrderIds.add(orderFromCharge.id);
+          } else if (!existingIneligibleOrderId) {
+            existingIneligibleOrderId = orderFromCharge.id;
+            existingIneligibleStatus = orderFromCharge.status;
+          }
         }
-      } catch {
-        // Continue
+      } catch (err) {
+        console.warn(`[reconcile] Error looking up Charge ${charge.id} in WooCommerce:`, err);
+        lookupFailed = true;
       }
     }
 
     if (matchedOrderId) {
       verifiedCount++;
       console.log(`✓ [Verified] PI ${piId} (Charge: ${charge.id}) -> Order #${matchedOrderId} (£${(charge.amount / 100).toFixed(2)})`);
+    } else if (existingIneligibleOrderId) {
+      console.warn(`⚠ [SKIPPED] Found order #${existingIneligibleOrderId} for PI ${piId} with ineligible status '${existingIneligibleStatus}'; skipping recovery to avoid duplicate order creation.`);
+    } else if (lookupFailed) {
+      console.warn(`⚠ [SKIPPED] Lookup failed due to WooCommerce error for Charge ${charge.id} (PI: ${piId}); skipping recovery to avoid duplicate order creation.`);
     } else {
       orphanCount++;
       console.warn(`\n⚠ [ORPHAN FOUND] Charge ${charge.id} (PI: ${piId}) has no WooCommerce order!`);
