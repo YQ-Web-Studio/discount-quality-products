@@ -134,6 +134,28 @@ describe('reconcile-stripe-orders engine', () => {
         },
       ]);
     });
+
+    it('does not produce fee_lines when discountAmount is 0, negative, or non-numeric', () => {
+      const baseParams = {
+        chargeId: 'ch_test',
+        paymentIntentId: 'pi_test',
+        amountPence: 5000,
+        customer: { firstName: 'Test', lastName: 'User', email: 'test@example.com' },
+        items: [{ id: 101, quantity: 1 }],
+      };
+
+      const payloadZero = buildRecoveryOrderPayload({ ...baseParams, discountAmount: 0 });
+      expect(payloadZero.fee_lines).toBeUndefined();
+
+      const payloadNegative = buildRecoveryOrderPayload({ ...baseParams, discountAmount: -5 });
+      expect(payloadNegative.fee_lines).toBeUndefined();
+
+      const payloadNaN = buildRecoveryOrderPayload({ ...baseParams, discountAmount: NaN as any });
+      expect(payloadNaN.fee_lines).toBeUndefined();
+
+      const payloadNonNumeric = buildRecoveryOrderPayload({ ...baseParams, discountAmount: 'invalid' as any });
+      expect(payloadNonNumeric.fee_lines).toBeUndefined();
+    });
   });
 
   describe('matchChargeWithOrders', () => {
@@ -184,6 +206,90 @@ describe('reconcile-stripe-orders engine', () => {
       expect(match).toBe(43350);
     });
 
+    it('skips already claimed orders so duplicate charges cannot reuse them', () => {
+      const orders = [
+        {
+          id: 43350,
+          total: '11.99',
+          billing: { email: 'jaded_femme@hotmail.com' },
+        },
+      ];
+      const claimed = new Set<number>([43350]);
+
+      const match = matchChargeWithOrders('ch_second', 'pi_second', orders, 1199, 'jaded_femme@hotmail.com', claimed);
+      expect(match).toBeNull();
+    });
+
+    it('adds matched order ID to claimedOrderIds set', () => {
+      const orders = [
+        {
+          id: 43350,
+          total: '11.99',
+          billing: { email: 'jaded_femme@hotmail.com' },
+        },
+      ];
+      const claimed = new Set<number>();
+
+      const match = matchChargeWithOrders('ch_first', 'pi_first', orders, 1199, 'jaded_femme@hotmail.com', claimed);
+      expect(match).toBe(43350);
+      expect(claimed.has(43350)).toBe(true);
+    });
+
+    it('skips cancelled, failed, and refunded orders', () => {
+      const orders = [
+        { id: 101, status: 'cancelled', total: '11.99', billing: { email: 'user@example.com' } },
+        { id: 102, status: 'failed', total: '11.99', billing: { email: 'user@example.com' } },
+        { id: 103, status: 'refunded', total: '11.99', billing: { email: 'user@example.com' } },
+      ];
+
+      const match = matchChargeWithOrders('ch_untracked', 'pi_untracked', orders, 1199, 'user@example.com');
+      expect(match).toBeNull();
+    });
+
+    it('skips orders whose transaction_id or meta_data contains a conflicting Stripe ID', () => {
+      const orders = [
+        {
+          id: 104,
+          transaction_id: 'ch_different_stripe_charge',
+          total: '11.99',
+          billing: { email: 'user@example.com' },
+        },
+        {
+          id: 105,
+          total: '11.99',
+          billing: { email: 'user@example.com' },
+          meta_data: [{ key: '_stripe_charge_id', value: 'ch_another_different_charge' }],
+        },
+      ];
+
+      const match = matchChargeWithOrders('ch_current', 'pi_current', orders, 1199, 'user@example.com');
+      expect(match).toBeNull();
+    });
+
+    it('returns null on negative matching cases (different email, delta >= 0.05, missing fields)', () => {
+      const orders = [
+        {
+          id: 43350,
+          total: '11.99',
+          billing: { email: 'user@example.com' },
+        },
+      ];
+
+      // Different email
+      expect(matchChargeWithOrders('ch_1', 'pi_1', orders, 1199, 'different@example.com')).toBeNull();
+
+      // Amount difference of 0.05 or more
+      expect(matchChargeWithOrders('ch_2', 'pi_2', orders, 1205, 'user@example.com')).toBeNull();
+      expect(matchChargeWithOrders('ch_3', 'pi_3', orders, 1193, 'user@example.com')).toBeNull();
+
+      // Missing customerEmail
+      expect(matchChargeWithOrders('ch_4', 'pi_4', orders, 1199, undefined)).toBeNull();
+      expect(matchChargeWithOrders('ch_5', 'pi_5', orders, 1199, '')).toBeNull();
+
+      // Missing chargeAmountPence
+      expect(matchChargeWithOrders('ch_6', 'pi_6', orders, undefined, 'user@example.com')).toBeNull();
+    });
+
     it('returns null when charge is an orphan missing from WooCommerce', () => {
       const orders = [{ id: 1001, transaction_id: 'ch_unrelated' }];
       const match = matchChargeWithOrders('ch_3UOeBh4Tt6mIhQxV1b5sx7M7', 'pi_3UOeBh4Tt6mIhQxV1cNLUZOX', orders);
@@ -207,5 +313,21 @@ describe('reconcile-stripe-orders engine', () => {
       expect(parsed.execute).toBe(false);
       expect(parsed.sinceTimestamp).toBe(Math.floor(new Date('2026-09-26T00:00:00Z').getTime() / 1000));
     });
+
+    it('scans from 1 Sep 2026 with --include-pre-sep26 or --all unless --since is set', () => {
+      const sep1Timestamp = Math.floor(new Date('2026-09-01T00:00:00Z').getTime() / 1000);
+
+      expect(parseReconcileCliArgs(['--include-pre-sep26']).sinceTimestamp).toBe(sep1Timestamp);
+      expect(parseReconcileCliArgs(['--all']).sinceTimestamp).toBe(sep1Timestamp);
+
+      // Explicit --since takes precedence
+      expect(parseReconcileCliArgs(['--all', '--since=2026-10-01']).sinceTimestamp).toBe(
+        Math.floor(new Date('2026-10-01').getTime() / 1000)
+      );
+      expect(parseReconcileCliArgs(['--include-pre-sep26', '--since=2026-10-05']).sinceTimestamp).toBe(
+        Math.floor(new Date('2026-10-05').getTime() / 1000)
+      );
+    });
   });
 });
+
