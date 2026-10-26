@@ -31,6 +31,7 @@ vi.mock('stripe', () => {
 import * as woocommerce from '@/lib/woocommerce';
 import * as checkoutLib from '@/lib/checkout';
 import * as stripeSync from '@/lib/stripe-sync';
+import * as wpAuth from '@/lib/wordpress-auth.server';
 import Stripe from 'stripe';
 
 describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
@@ -39,6 +40,9 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
     mockPaymentIntentsCreate.mockReset();
     mockPaymentIntentsRetrieve.mockReset();
     mockPaymentIntentsCancel.mockReset();
+    stripeSync._resetInFlightPaymentIntents();
+    vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockResolvedValue(null);
+    vi.spyOn(stripeSync, 'sendConfirmationEmailForOrder').mockResolvedValue(undefined as any);
   });
 
   describe('Stripe create-intent lifecycle', () => {
@@ -318,9 +322,246 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
         })
       );
     });
+
+    it('applies promotion fee_lines when discountAmount > 0 and no couponCode is provided', async () => {
+      process.env.PAYPAL_CLIENT_ID = 'test-client';
+      process.env.PAYPAL_CLIENT_SECRET = 'test-secret';
+
+      vi.spyOn(checkoutLib, 'validateCartTotals').mockResolvedValue({
+        isValid: true,
+        subtotal: 50.00,
+        discountAmount: 10.00,
+        vat: 6.67,
+        shippingCost: 0,
+        finalTotal: 40.00,
+        shippingTitle: 'Free Delivery',
+      });
+
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockResolvedValue({
+        id: 44456,
+        status: 'processing',
+        total: '40.00',
+      } as any);
+
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oauth2/token')) {
+          return new Response(JSON.stringify({ access_token: 'mock-token' }), { status: 200 });
+        }
+        if (urlStr.includes('/v2/checkout/orders/PAYPAL-DISC') && !urlStr.includes('/capture')) {
+          return new Response(
+            JSON.stringify({
+              id: 'PAYPAL-DISC',
+              purchase_units: [{ amount: { currency_code: 'GBP', value: '40.00' } }],
+            }),
+            { status: 200 }
+          );
+        }
+        if (urlStr.includes('/capture')) {
+          return new Response(
+            JSON.stringify({
+              status: 'COMPLETED',
+              payer: { payer_id: 'PAYER-DISC' },
+              purchase_units: [{ payments: { captures: [{ id: 'CAPTURE-DISC-1' }] } }],
+            }),
+            { status: 201 }
+          );
+        }
+        return new Response(JSON.stringify({}), { status: 200 });
+      });
+
+      const { POST } = await import('@/app/api/checkout/paypal/capture-order/route');
+      const req = new Request('http://localhost:3000/api/checkout/paypal/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderID: 'PAYPAL-DISC',
+          items: [{ id: '101', quantity: 1 }],
+          shippingMethod: 'standard',
+          form: {
+            firstName: 'Ella',
+            lastName: 'Savage',
+            email: 'ella@example.com',
+            address1: '1 High Street',
+            city: 'London',
+            postcode: 'SW1A 1AA',
+            country: 'GB',
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(createOrderSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fee_lines: [
+            expect.objectContaining({
+              name: 'Promotion Discount',
+              total: '-8.33', // 10.00 / 1.2
+              tax_status: 'taxable',
+            }),
+          ],
+        })
+      );
+    });
+
+    it('assigns customerId from WordPress session when authenticated user captures PayPal order', async () => {
+      process.env.PAYPAL_CLIENT_ID = 'test-client';
+      process.env.PAYPAL_CLIENT_SECRET = 'test-secret';
+
+      vi.spyOn(wpAuth, 'getCurrentWordPressSession').mockResolvedValue({
+        user: { id: 789, name: 'Ella Savage', email: 'ella@example.com' },
+      } as any);
+
+      vi.spyOn(checkoutLib, 'validateCartTotals').mockResolvedValue({
+        isValid: true,
+        subtotal: 33.98,
+        discountAmount: 0,
+        vat: 5.66,
+        shippingCost: 0,
+        finalTotal: 33.98,
+        shippingTitle: 'Free Delivery',
+      });
+
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockResolvedValue({
+        id: 44457,
+        status: 'processing',
+        total: '33.98',
+      } as any);
+
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oauth2/token')) {
+          return new Response(JSON.stringify({ access_token: 'mock-token' }), { status: 200 });
+        }
+        if (urlStr.includes('/v2/checkout/orders/PAYPAL-AUTH') && !urlStr.includes('/capture')) {
+          return new Response(
+            JSON.stringify({
+              id: 'PAYPAL-AUTH',
+              purchase_units: [{ amount: { currency_code: 'GBP', value: '33.98' } }],
+            }),
+            { status: 200 }
+          );
+        }
+        if (urlStr.includes('/capture')) {
+          return new Response(
+            JSON.stringify({
+              status: 'COMPLETED',
+              payer: { payer_id: 'PAYER-AUTH' },
+              purchase_units: [{ payments: { captures: [{ id: 'CAPTURE-AUTH-1' }] } }],
+            }),
+            { status: 201 }
+          );
+        }
+        return new Response(JSON.stringify({}), { status: 200 });
+      });
+
+      const { POST } = await import('@/app/api/checkout/paypal/capture-order/route');
+      const req = new Request('http://localhost:3000/api/checkout/paypal/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderID: 'PAYPAL-AUTH',
+          items: [{ id: '101', quantity: 1 }],
+          shippingMethod: 'standard',
+          form: {
+            firstName: 'Ella',
+            lastName: 'Savage',
+            email: 'ella@example.com',
+            address1: '1 High Street',
+            city: 'London',
+            postcode: 'SW1A 1AA',
+            country: 'GB',
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(createOrderSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customer_id: 789,
+        })
+      );
+    });
+
+    it('does not create a duplicate order when an existing order matches PayPal capture', async () => {
+      process.env.PAYPAL_CLIENT_ID = 'test-client';
+      process.env.PAYPAL_CLIENT_SECRET = 'test-secret';
+
+      vi.spyOn(checkoutLib, 'validateCartTotals').mockResolvedValue({
+        isValid: true,
+        subtotal: 33.98,
+        discountAmount: 0,
+        vat: 5.66,
+        shippingCost: 0,
+        finalTotal: 33.98,
+        shippingTitle: 'Free Delivery',
+      });
+
+      vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockResolvedValue({
+        id: 44458,
+        status: 'processing',
+      } as any);
+
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder');
+
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oauth2/token')) {
+          return new Response(JSON.stringify({ access_token: 'mock-token' }), { status: 200 });
+        }
+        if (urlStr.includes('/v2/checkout/orders/PAYPAL-DEDUP') && !urlStr.includes('/capture')) {
+          return new Response(
+            JSON.stringify({
+              id: 'PAYPAL-DEDUP',
+              purchase_units: [{ amount: { currency_code: 'GBP', value: '33.98' } }],
+            }),
+            { status: 200 }
+          );
+        }
+        if (urlStr.includes('/capture')) {
+          return new Response(
+            JSON.stringify({
+              status: 'COMPLETED',
+              payer: { payer_id: 'PAYER-DEDUP' },
+              purchase_units: [{ payments: { captures: [{ id: 'CAPTURE-DEDUP-1' }] } }],
+            }),
+            { status: 201 }
+          );
+        }
+        return new Response(JSON.stringify({}), { status: 200 });
+      });
+
+      const { POST } = await import('@/app/api/checkout/paypal/capture-order/route');
+      const req = new Request('http://localhost:3000/api/checkout/paypal/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderID: 'PAYPAL-DEDUP',
+          items: [{ id: '101', quantity: 1 }],
+          shippingMethod: 'standard',
+          form: {
+            firstName: 'Ella',
+            lastName: 'Savage',
+            email: 'ella@example.com',
+            address1: '1 High Street',
+            city: 'London',
+            postcode: 'SW1A 1AA',
+            country: 'GB',
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.orderId).toBe(44458);
+      expect(createOrderSpy).not.toHaveBeenCalled();
+    });
   });
 
-  describe('Stripe webhook sparse metadata resilience', () => {
+  describe('Stripe webhook sparse metadata resilience and deduplication', () => {
     it('creates a recovered order instead of dropping the payment when metadata is empty or sparse', async () => {
       const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockResolvedValue({
         id: 44452,
@@ -351,6 +592,57 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
           customer_note: expect.stringContaining('ch_3UUm394Tt6mIhQxV1GbRGRM2'),
         })
       );
+    });
+
+    it('does not create a second order when an existing order references the PaymentIntent', async () => {
+      vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockResolvedValue({
+        id: 44460,
+        status: 'processing',
+      } as any);
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder');
+
+      const result = await stripeSync.processOrderFromPaymentIntent(
+        { id: 'pi_existing_123', amount: 899, currency: 'gbp', metadata: {} } as unknown as Stripe.PaymentIntent,
+        'ch_existing_123'
+      );
+
+      expect(result.id).toBe(44460);
+      expect(createOrderSpy).not.toHaveBeenCalled();
+    });
+
+    it('handles concurrent processOrderFromPaymentIntent calls safely with in-flight mutex', async () => {
+      let createCallCount = 0;
+      vi.spyOn(woocommerce, 'createWooCommerceOrder').mockImplementation(async () => {
+        createCallCount++;
+        // Simulate network latency in order creation
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return {
+          id: 44461,
+          status: 'processing',
+          total: '8.99',
+        } as any;
+      });
+
+      const sparsePaymentIntent = {
+        id: 'pi_concurrent_999',
+        amount: 899,
+        currency: 'gbp',
+        status: 'succeeded',
+        description: '1x 18W T8 Tube 3500k',
+        metadata: {},
+      } as unknown as Stripe.PaymentIntent;
+
+      // Invoke processOrderFromPaymentIntent concurrently for the same PaymentIntent
+      const [orderA, orderB] = await Promise.all([
+        stripeSync.processOrderFromPaymentIntent(sparsePaymentIntent, 'ch_concurrent_999'),
+        stripeSync.processOrderFromPaymentIntent(sparsePaymentIntent, 'ch_concurrent_999'),
+      ]);
+
+      expect(createCallCount).toBe(1);
+      expect(orderA).not.toBeNull();
+      expect(orderB).not.toBeNull();
+      expect(orderA.id).toBe(44461);
+      expect(orderB.id).toBe(44461);
     });
   });
 });

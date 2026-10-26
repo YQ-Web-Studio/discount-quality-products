@@ -110,13 +110,48 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
   }
 }
 
+// In-flight mutex map to serialize concurrent executions per PaymentIntent ID
+// Prevents race conditions between webhook deliveries and success-page fallback polling
+const inFlightPaymentIntents = new Map<string, Promise<any>>();
+
+export function _resetInFlightPaymentIntents(): void {
+  inFlightPaymentIntents.clear();
+}
+
 /**
  * Promotes an existing WooCommerce order to "processing" now that payment
  * has been confirmed. Falls back to creating a brand-new order if no linked
  * order is available (for example, if WooCommerce was unavailable at the time).
  * Returns the created or updated order.
+ * Serialized per PaymentIntent to eliminate race conditions between webhook and client polling.
  */
 export async function processOrderFromPaymentIntent(
+  paymentIntent: Stripe.PaymentIntent,
+  chargeId: string
+): Promise<any> {
+  const flightKey = paymentIntent.id;
+  const existingFlight = inFlightPaymentIntents.get(flightKey);
+  if (existingFlight) {
+    console.log(
+      `[stripe-sync] Execution already in flight for PI ${flightKey} — deduplicating and awaiting existing execution.`
+    );
+    return existingFlight;
+  }
+
+  const execution = (async () => {
+    return internalProcessOrderFromPaymentIntent(paymentIntent, chargeId);
+  })();
+
+  inFlightPaymentIntents.set(flightKey, execution);
+
+  try {
+    return await execution;
+  } finally {
+    inFlightPaymentIntents.delete(flightKey);
+  }
+}
+
+async function internalProcessOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {

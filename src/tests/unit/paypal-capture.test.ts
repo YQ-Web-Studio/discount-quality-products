@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/wordpress-auth.server', () => ({
+  getCurrentWordPressSession: vi.fn().mockResolvedValue(null),
+}));
+
 import { POST } from '@/app/api/checkout/paypal/capture-order/route';
 import * as checkoutLib from '@/lib/checkout';
 

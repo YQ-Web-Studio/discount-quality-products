@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { validateCartTotals } from "@/lib/checkout";
-import { createWooCommerceOrder, updateWooCommerceOrder, fetchWooCommerceOrder } from "@/lib/woocommerce";
+import { createWooCommerceOrder, updateWooCommerceOrder, fetchWooCommerceOrder, searchWooCommerceOrderByPaymentIntent } from "@/lib/woocommerce";
 import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
 import { sendConfirmationEmailForOrder } from "@/lib/stripe-sync";
+import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 
 type PayPalCaptureResponse = {
   status?: string;
@@ -181,36 +182,65 @@ export async function POST(req: Request) {
           console.error(`[paypal/capture-order] Warning promoting order #${resolvedOrderId}:`, updateErr);
         }
       } else {
+        // Check if an order already exists for this PayPal transaction/capture (deduplication guard)
         try {
-          console.log(`[paypal/capture-order] Creating processing WooCommerce order for capture ${captureId}...`);
-          const orderPayload = buildPendingOrderPayload({
-            items,
-            form,
-            shippingCost: validation.shippingCost ?? 0,
-            shippingTitle: validation.shippingTitle || "Standard Delivery",
-            paymentProvider: 'paypal',
-            couponCode,
-            status: 'processing',
-            setPaid: true,
-            transactionId: captureId,
-            customerNote: captureNote,
-          });
-
-          const createdOrder = await createWooCommerceOrder(orderPayload);
-          resolvedOrderId = createdOrder.id;
-
-          if (form?.email) {
-            await sendConfirmationEmailForOrder(createdOrder, {
-              fn: form.firstName,
-              ln: form.lastName,
-              em: form.email,
-              a1: form.address1,
-              ct: form.city,
-              pc: form.postcode,
-            });
+          const existing = await searchWooCommerceOrderByPaymentIntent(captureId || orderID);
+          if (existing) {
+            console.log(`[paypal/capture-order] Found existing order #${existing.number ?? existing.id} for capture ${captureId || orderID} — skipping duplicate creation.`);
+            resolvedOrderId = existing.id;
           }
-        } catch (createErr) {
-          console.error(`[paypal/capture-order] Failed to create processing order for capture ${captureId}:`, createErr);
+        } catch (searchErr) {
+          console.warn(`[paypal/capture-order] Deduplication lookup notice:`, searchErr);
+        }
+
+        if (!resolvedOrderId) {
+          try {
+            console.log(`[paypal/capture-order] Creating processing WooCommerce order for capture ${captureId}...`);
+            const session = await getCurrentWordPressSession();
+            const orderPayload = buildPendingOrderPayload({
+              items,
+              form,
+              shippingCost: validation.shippingCost ?? 0,
+              shippingTitle: validation.shippingTitle || "Standard Delivery",
+              paymentProvider: 'paypal',
+              couponCode,
+              customerId: session?.user?.id ? Number(session.user.id) : undefined,
+              status: 'processing',
+              setPaid: true,
+              transactionId: captureId,
+              customerNote: captureNote,
+            });
+
+            if (!couponCode && validation.discountAmount > 0) {
+              orderPayload.fee_lines = [
+                {
+                  name: "Promotion Discount",
+                  total: `-${(validation.discountAmount / 1.2).toFixed(2)}`,
+                  tax_status: "taxable",
+                },
+              ];
+            }
+
+            const createdOrder = await createWooCommerceOrder(orderPayload);
+            resolvedOrderId = createdOrder.id;
+
+            if (form?.email) {
+              try {
+                await sendConfirmationEmailForOrder(createdOrder, {
+                  fn: form.firstName,
+                  ln: form.lastName,
+                  em: form.email,
+                  a1: form.address1,
+                  ct: form.city,
+                  pc: form.postcode,
+                });
+              } catch (emailErr) {
+                console.error(`[paypal/capture-order] Warning: Failed to send confirmation email for order #${resolvedOrderId}:`, emailErr);
+              }
+            }
+          } catch (createErr) {
+            console.error(`[paypal/capture-order] Failed to create processing order for capture ${captureId}:`, createErr);
+          }
         }
       }
 
