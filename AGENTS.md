@@ -176,6 +176,18 @@ Agents must **never take autonomous action on external platforms (Jira, GitHub, 
 - Changed-line test coverage must be >= 80%.
 - Bug fixes must include a regression test reproducing the issue.
 - Never mock production calls against live client WordPress or payment gateways in tests. Use Vitest, MSW, or local `@wordpress/env`.
+
+## 4. Code Quality & Security Standards (Zero CodeRabbit Majors)
+To prevent recurring CodeRabbit major findings and security vulnerabilities:
+1. **Subprocess & Shell Safety**:
+   - **NEVER** use `exec` or `execSync` with template literals or string concatenation.
+   - **ALWAYS** use `execFileSync` or `spawnSync` with an explicit string array of arguments (`[binary, ...argArray]`). Spawning child processes with argument arrays prevents shell injection, respects argument boundaries (spaces/quotes), and protects complex script payloads (e.g., PHP strings).
+2. **Resource Scoping & Multi-Tenancy**:
+   - All Docker, CLI, cache, and database lookups must explicitly filter and verify ownership by the project key (`discount-products-store`).
+   - Never pick `first-match` on generic substrings (e.g. `cli-1` or `wordpress`) to prevent cross-contamination across multiple local projects.
+3. **Fallback & Error-Recovery Test Parity**:
+   - Every defensive `fallback`, degradation, or error-recovery branch must have a dedicated unit test verifying its behavior.
+   - Boundary inputs (arguments with spaces, quotes, semicolons, empty values) must be explicitly tested.
 <!-- END:engineering-workflow -->
 
 
