@@ -130,15 +130,25 @@ export function writeEnvTestLocal(
 
 let cachedCliContainer: string | null = null;
 
-function getCliContainer(): string | null {
+export function findProjectCliContainer(containerNames: string[]): string | null {
+  return (
+    containerNames.find(
+      (name) => name.includes('discount-products-store') && name.endsWith('cli-1')
+    ) || null
+  );
+}
+
+export function getCliContainer(): string | null {
   if (cachedCliContainer) return cachedCliContainer;
   try {
-    const detected = execSync('docker ps --filter "name=cli-1" --format "{{.Names}}"', {
+    const output = execSync('docker ps --format "{{.Names}}"', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    if (detected) {
-      cachedCliContainer = detected.split(/\r?\n/)[0].trim();
+    });
+    const names = output.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    const matched = findProjectCliContainer(names);
+    if (matched) {
+      cachedCliContainer = matched;
       return cachedCliContainer;
     }
   } catch {
@@ -147,27 +157,45 @@ function getCliContainer(): string | null {
   return null;
 }
 
-export function runWpCli(args: string[] | string): string {
+export function buildWpCliInvocation(
+  args: string[] | string,
+  container: string | null
+): { command: string; args: string[] } {
   const argArray = Array.isArray(args) ? args : args.split(' ');
-  const container = getCliContainer();
-
   if (container) {
-    try {
-      const { execFileSync } = require('child_process');
-      return execFileSync('docker', ['exec', container, ...argArray], {
+    return {
+      command: 'docker',
+      args: ['exec', container, ...argArray],
+    };
+  }
+  const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  return {
+    command: npxCmd,
+    args: ['wp-env', 'run', 'cli', ...argArray],
+  };
+}
+
+export function runWpCli(args: string[] | string): string {
+  const container = getCliContainer();
+  const invocation = buildWpCliInvocation(args, container);
+  const { execFileSync } = require('child_process');
+
+  try {
+    return execFileSync(invocation.command, invocation.args, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    if (container) {
+      // If docker exec fails, fall back to wp-env with preserved argument array
+      const fallback = buildWpCliInvocation(args, null);
+      return execFileSync(fallback.command, fallback.args, {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
       });
-    } catch {
-      // Fall through to wp-env
     }
+    throw err;
   }
-
-  const fullCmd = Array.isArray(args) ? args.join(' ') : args;
-  return execSync(`npx wp-env run cli ${fullCmd}`, {
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
 }
 
 export async function seedLocalEnvironment(): Promise<void> {
