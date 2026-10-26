@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockPaymentIntentsCreate = vi.fn();
-const mockPaymentIntentsRetrieve = vi.fn();
-const mockPaymentIntentsCancel = vi.fn();
+const {
+  mockPaymentIntentsCreate,
+  mockPaymentIntentsRetrieve,
+  mockPaymentIntentsCancel,
+  mockPaymentIntentsUpdate,
+} = vi.hoisted(() => ({
+  mockPaymentIntentsCreate: vi.fn(),
+  mockPaymentIntentsRetrieve: vi.fn(),
+  mockPaymentIntentsCancel: vi.fn(),
+  mockPaymentIntentsUpdate: vi.fn().mockResolvedValue({}),
+}));
 
 vi.mock('server-only', () => ({}));
 
@@ -17,6 +25,7 @@ vi.mock('stripe', () => {
         create: mockPaymentIntentsCreate,
         retrieve: mockPaymentIntentsRetrieve,
         cancel: mockPaymentIntentsCancel,
+        update: mockPaymentIntentsUpdate,
       };
       customers = {
         list: vi.fn().mockResolvedValue({ data: [] }),
@@ -643,6 +652,94 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
       expect(orderB).not.toBeNull();
       expect(orderA.id).toBe(44461);
       expect(orderB.id).toBe(44461);
+    });
+
+    it('prevents duplicate orders across independent execution contexts when existing order is discovered', async () => {
+      let createdOrder: any = null;
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockImplementation(async () => {
+        createdOrder = {
+          id: 44462,
+          status: 'processing',
+          total: '8.99',
+        };
+        return createdOrder;
+      });
+
+      // Context 1: search returns null initially, so context 1 creates the order
+      const searchSpy = vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockImplementation(async () => {
+        return createdOrder;
+      });
+
+      const paymentIntentContext1 = {
+        id: 'pi_cross_instance_1',
+        amount: 899,
+        currency: 'gbp',
+        status: 'succeeded',
+        description: '1x 18W T8 Tube 3500k',
+        metadata: {},
+      } as unknown as Stripe.PaymentIntent;
+
+      const orderInstance1 = await stripeSync.processOrderFromPaymentIntent(paymentIntentContext1, 'ch_1');
+      expect(orderInstance1.id).toBe(44462);
+      expect(createOrderSpy).toHaveBeenCalledTimes(1);
+
+      // Context 2: Independent serverless instance (separate in-memory map).
+      // Now search returns the created order from WooCommerce.
+      const paymentIntentContext2 = {
+        id: 'pi_cross_instance_1',
+        amount: 899,
+        currency: 'gbp',
+        status: 'succeeded',
+        description: '1x 18W T8 Tube 3500k',
+        metadata: {},
+      } as unknown as Stripe.PaymentIntent;
+
+      const orderInstance2 = await stripeSync.processOrderFromPaymentIntent(paymentIntentContext2, 'ch_1');
+      expect(orderInstance2.id).toBe(44462);
+      // createWooCommerceOrder should still have only been called once!
+      expect(createOrderSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Stripe order-status endpoint read-only behavior', () => {
+    it('is strictly read-only and returns pending without creating an order even if fallback=true is requested', async () => {
+      process.env.WOOCOMMERCE_URL = 'https://admin.example.com';
+      process.env.WOOCOMMERCE_CONSUMER_KEY = 'ck_test';
+      process.env.WOOCOMMERCE_CONSUMER_SECRET = 'cs_test';
+
+      vi.spyOn(global, 'fetch').mockImplementation(async () => {
+        // Return empty orders array from WooCommerce search
+        return new Response(JSON.stringify([]), { status: 200 });
+      });
+
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder');
+
+      const { GET } = await import('@/app/api/checkout/stripe/order-status/route');
+      const req = new Request('http://localhost:3000/api/checkout/stripe/order-status?pi=pi_test_123&fallback=true');
+      const res = await GET(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json).toEqual({ pending: true });
+      expect(createOrderSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns orderId when WooCommerce search finds an existing order', async () => {
+      process.env.WOOCOMMERCE_URL = 'https://admin.example.com';
+      process.env.WOOCOMMERCE_CONSUMER_KEY = 'ck_test';
+      process.env.WOOCOMMERCE_CONSUMER_SECRET = 'cs_test';
+
+      vi.spyOn(global, 'fetch').mockImplementation(async () => {
+        return new Response(JSON.stringify([{ id: 44463, number: '44463' }]), { status: 200 });
+      });
+
+      const { GET } = await import('@/app/api/checkout/stripe/order-status/route');
+      const req = new Request('http://localhost:3000/api/checkout/stripe/order-status?pi=pi_test_123');
+      const res = await GET(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json).toEqual({ orderId: '44463' });
     });
   });
 });

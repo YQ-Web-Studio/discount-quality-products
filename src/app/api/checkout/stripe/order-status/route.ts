@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-import { processOrderFromPaymentIntent } from "@/lib/stripe-sync";
 
 export const maxDuration = 60;
 
@@ -8,26 +6,25 @@ const WC_URL = process.env.WOOCOMMERCE_URL;
 const WC_KEY = process.env.WOOCOMMERCE_CONSUMER_KEY;
 const WC_SECRET = process.env.WOOCOMMERCE_CONSUMER_SECRET;
 
-const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
-  apiVersion: "2023-10-16" as any,
-});
-
 /**
- * GET /api/checkout/stripe/order-status?pi=pi_xxx&fallback=true
+ * GET /api/checkout/stripe/order-status?pi=pi_xxx
  *
  * Looks up the WooCommerce order created by the Stripe webhook for a given
  * PaymentIntent ID. The webhook stores the PI under the _stripe_intent_id
  * order meta key so we can reliably reverse-look-up the order here.
  *
+ * Strictly READ-ONLY: Never creates orders or triggers background order processing,
+ * guaranteeing that concurrent polling requests can never race with the Stripe webhook
+ * across serverless instances or processes.
+ *
  * Returns:
  *   { orderId: number }   — order found
- *   { pending: true }     — webhook hasn't fired yet; client should retry
+ *   { pending: true }     — webhook hasn't finished processing yet; client should retry
  *   { error: string }     — bad request or server error
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const pi = searchParams.get("pi");
-  const fallback = searchParams.get("fallback") === "true";
 
   if (!pi || !pi.startsWith("pi_")) {
     return NextResponse.json({ error: "Invalid payment intent ID." }, { status: 400 });
@@ -49,7 +46,6 @@ export async function GET(req: Request) {
   });
 
   // Search WooCommerce orders by the Stripe PaymentIntent ID.
-  // The WC REST API ignores meta_key queries on orders unless customized, but natively supports searching meta/transactions via `search=`.
   const apiUrl = `${WC_URL.replace(/\/$/, "")}/wp-json/wc/v3/orders?search=${encodeURIComponent(pi)}&per_page=1`;
 
   const authHeader = oauth.toHeader(oauth.authorize({ url: apiUrl, method: "GET" }));
@@ -72,34 +68,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ orderId: orders[0].number ?? orders[0].id });
     }
 
-    // Webhook hasn't processed yet or dropped.
-    // If fallback=true is passed (usually at the end of polling timeout), verify with Stripe directly.
-    if (fallback) {
-      try {
-        console.log(`[order-status] Fallback triggered for PI ${pi}. Checking Stripe...`);
-        const expanded = await stripe.paymentIntents.retrieve(pi, {
-          expand: ["latest_charge"],
-        });
-
-        if (expanded.status === "succeeded") {
-          const charge = expanded.latest_charge;
-          const chargeId = typeof charge === "string" ? charge : (charge as any)?.id ?? "";
-          
-          console.log(`[order-status] PI is succeeded. Syncing order manually...`);
-          const newOrder = await processOrderFromPaymentIntent(expanded, chargeId);
-          
-          if (newOrder) {
-             return NextResponse.json({ orderId: newOrder.number ?? newOrder.id });
-          }
-        }
-      } catch (err) {
-         console.error(`[order-status] Fallback Stripe check failed for PI ${pi}:`, err);
-      }
-    }
-
     return NextResponse.json({ pending: true });
   } catch (err) {
     console.error("[order-status] Network error:", err);
     return NextResponse.json({ error: "Network error." }, { status: 500 });
   }
 }
+

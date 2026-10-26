@@ -8,10 +8,9 @@ import { sendGAEvent } from "@next/third-parties/google";
 import { useBasket } from "@/lib/useBasket";
 
 
-// Maximum time to wait for the Stripe webhook before triggering fallback sync (ms).
+// Maximum time to wait for the Stripe webhook to create the WC order (ms).
 // Webhooks typically fire within 1–3 s of payment confirmation.
-// Lowered to 3s so users who close the tab quickly still have orders created immediately.
-const POLL_TIMEOUT_MS = 3_000;
+const POLL_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 1_500;
 
 export default function SuccessContent() {
@@ -127,13 +126,12 @@ export default function SuccessContent() {
   useEffect(() => {
     if (!pi || directOrder) return;
 
-
     let elapsed = 0;
     let stopped = false;
 
-    async function poll(isFallback = false) {
+    async function poll() {
       try {
-        const url = `/api/checkout/stripe/order-status?pi=${encodeURIComponent(pi!)}${isFallback ? "&fallback=true" : ""}`;
+        const url = `/api/checkout/stripe/order-status?pi=${encodeURIComponent(pi!)}`;
         const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
 
@@ -147,20 +145,14 @@ export default function SuccessContent() {
       }
 
       elapsed += POLL_INTERVAL_MS;
-      if (elapsed >= POLL_TIMEOUT_MS && !isFallback) {
-        // Timed out normal polling — try one last time with fallback sync to force order creation.
-        // This is crucial for local dev without webhook forwarding, or if webhook dropped.
-        poll(true);
+      if (elapsed >= POLL_TIMEOUT_MS) {
+        setPolling(false);
+        setError(true);
         return;
-      } else if (isFallback) {
-         // Fallback also failed.
-         setPolling(false);
-         setError(true);
-         return;
       }
 
       if (!stopped) {
-        setTimeout(() => poll(false), POLL_INTERVAL_MS);
+        setTimeout(poll, POLL_INTERVAL_MS);
       }
     }
 

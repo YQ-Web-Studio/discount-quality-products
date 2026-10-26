@@ -4,6 +4,10 @@ import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import React from "react";
 
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
+  apiVersion: "2023-10-16" as any,
+});
+
 /** Shared payment meta added to every confirmed order. */
 export function buildPaymentMeta(paymentIntentId: string, chargeId: string) {
   return [
@@ -307,6 +311,13 @@ async function internalProcessOrderFromPaymentIntent(
       console.log(
         `[stripe-sync] ✓ Sparse WooCommerce order #${recoveredOrder.number ?? recoveredOrder.id} recovered and created for PaymentIntent ${paymentIntent.id}.`
       );
+      try {
+        await stripe.paymentIntents.update(paymentIntent.id, {
+          metadata: { wc_order_id: String(recoveredOrder.id), orderId: String(recoveredOrder.id) },
+        });
+      } catch (stripeErr) {
+        console.warn(`[stripe-sync] Could not update PaymentIntent ${paymentIntent.id} metadata:`, stripeErr);
+      }
       if (customerEmail) {
         await sendConfirmationEmailForOrder(recoveredOrder, {
           fn: sparseBilling.first_name,
@@ -441,6 +452,13 @@ async function internalProcessOrderFromPaymentIntent(
     console.log(
       `[stripe-sync] ✓ WooCommerce order #${newOrder.number ?? newOrder.id} created (fallback) for PaymentIntent ${paymentIntent.id}.`
     );
+    try {
+      await stripe.paymentIntents.update(paymentIntent.id, {
+        metadata: { wc_order_id: String(newOrder.id), orderId: String(newOrder.id) },
+      });
+    } catch (stripeErr) {
+      console.warn(`[stripe-sync] Could not update PaymentIntent ${paymentIntent.id} metadata:`, stripeErr);
+    }
     // Send order confirmation email
     await sendConfirmationEmailForOrder(newOrder, form);
     return newOrder;
