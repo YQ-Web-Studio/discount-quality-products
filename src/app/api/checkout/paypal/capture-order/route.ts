@@ -153,6 +153,8 @@ export async function POST(req: Request) {
         if (!isNaN(parsed)) resolvedOrderId = parsed;
       }
 
+      const captureNote = `Payment captured securely via PayPal. Capture ID: ${captureId}.${couponCode ? ` Voucher: ${couponCode.toUpperCase()} applied.` : ""}`;
+
       if (resolvedOrderId) {
         try {
           console.log(`[paypal/capture-order] Promoting pending WooCommerce order #${resolvedOrderId} to processing...`);
@@ -160,6 +162,7 @@ export async function POST(req: Request) {
             status: "processing",
             set_paid: true,
             transaction_id: captureId,
+            customer_note: captureNote,
           });
 
           // Send confirmation email
@@ -176,6 +179,38 @@ export async function POST(req: Request) {
           }
         } catch (updateErr) {
           console.error(`[paypal/capture-order] Warning promoting order #${resolvedOrderId}:`, updateErr);
+        }
+      } else {
+        try {
+          console.log(`[paypal/capture-order] Creating processing WooCommerce order for capture ${captureId}...`);
+          const orderPayload = buildPendingOrderPayload({
+            items,
+            form,
+            shippingCost: validation.shippingCost ?? 0,
+            shippingTitle: validation.shippingTitle || "Standard Delivery",
+            paymentProvider: 'paypal',
+            couponCode,
+            status: 'processing',
+            setPaid: true,
+            transactionId: captureId,
+            customerNote: captureNote,
+          });
+
+          const createdOrder = await createWooCommerceOrder(orderPayload);
+          resolvedOrderId = createdOrder.id;
+
+          if (form?.email) {
+            await sendConfirmationEmailForOrder(createdOrder, {
+              fn: form.firstName,
+              ln: form.lastName,
+              em: form.email,
+              a1: form.address1,
+              ct: form.city,
+              pc: form.postcode,
+            });
+          }
+        } catch (createErr) {
+          console.error(`[paypal/capture-order] Failed to create processing order for capture ${captureId}:`, createErr);
         }
       }
 

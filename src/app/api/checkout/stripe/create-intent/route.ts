@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
-import { createWooCommerceOrder, updateWooCommerceOrder } from "@/lib/woocommerce";
-import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
+import { updateWooCommerceOrder } from "@/lib/woocommerce";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
   apiVersion: "2023-10-16" as any,
@@ -161,30 +160,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Atomic Pending-Order-First Lifecycle (DQP-5) ─────────────────────
-    // Pre-create WooCommerce pending order so coupons, tax, and order items are
-    // validated and committed before payment capture.
-    let pendingOrderId: number | undefined;
-    if (form && items && items.length > 0) {
-      try {
-        const pendingPayload = buildPendingOrderPayload({
-          items,
-          form,
-          shippingCost: validation.shippingCost,
-          shippingTitle: validation.shippingTitle || "Free Delivery",
-          paymentProvider: "stripe",
-          couponCode,
-          customerId: session?.user?.id ? Number(session.user.id) : 0,
-        });
-
-        const pendingOrder = await createWooCommerceOrder(pendingPayload);
-        pendingOrderId = pendingOrder.id;
-        console.log(`[stripe-intent] Pre-created pending WooCommerce order #${pendingOrderId}`);
-      } catch (orderErr) {
-        console.warn("[stripe-intent] Notice: could not pre-create pending order:", orderErr);
-      }
-    }
-
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInPence,
       currency: "gbp",
@@ -203,8 +178,8 @@ export async function POST(req: Request) {
         delivery_address: deliveryAddress ? JSON.stringify(deliveryAddress) : "",
         billing_address: billingAddress ? JSON.stringify(billingAddress) : "",
         wc_customer_id: session?.user?.id ? String(session.user.id) : "",
-        orderId: pendingOrderId ? String(pendingOrderId) : "",
-        wc_order_id: pendingOrderId ? String(pendingOrderId) : "",
+        orderId: "",
+        wc_order_id: "",
       },
     });
 
@@ -231,7 +206,6 @@ export async function POST(req: Request) {
       clientSecret: paymentIntent.client_secret,
       totalCalculated: validation.finalTotal,
       paymentIntentId: paymentIntent.id,
-      orderId: pendingOrderId,
       savedCards,
     });
   } catch (error: unknown) {
