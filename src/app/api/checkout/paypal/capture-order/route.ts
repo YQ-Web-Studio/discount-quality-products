@@ -74,6 +74,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing basket items." }, { status: 400 });
     }
 
+    if (!form || !form.email || !form.address1 || !form.postcode) {
+      return NextResponse.json({ error: "Missing checkout details." }, { status: 400 });
+    }
+
     // Validate the cart BEFORE capturing funds. Once PayPal captures, money has moved,
     // so an invalid cart (rejected coupon, stock change) must be caught here, not in
     // create-wc-order afterwards.
@@ -147,7 +151,7 @@ export async function POST(req: Request) {
       const payerId = (data.payer as any)?.payer_id ?? "";
 
       let resolvedOrderId: number | undefined = undefined;
-      const captureNote = `Payment captured securely via PayPal. Capture ID: ${captureId}.${couponCode ? ` Voucher: ${couponCode.toUpperCase()} applied.` : ""}`;
+      const captureNote = `Payment captured securely via PayPal. Capture ID: ${captureId || "N/A"}${orderID ? ` | PayPal Order: ${orderID}` : ""}.${couponCode ? ` Voucher: ${couponCode.toUpperCase()} applied.` : ""}`;
 
       // Check if an order already exists for this PayPal transaction/capture (deduplication & promotion guard)
       let existingOrder: any = null;
@@ -172,6 +176,11 @@ export async function POST(req: Request) {
               set_paid: true,
               transaction_id: captureId,
               customer_note: captureNote,
+              meta_data: [
+                { key: "_paypal_capture_id", value: captureId },
+                ...(orderID ? [{ key: "_paypal_order_id", value: orderID }] : []),
+                { key: "_confirmation_email_sent", value: "yes" },
+              ],
             });
 
             // Send confirmation email
@@ -222,6 +231,14 @@ export async function POST(req: Request) {
               },
             ];
           }
+
+          // Persist PayPal capture & order identifiers in metadata for exact lookup
+          orderPayload.meta_data = [
+            ...(orderPayload.meta_data || []),
+            { key: "_paypal_capture_id", value: captureId },
+            ...(orderID ? [{ key: "_paypal_order_id", value: orderID }] : []),
+            { key: "_confirmation_email_sent", value: "yes" },
+          ];
 
           const createdOrder = await createWooCommerceOrder(orderPayload);
           resolvedOrderId = createdOrder.id;

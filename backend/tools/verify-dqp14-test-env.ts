@@ -295,6 +295,18 @@ async function run() {
   if (allMatchedAfterRetry.length !== 1) {
     throw new Error(`FAIL: Duplicate order detected! Found ${allMatchedAfterRetry.length} orders for ${testStripePi}`);
   }
+
+  // Concurrent in-flight call check on a fresh PaymentIntent ID
+  const concurrentPi = { ...mockPaymentIntent, id: `pi_concurrent_check_${testTimestamp}` } as Stripe.PaymentIntent;
+  const concurrentCharge = `ch_concurrent_check_${testTimestamp}`;
+  const [orderA, orderB] = await Promise.all([
+    stripeSync.processOrderFromPaymentIntent(concurrentPi, concurrentCharge),
+    stripeSync.processOrderFromPaymentIntent(concurrentPi, concurrentCharge),
+  ]);
+  const concurrentMatches = await fetchOrdersFromWc(concurrentPi.id);
+  if (orderA.id !== orderB.id || concurrentMatches.length !== 1) {
+    throw new Error(`FAIL: Concurrent calls created ${concurrentMatches.length} orders for ${concurrentPi.id}`);
+  }
   console.log(`  ✓ PASS: In-flight serialization and retry deduplication verified. Still exactly 1 order in WooCommerce.`);
 
   // -------------------------------------------------------------
