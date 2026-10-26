@@ -128,8 +128,43 @@ export function writeEnvTestLocal(
   fs.writeFileSync(targetPath, content, 'utf8');
 }
 
-function runWpCli(command: string): string {
-  return execSync(`npx wp-env run cli ${command}`, {
+let cachedCliContainer: string | null = null;
+
+function getCliContainer(): string | null {
+  if (cachedCliContainer) return cachedCliContainer;
+  try {
+    const detected = execSync('docker ps --filter "name=cli-1" --format "{{.Names}}"', {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    if (detected) {
+      cachedCliContainer = detected.split(/\r?\n/)[0].trim();
+      return cachedCliContainer;
+    }
+  } catch {
+    // Docker CLI not available or container not running
+  }
+  return null;
+}
+
+export function runWpCli(args: string[] | string): string {
+  const argArray = Array.isArray(args) ? args : args.split(' ');
+  const container = getCliContainer();
+
+  if (container) {
+    try {
+      const { execFileSync } = require('child_process');
+      return execFileSync('docker', ['exec', container, ...argArray], {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch {
+      // Fall through to wp-env
+    }
+  }
+
+  const fullCmd = Array.isArray(args) ? args.join(' ') : args;
+  return execSync(`npx wp-env run cli ${fullCmd}`, {
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -152,7 +187,7 @@ export async function seedLocalEnvironment(): Promise<void> {
 
   // 1. Verify container connectivity
   try {
-    const isInstalled = runWpCli('wp core is-installed');
+    runWpCli(['wp', 'core', 'is-installed']);
     console.log('[seed-local-wp] WordPress container is active.');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -165,9 +200,9 @@ export async function seedLocalEnvironment(): Promise<void> {
   // 2. Set WooCommerce currency & tax options
   console.log('[seed-local-wp] Configuring WooCommerce settings (GBP, VAT)...');
   try {
-    runWpCli('wp option update woocommerce_currency GBP');
-    runWpCli('wp option update woocommerce_calc_taxes yes');
-    runWpCli('wp option update woocommerce_prices_include_tax no');
+    runWpCli(['wp', 'option', 'update', 'woocommerce_currency', 'GBP']);
+    runWpCli(['wp', 'option', 'update', 'woocommerce_calc_taxes', 'yes']);
+    runWpCli(['wp', 'option', 'update', 'woocommerce_prices_include_tax', 'no']);
   } catch (err) {
     console.warn('[seed-local-wp] Notice configuring options:', err);
   }
@@ -176,7 +211,7 @@ export async function seedLocalEnvironment(): Promise<void> {
   console.log(`[seed-local-wp] Provisioning deterministic REST API key (${consumerKey})...`);
   try {
     const phpScript = buildApiKeyPhpScript(consumerKey, consumerSecret, 'Deterministic Test Key');
-    runWpCli(`wp eval "${phpScript}"`);
+    runWpCli(['wp', 'eval', phpScript]);
     console.log('[seed-local-wp] Deterministic API key provisioned.');
   } catch (err) {
     console.warn('[seed-local-wp] Notice provisioning API key:', err);
@@ -187,9 +222,9 @@ export async function seedLocalEnvironment(): Promise<void> {
   const categoryIdMap: Record<string, number> = {};
   for (const cat of catalog.categories) {
     try {
-      let termIdStr = runWpCli(`wp term list product_cat --slug="${cat.slug}" --field=term_id`).trim();
+      let termIdStr = runWpCli(['wp', 'term', 'list', 'product_cat', `--slug=${cat.slug}`, '--field=term_id']).trim();
       if (!termIdStr) {
-        termIdStr = runWpCli(`wp term create product_cat "${cat.name}" --slug="${cat.slug}" --porcelain`).trim();
+        termIdStr = runWpCli(['wp', 'term', 'create', 'product_cat', cat.name, `--slug=${cat.slug}`, '--porcelain']).trim();
       }
       const termId = parseInt(termIdStr, 10);
       if (!isNaN(termId)) {
@@ -204,13 +239,13 @@ export async function seedLocalEnvironment(): Promise<void> {
   console.log(`[seed-local-wp] Seeding ${catalog.products.length} products...`);
   for (const prod of catalog.products) {
     try {
-      const existingId = runWpCli(`wp post list --post_type=product --name="${prod.slug}" --field=ID`).trim();
+      const existingId = runWpCli(['wp', 'post', 'list', '--post_type=product', `--name=${prod.slug}`, '--field=ID']).trim();
       const cliArgs = buildProductCliArgs(prod, categoryIdMap);
       if (!existingId) {
-        runWpCli(`wp wc product create ${cliArgs.join(' ')}`);
+        runWpCli(['wp', 'wc', 'product', 'create', ...cliArgs]);
         console.log(`  + Product created: ${prod.name} (${prod.slug})`);
       } else {
-        runWpCli(`wp wc product update ${existingId} ${cliArgs.join(' ')}`);
+        runWpCli(['wp', 'wc', 'product', 'update', existingId, ...cliArgs]);
         console.log(`  ~ Product updated: ${prod.name} (${prod.slug})`);
       }
     } catch (err) {
@@ -222,13 +257,13 @@ export async function seedLocalEnvironment(): Promise<void> {
   console.log(`[seed-local-wp] Seeding ${catalog.coupons.length} coupons...`);
   for (const coupon of catalog.coupons) {
     try {
-      const existingCouponId = runWpCli(`wp post list --post_type=shop_coupon --title="${coupon.code}" --field=ID`).trim();
+      const existingCouponId = runWpCli(['wp', 'post', 'list', '--post_type=shop_coupon', `--title=${coupon.code}`, '--field=ID']).trim();
       const cliArgs = buildCouponCliArgs(coupon);
       if (!existingCouponId) {
-        runWpCli(`wp wc shop_coupon create ${cliArgs.join(' ')}`);
+        runWpCli(['wp', 'wc', 'shop_coupon', 'create', ...cliArgs]);
         console.log(`  + Coupon created: ${coupon.code}`);
       } else {
-        runWpCli(`wp wc shop_coupon update ${existingCouponId} ${cliArgs.join(' ')}`);
+        runWpCli(['wp', 'wc', 'shop_coupon', 'update', existingCouponId, ...cliArgs]);
         console.log(`  ~ Coupon updated: ${coupon.code}`);
       }
     } catch (err) {

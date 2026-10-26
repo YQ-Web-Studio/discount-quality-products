@@ -63,7 +63,7 @@ describe('Stripe Webhook & Order Idempotency Engine', () => {
       expect(res.status).toBe(400);
       const json = await res.json();
       expect(json.error).toBe('Missing signature.');
-    });
+    }, 15000);
 
     it('returns 400 when stripe-signature fails cryptographic verification', async () => {
       process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_secret_123';

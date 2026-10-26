@@ -21,7 +21,7 @@ Welcome to the Discount Products Store testing environment guide. This document 
 │   ┌─────────────────────────────────────────────────────┐   │
 │   │ Docker Container (@wordpress/env, port 8888)        │   │
 │   │                                                     │   │
-│   │  - WordPress 6.7 + WooCommerce                      │   │
+│   │  - WordPress 7.1.3 + WooCommerce                    │   │
 │   │  - Snippets Auto-Mounted (wp-content/mu-plugins/)   │   │
 │   │  - Deterministic REST API Keys (ck_ / cs_local_test)│   │
 │   │  - Edge-case Seed Catalog & Coupons                 │   │
