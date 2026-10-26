@@ -66,6 +66,10 @@ export function buildPendingOrderPayload(params: {
   paymentProvider: 'paypal' | 'stripe';
   couponCode?: string;
   customerId?: number;
+  status?: string;
+  setPaid?: boolean;
+  transactionId?: string;
+  customerNote?: string;
 }): Record<string, any> {
   const isBillingDifferent = params.form.showBillingAddress === true;
 
@@ -114,7 +118,7 @@ export function buildPendingOrderPayload(params: {
   const isFirstClass = params.shippingTitle.toLowerCase().includes('first class') || params.shippingTitle.toLowerCase().includes('1st class');
 
   const meta_data: Array<{ key: string; value: string }> = [
-    { key: '_order_lifecycle', value: 'pending_first' },
+    { key: '_order_lifecycle', value: params.status === 'processing' ? 'captured_direct' : 'pending_first' },
   ];
 
   if (params.couponCode) {
@@ -124,11 +128,11 @@ export function buildPendingOrderPayload(params: {
   const orderData: Record<string, any> = {
     payment_method: params.paymentProvider === 'paypal' ? 'ppcp-gateway' : 'stripe',
     payment_method_title: params.paymentProvider === 'paypal' ? 'PayPal' : 'Credit Card (Stripe)',
-    set_paid: false,
-    status: 'pending',
+    set_paid: params.setPaid !== undefined ? params.setPaid : false,
+    status: params.status || 'pending',
     currency: 'GBP',
     customer_id: params.customerId || 0,
-    customer_note: `Pending payment via ${params.paymentProvider === 'paypal' ? 'PayPal' : 'Stripe'}.`,
+    customer_note: params.customerNote || `Pending payment via ${params.paymentProvider === 'paypal' ? 'PayPal' : 'Stripe'}.`,
     billing,
     shipping: delivery,
     line_items,
@@ -141,6 +145,10 @@ export function buildPendingOrderPayload(params: {
     ],
     meta_data,
   };
+
+  if (params.transactionId) {
+    orderData.transaction_id = params.transactionId;
+  }
 
   if (params.couponCode) {
     orderData.coupon_lines = [{ code: params.couponCode.trim().toLowerCase() }];

@@ -4,6 +4,10 @@ import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import React from "react";
 
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
+  apiVersion: "2023-10-16" as any,
+});
+
 /** Shared payment meta added to every confirmed order. */
 export function buildPaymentMeta(paymentIntentId: string, chargeId: string) {
   return [
@@ -110,55 +114,55 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
   }
 }
 
+// In-flight mutex map to serialize concurrent executions per PaymentIntent ID
+// Prevents race conditions between webhook deliveries and success-page fallback polling
+const inFlightPaymentIntents = new Map<string, Promise<any>>();
+
+export function _resetInFlightPaymentIntents(): void {
+  inFlightPaymentIntents.clear();
+}
+
 /**
  * Promotes an existing WooCommerce order to "processing" now that payment
  * has been confirmed. Falls back to creating a brand-new order if no linked
  * order is available (for example, if WooCommerce was unavailable at the time).
  * Returns the created or updated order.
+ * Serialized per PaymentIntent to eliminate race conditions between webhook and client polling.
  */
 export async function processOrderFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
   chargeId: string
 ): Promise<any> {
-  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_coupon, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id, orderId: metaOrderId } = paymentIntent.metadata ?? {};
-  const resolvedOrderId = metaOrderId || wc_order_id;
-
-  if (!cart_items || (!cart_form && !delivery_address)) {
-    console.warn(
-      `[stripe-sync] missing cart_items, cart_form, or delivery_address in metadata. ` +
-      `Order processing skipped. PaymentIntent: ${paymentIntent.id}`
+  const flightKey = paymentIntent.id;
+  const existingFlight = inFlightPaymentIntents.get(flightKey);
+  if (existingFlight) {
+    console.log(
+      `[stripe-sync] Execution already in flight for PI ${flightKey} — deduplicating and awaiting existing execution.`
     );
-    return null;
+    return existingFlight;
   }
 
-  let items: { i: number; q: number }[];
-  let form: { fn: string; ln: string; em: string; a1: string; ct: string; pc: string };
-  let delivery: any = null;
-  let billing: any = null;
+  const execution = (async () => {
+    return internalProcessOrderFromPaymentIntent(paymentIntent, chargeId);
+  })();
+
+  inFlightPaymentIntents.set(flightKey, execution);
 
   try {
-    items = JSON.parse(cart_items);
-    if (cart_form) {
-      form = JSON.parse(cart_form);
-    } else {
-      form = { fn: "", ln: "", em: "", a1: "", ct: "", pc: "" };
-    }
-
-    if (delivery_address) delivery = JSON.parse(delivery_address);
-    if (billing_address) billing = JSON.parse(billing_address);
-  } catch (err) {
-    console.error(`[stripe-sync] Failed to parse cart metadata for ${paymentIntent.id}:`, err);
-    return null;
+    return await execution;
+  } finally {
+    inFlightPaymentIntents.delete(flightKey);
   }
+}
 
-  const shippingMethod = cart_shipping ?? "standard";
-  const shippingCost = cart_shipping_cost ? parseFloat(cart_shipping_cost) : 0;
-  const shippingTitle = cart_shipping_title || (shippingCost > 0 ? `Shipping (${shippingMethod})` : "Free Delivery");
-  const isFirstClass = shippingTitle.toLowerCase().includes("first class") || shippingTitle.toLowerCase().includes("1st class");
-  const discountAmount = cart_discount ? parseFloat(cart_discount) : 0;
-  const couponCode = cart_coupon ? cart_coupon.trim().toLowerCase() : "";
-  const line_items = items.map((item) => ({ product_id: item.i, quantity: item.q }));
+async function internalProcessOrderFromPaymentIntent(
+  paymentIntent: Stripe.PaymentIntent,
+  chargeId: string
+): Promise<any> {
+  const { cart_items, cart_shipping, cart_shipping_cost, cart_shipping_title, cart_discount, cart_coupon, cart_form, delivery_address, billing_address, wc_order_id, wc_customer_id, orderId: metaOrderId } = paymentIntent.metadata ?? {};
+  const resolvedOrderId = metaOrderId || wc_order_id;
   const paymentMeta = buildPaymentMeta(paymentIntent.id, chargeId);
+  const couponCode = cart_coupon ? cart_coupon.trim().toLowerCase() : "";
 
   // ── Path A: update the linked WooCommerce order if one already exists ────
   if (resolvedOrderId) {
@@ -178,6 +182,13 @@ export async function processOrderFromPaymentIntent(
     } catch (fetchErr) {
       // If we can't fetch the order to check, proceed with the update attempt.
       console.warn(`[stripe-sync] Could not fetch order ${orderId} for idempotency check:`, fetchErr);
+    }
+
+    let form: any = undefined;
+    if (cart_form) {
+      try {
+        form = JSON.parse(cart_form);
+      } catch {}
     }
 
     try {
@@ -215,7 +226,7 @@ export async function processOrderFromPaymentIntent(
     }
   }
 
-  // ── Path B: fallback — create order from scratch (WC was down at intent time) ──
+  // ── Path B: fallback — create order from scratch (WC was down at intent time or direct checkout) ──
   // DEDUPLICATION GUARD: Before creating, search WooCommerce for an order that
   // already references this PaymentIntent. This prevents duplicates when the
   // webhook and success-page fallback race each other.
@@ -231,6 +242,133 @@ export async function processOrderFromPaymentIntent(
     // If search fails, proceed cautiously with creation.
     console.warn(`[stripe-sync] Deduplication search failed for PI ${paymentIntent.id}:`, searchErr);
   }
+
+  // If cart metadata is sparse or missing, recover gracefully rather than dropping payment
+  if (!cart_items || (!cart_form && !delivery_address)) {
+    console.warn(
+      `[stripe-sync] Sparse metadata detected for succeeded PaymentIntent ${paymentIntent.id}. Recovering order from PaymentIntent details.`
+    );
+
+    const description = paymentIntent.description || `Stripe Payment ${paymentIntent.id}`;
+    const totalAmount = paymentIntent.amount ? (paymentIntent.amount / 100).toFixed(2) : "0.00";
+    const sparseNote = `Sparse Stripe Payment captured. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}. Description: ${description}. Total: £${totalAmount}. Please review and update line items or customer contact details if needed.`;
+
+    let chargeData = (paymentIntent as any).charges?.data?.[0];
+    const resolvedChargeId = chargeId || (paymentIntent as any).latest_charge;
+    if (!chargeData && resolvedChargeId && typeof resolvedChargeId === "string") {
+      try {
+        chargeData = await stripe.charges.retrieve(resolvedChargeId);
+      } catch (chargeErr) {
+        console.warn(`[stripe-sync] Could not retrieve Charge ${resolvedChargeId} for sparse recovery:`, chargeErr);
+      }
+    }
+    const billingDetails = chargeData?.billing_details;
+    const shippingDetails = (paymentIntent as any).shipping || chargeData?.shipping;
+    const customerEmail = (paymentIntent as any).receipt_email || billingDetails?.email || "";
+
+    const sparseBilling = {
+      first_name: billingDetails?.name ? billingDetails.name.split(" ")[0] : "Customer",
+      last_name: billingDetails?.name ? billingDetails.name.split(" ").slice(1).join(" ") : "",
+      address_1: billingDetails?.address?.line1 || shippingDetails?.address?.line1 || "Address Pending",
+      address_2: billingDetails?.address?.line2 || shippingDetails?.address?.line2 || "",
+      city: billingDetails?.address?.city || shippingDetails?.address?.city || "London",
+      state: billingDetails?.address?.state || shippingDetails?.address?.state || "",
+      postcode: billingDetails?.address?.postal_code || shippingDetails?.address?.postal_code || "",
+      country: billingDetails?.address?.country || shippingDetails?.address?.country || "GB",
+      email: customerEmail,
+      phone: billingDetails?.phone || shippingDetails?.phone || "",
+    };
+
+    const sparseShipping = {
+      first_name: shippingDetails?.name ? shippingDetails.name.split(" ")[0] : sparseBilling.first_name,
+      last_name: shippingDetails?.name ? shippingDetails.name.split(" ").slice(1).join(" ") : sparseBilling.last_name,
+      address_1: shippingDetails?.address?.line1 || sparseBilling.address_1,
+      address_2: shippingDetails?.address?.line2 || sparseBilling.address_2,
+      city: shippingDetails?.address?.city || sparseBilling.city,
+      state: shippingDetails?.address?.state || sparseBilling.state,
+      postcode: shippingDetails?.address?.postal_code || sparseBilling.postcode,
+      country: shippingDetails?.address?.country || sparseBilling.country,
+    };
+
+    const sparseOrderPayload: any = {
+      payment_method: "stripe",
+      payment_method_title: "Credit Card (Stripe)",
+      set_paid: true,
+      status: "processing",
+      currency: (paymentIntent.currency || "gbp").toUpperCase(),
+      transaction_id: chargeId || paymentIntent.id,
+      customer_note: sparseNote,
+      billing: sparseBilling,
+      shipping: sparseShipping,
+      fee_lines: [
+        {
+          name: description,
+          total: totalAmount,
+          tax_status: "none",
+        },
+      ],
+      meta_data: [
+        ...paymentMeta,
+        { key: "_sparse_metadata_recovered", value: "yes" },
+        { key: "_original_payment_intent_description", value: description },
+      ],
+    };
+
+    try {
+      const recoveredOrder = await createWooCommerceOrder(sparseOrderPayload);
+      console.log(
+        `[stripe-sync] ✓ Sparse WooCommerce order #${recoveredOrder.number ?? recoveredOrder.id} recovered and created for PaymentIntent ${paymentIntent.id}.`
+      );
+      try {
+        await stripe.paymentIntents.update(paymentIntent.id, {
+          metadata: { wc_order_id: String(recoveredOrder.id), orderId: String(recoveredOrder.id) },
+        });
+      } catch (stripeErr) {
+        console.warn(`[stripe-sync] Could not update PaymentIntent ${paymentIntent.id} metadata:`, stripeErr);
+      }
+      if (customerEmail) {
+        await sendConfirmationEmailForOrder(recoveredOrder, {
+          fn: sparseBilling.first_name,
+          ln: sparseBilling.last_name,
+          em: customerEmail,
+          a1: sparseBilling.address_1,
+          ct: sparseBilling.city,
+          pc: sparseBilling.postcode,
+        });
+      }
+      return recoveredOrder;
+    } catch (err) {
+      console.error(`[stripe-sync] FATAL: Failed to create recovered order for sparse PaymentIntent ${paymentIntent.id}:`, err);
+      return null;
+    }
+  }
+
+  let items: { i: number; q: number }[];
+  let form: { fn: string; ln: string; em: string; a1: string; ct: string; pc: string };
+  let delivery: any = null;
+  let billing: any = null;
+
+  try {
+    items = JSON.parse(cart_items);
+    if (cart_form) {
+      form = JSON.parse(cart_form);
+    } else {
+      form = { fn: "", ln: "", em: "", a1: "", ct: "", pc: "" };
+    }
+
+    if (delivery_address) delivery = JSON.parse(delivery_address);
+    if (billing_address) billing = JSON.parse(billing_address);
+  } catch (err) {
+    console.error(`[stripe-sync] Failed to parse cart metadata for ${paymentIntent.id}:`, err);
+    return null;
+  }
+
+  const shippingMethod = cart_shipping ?? "standard";
+  const shippingCost = cart_shipping_cost ? parseFloat(cart_shipping_cost) : 0;
+  const shippingTitle = cart_shipping_title || (shippingCost > 0 ? `Shipping (${shippingMethod})` : "Free Delivery");
+  const isFirstClass = shippingTitle.toLowerCase().includes("first class") || shippingTitle.toLowerCase().includes("1st class");
+  const discountAmount = cart_discount ? parseFloat(cart_discount) : 0;
+  const line_items = items.map((item) => ({ product_id: item.i, quantity: item.q }));
 
   const billingPayload = billing
     ? {
@@ -322,6 +460,13 @@ export async function processOrderFromPaymentIntent(
     console.log(
       `[stripe-sync] ✓ WooCommerce order #${newOrder.number ?? newOrder.id} created (fallback) for PaymentIntent ${paymentIntent.id}.`
     );
+    try {
+      await stripe.paymentIntents.update(paymentIntent.id, {
+        metadata: { wc_order_id: String(newOrder.id), orderId: String(newOrder.id) },
+      });
+    } catch (stripeErr) {
+      console.warn(`[stripe-sync] Could not update PaymentIntent ${paymentIntent.id} metadata:`, stripeErr);
+    }
     // Send order confirmation email
     await sendConfirmationEmailForOrder(newOrder, form);
     return newOrder;

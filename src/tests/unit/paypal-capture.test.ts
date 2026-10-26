@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/wordpress-auth.server', () => ({
+  getCurrentWordPressSession: vi.fn().mockResolvedValue(null),
+}));
+
 import { POST } from '@/app/api/checkout/paypal/capture-order/route';
 import * as checkoutLib from '@/lib/checkout';
 
@@ -6,7 +12,7 @@ const validCart = {
   orderID: 'PAYPAL-ORDER-1',
   items: [{ id: '101', quantity: 1 }],
   shippingMethod: 'standard',
-  form: { country: 'GB', city: 'London', postcode: 'SW1A 1AA', email: 'buyer@example.com' },
+  form: { country: 'GB', address1: '10 Downing Street', city: 'London', postcode: 'SW1A 1AA', email: 'buyer@example.com' },
   couponCode: 'THANKYOU10',
 };
 
@@ -38,6 +44,20 @@ describe('PayPal capture-order: cart validation before funds are captured', () =
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('Missing basket items.');
     expect(validateSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects with 400 and never captures when form details (email/address/postcode) are missing', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch');
+    const res = await POST(makeRequest({
+      orderID: 'PAYPAL-ORDER-1',
+      items: [{ id: '101', quantity: 1 }],
+      shippingMethod: 'standard',
+      form: { email: '', address1: '' },
+    }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Missing checkout details.');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

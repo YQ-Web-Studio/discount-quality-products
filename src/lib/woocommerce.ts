@@ -756,7 +756,8 @@ export async function searchWooCommerceOrderByPaymentIntent(paymentIntentId: str
     throw new Error("WooCommerce API keys are missing.");
   }
 
-  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders?search=${encodeURIComponent(paymentIntentId)}&per_page=1`;
+  const cleanId = paymentIntentId.trim();
+  const apiUrl = `${url.replace(/\/$/, "")}/wp-json/wc/v3/orders?search=${encodeURIComponent(cleanId)}&per_page=10`;
 
   const CryptoJS = require("crypto-js");
   const OAuth = require("oauth-1.0a");
@@ -782,7 +783,33 @@ export async function searchWooCommerceOrderByPaymentIntent(paymentIntentId: str
   }
 
   const orders: any[] = await response.json();
-  return orders.length > 0 ? orders[0] : null;
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return null;
+  }
+
+  // Priority 1: Exact match on payment metadata keys or transaction_id
+  const exactMetaMatch = orders.find((order) => {
+    if (order.transaction_id && String(order.transaction_id).trim() === cleanId) return true;
+    if (Array.isArray(order.meta_data)) {
+      return order.meta_data.some(
+        (m: { key: string; value: any }) =>
+          (m.key === "_stripe_intent_id" ||
+            m.key === "_stripe_charge_id" ||
+            m.key === "_paypal_capture_id" ||
+            m.key === "_paypal_order_id") &&
+          String(m.value).trim() === cleanId
+      );
+    }
+    return false;
+  });
+  if (exactMetaMatch) return exactMetaMatch;
+
+  // Priority 2: Word-boundary match in customer_note (e.g. "PaymentIntent: pi_123." or "Capture ID: CAP_123.")
+  const noteRegex = new RegExp(`(^|\\s|:|\\|)${cleanId.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}(\\s|\\.|\\||,|$)`);
+  const noteMatch = orders.find((order) => order.customer_note && noteRegex.test(order.customer_note));
+  if (noteMatch) return noteMatch;
+
+  return orders[0];
 }
 
 /**
