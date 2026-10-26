@@ -253,7 +253,15 @@ async function internalProcessOrderFromPaymentIntent(
     const totalAmount = paymentIntent.amount ? (paymentIntent.amount / 100).toFixed(2) : "0.00";
     const sparseNote = `Sparse Stripe Payment captured. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}. Description: ${description}. Total: £${totalAmount}. Please review and update line items or customer contact details if needed.`;
 
-    const chargeData = (paymentIntent as any).charges?.data?.[0];
+    let chargeData = (paymentIntent as any).charges?.data?.[0];
+    const resolvedChargeId = chargeId || (paymentIntent as any).latest_charge;
+    if (!chargeData && resolvedChargeId && typeof resolvedChargeId === "string") {
+      try {
+        chargeData = await stripe.charges.retrieve(resolvedChargeId);
+      } catch (chargeErr) {
+        console.warn(`[stripe-sync] Could not retrieve Charge ${resolvedChargeId} for sparse recovery:`, chargeErr);
+      }
+    }
     const billingDetails = chargeData?.billing_details;
     const shippingDetails = (paymentIntent as any).shipping || chargeData?.shipping;
     const customerEmail = (paymentIntent as any).receipt_email || billingDetails?.email || "";

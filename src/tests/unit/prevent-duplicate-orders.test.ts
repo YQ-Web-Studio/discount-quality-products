@@ -5,11 +5,13 @@ const {
   mockPaymentIntentsRetrieve,
   mockPaymentIntentsCancel,
   mockPaymentIntentsUpdate,
+  mockChargesRetrieve,
 } = vi.hoisted(() => ({
   mockPaymentIntentsCreate: vi.fn(),
   mockPaymentIntentsRetrieve: vi.fn(),
   mockPaymentIntentsCancel: vi.fn(),
   mockPaymentIntentsUpdate: vi.fn().mockResolvedValue({}),
+  mockChargesRetrieve: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +28,9 @@ vi.mock('stripe', () => {
         retrieve: mockPaymentIntentsRetrieve,
         cancel: mockPaymentIntentsCancel,
         update: mockPaymentIntentsUpdate,
+      };
+      charges = {
+        retrieve: mockChargesRetrieve,
       };
       customers = {
         list: vi.fn().mockResolvedValue({ data: [] }),
@@ -49,6 +54,7 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
     mockPaymentIntentsCreate.mockReset();
     mockPaymentIntentsRetrieve.mockReset();
     mockPaymentIntentsCancel.mockReset();
+    mockChargesRetrieve.mockReset();
     stripeSync._resetInFlightPaymentIntents();
     vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockResolvedValue(null);
     vi.spyOn(stripeSync, 'sendConfirmationEmailForOrder').mockResolvedValue(undefined as any);
@@ -184,6 +190,10 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
         id: 44448,
         status: 'processing',
         billing: { email: 'ella@example.com' },
+      } as any);
+      vi.spyOn(woocommerce, 'searchWooCommerceOrderByPaymentIntent').mockResolvedValue({
+        id: 44448,
+        status: 'pending',
       } as any);
 
       vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
@@ -599,6 +609,58 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
           set_paid: true,
           transaction_id: 'ch_3UUm394Tt6mIhQxV1GbRGRM2',
           customer_note: expect.stringContaining('ch_3UUm394Tt6mIhQxV1GbRGRM2'),
+        })
+      );
+    });
+
+    it('retrieves Charge details from Stripe when PaymentIntent.charges has no entry during sparse recovery', async () => {
+      mockChargesRetrieve.mockResolvedValue({
+        id: 'ch_sparse_fetch_test',
+        billing_details: {
+          name: 'Sarah Connor',
+          email: 'sarah@example.com',
+          phone: '07123456789',
+          address: {
+            line1: '42 Cyber Way',
+            city: 'London',
+            postal_code: 'EC1A 1BB',
+            country: 'GB',
+          },
+        },
+      });
+
+      const createOrderSpy = vi.spyOn(woocommerce, 'createWooCommerceOrder').mockResolvedValue({
+        id: 44453,
+        status: 'processing',
+        total: '15.00',
+      } as any);
+
+      const sparsePaymentIntent = {
+        id: 'pi_no_charges_obj',
+        amount: 1500,
+        currency: 'gbp',
+        status: 'succeeded',
+        description: 'LED Panel 600x600',
+        metadata: {},
+      } as unknown as Stripe.PaymentIntent;
+
+      const result = await stripeSync.processOrderFromPaymentIntent(
+        sparsePaymentIntent,
+        'ch_sparse_fetch_test'
+      );
+
+      expect(mockChargesRetrieve).toHaveBeenCalledWith('ch_sparse_fetch_test');
+      expect(result).not.toBeNull();
+      expect(createOrderSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          billing: expect.objectContaining({
+            first_name: 'Sarah',
+            last_name: 'Connor',
+            email: 'sarah@example.com',
+            address_1: '42 Cyber Way',
+            city: 'London',
+            postcode: 'EC1A 1BB',
+          }),
         })
       );
     });

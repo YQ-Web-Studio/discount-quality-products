@@ -2,26 +2,70 @@
  * Verification Script: Automated DQP-14 Checkout Verification in Local Test Environment (wp-env)
  * 
  * Tests:
- * 1. Stripe create-intent does NOT create a premature pending order in WooCommerce.
- * 2. PayPal create-order does NOT create a premature pending order in WooCommerce.
+ * 1. Stripe create-intent route does NOT create a premature pending order in WooCommerce.
+ * 2. PayPal create-order route does NOT create a premature pending order in WooCommerce.
  * 3. Stripe webhook creates exactly 1 order marked 'processing' with proper note & metadata.
  * 4. Stripe webhook retry/duplicate delivery does NOT create a duplicate order.
  * 5. Order-status endpoint is read-only (returns orderId or pending, never creates orders).
- * 6. PayPal capture creates exactly 1 order marked 'processing' with proper capture note.
- * 7. PayPal capture deduplication prevents duplicate orders on re-capture or retries.
+ * 6. PayPal capture route creates exactly 1 order marked 'processing' with proper capture note.
  */
+import Module from 'module';
+const origLoad = (Module as any)._load;
+(Module as any)._load = function (request: string, parent: any, isMain: boolean) {
+  if (request === 'server-only') {
+    return {};
+  }
+  if (request.endsWith('checkout') || request.endsWith('checkout.ts') || request === '@/lib/checkout') {
+    const realCheckout = origLoad(request, parent, isMain);
+    return {
+      ...realCheckout,
+      validateCartTotals: async function () {
+        return {
+          isValid: true,
+          subtotal: 8.99,
+          discountAmount: 0,
+          vat: 1.50,
+          shippingCost: 0,
+          shippingTitle: 'Standard Delivery',
+          finalTotal: 8.99,
+        };
+      },
+    };
+  }
+  if (request.includes('wordpress-auth.server') || request === '@/lib/wordpress-auth.server') {
+    const realAuth = origLoad(request, parent, isMain);
+    return {
+      ...realAuth,
+      getCurrentWordPressSession: async function () {
+        return null;
+      },
+    };
+  }
+  return origLoad(request, parent, isMain);
+};
 
 import OAuth from 'oauth-1.0a';
 import CryptoJS from 'crypto-js';
 import Stripe from 'stripe';
 
 const WP_URL = process.env.WOOCOMMERCE_URL || 'http://localhost:8888';
+const { hostname } = new URL(WP_URL);
+if (!['localhost', '127.0.0.1'].includes(hostname) && !hostname.endsWith('.local')) {
+  throw new Error(`Refusing to run against non-local WooCommerce host: ${hostname}`);
+}
+
+// Strip RESEND_API_KEY so test runs never accidentally send emails
+delete process.env.RESEND_API_KEY;
+
 const WC_KEY = process.env.WOOCOMMERCE_CONSUMER_KEY || 'ck_local_test';
 const WC_SECRET = process.env.WOOCOMMERCE_CONSUMER_SECRET || 'cs_local_test';
 
 process.env.WOOCOMMERCE_URL = WP_URL;
 process.env.WOOCOMMERCE_CONSUMER_KEY = WC_KEY;
 process.env.WOOCOMMERCE_CONSUMER_SECRET = WC_SECRET;
+process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy_key';
+process.env.PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || 'dummy_paypal_client_id';
+process.env.PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || 'dummy_paypal_secret';
 
 const oauth = new OAuth({
   consumer: { key: WC_KEY, secret: WC_SECRET },
@@ -55,38 +99,146 @@ async function run() {
   const testStripePi = `pi_test_dqp14_${testTimestamp}`;
   const testStripeCharge = `ch_test_dqp14_${testTimestamp}`;
   const testPayPalCaptureId = `CAPTURE-DQP14-${testTimestamp}`;
+  const testPayPalOrderId = `PAYPAL-ORDER-${testTimestamp}`;
+
+  // Stub Stripe SDK PaymentIntentsResource on prototype to intercept create-intent without hitting live Stripe API
+  const dummyStripe = new Stripe('sk_test_dummy_key');
+  const PaymentIntentsResource = (dummyStripe.paymentIntents as any).constructor.prototype;
+  PaymentIntentsResource.create = async function (params: any) {
+    return {
+      id: testStripePi,
+      client_secret: `${testStripePi}_secret`,
+      status: 'requires_payment_method',
+      amount: params.amount,
+      currency: params.currency,
+      metadata: params.metadata || {},
+    };
+  };
+  PaymentIntentsResource.update = async function () {
+    return {};
+  };
+
+
+  // Intercept global.fetch for PayPal API endpoints
+  const originalFetch = global.fetch;
+  global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const urlStr = String(input);
+    if (urlStr.includes('paypal.com')) {
+      if (urlStr.includes('/oauth2/token')) {
+        return new Response(JSON.stringify({ access_token: 'mock-paypal-access-token' }), { status: 200 });
+      }
+      if (urlStr.includes('/v2/checkout/orders') && !urlStr.includes('/capture')) {
+        return new Response(
+          JSON.stringify({
+            id: testPayPalOrderId,
+            status: 'APPROVED',
+            purchase_units: [
+              {
+                amount: { currency_code: 'GBP', value: '8.99' },
+                custom_id: '',
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (urlStr.includes('/capture')) {
+        return new Response(
+          JSON.stringify({
+            status: 'COMPLETED',
+            payer: { payer_id: 'PAYER-TEST-123' },
+            purchase_units: [
+              {
+                payments: {
+                  captures: [{ id: testPayPalCaptureId }],
+                },
+              },
+            ],
+          }),
+          { status: 201 }
+        );
+      }
+    }
+    return originalFetch(input, init);
+  };
 
   // -------------------------------------------------------------
-  // Test 1: Stripe Intent Creation — No premature pending order
+  // Test 1: Stripe Intent Creation Route — No premature pending order
   // -------------------------------------------------------------
-  console.log(`\n[Test 1] Verifying Stripe create-intent does NOT create a pending WooCommerce order...`);
+  console.log(`\n[Test 1] Verifying Stripe create-intent route does NOT create a pending WooCommerce order...`);
   const ordersBeforeIntent = await fetchOrdersFromWc();
-  
-  // Verify order count did not increase
+
+  const { POST: stripeCreateIntentPost } = await import('@/app/api/checkout/stripe/create-intent/route');
+  const stripeIntentReq = new Request('http://localhost:3000/api/checkout/stripe/create-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: [{ id: '101', quantity: 1 }],
+      shippingMethod: 'standard',
+      form: {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane.doe@example.com',
+        address1: '10 Downing Street',
+        city: 'London',
+        postcode: 'SW1A 2AA',
+      },
+    }),
+  });
+
+  const stripeIntentRes = await stripeCreateIntentPost(stripeIntentReq);
+  const stripeIntentJson = await stripeIntentRes.json();
+  if (stripeIntentRes.status !== 200 || !stripeIntentJson.clientSecret) {
+    throw new Error(`FAIL: Stripe create-intent route failed: ${JSON.stringify(stripeIntentJson)}`);
+  }
+
   const ordersAfterIntent = await fetchOrdersFromWc();
   if (ordersAfterIntent.length !== ordersBeforeIntent.length) {
-    throw new Error(`FAIL: An order was prematurely created in WooCommerce during checkout initiation!`);
+    throw new Error(`FAIL: An order was prematurely created in WooCommerce during Stripe create-intent!`);
   }
-  console.log(`  ✓ PASS: Zero orders created in WooCommerce during Stripe intent creation.`);
+  console.log(`  ✓ PASS: Stripe create-intent route succeeded and created 0 premature orders in WooCommerce.`);
 
   // -------------------------------------------------------------
-  // Test 2: PayPal Order Creation — No premature pending order
+  // Test 2: PayPal Order Creation Route — No premature pending order
   // -------------------------------------------------------------
-  console.log(`\n[Test 2] Verifying PayPal create-order does NOT create a pending WooCommerce order...`);
+  console.log(`\n[Test 2] Verifying PayPal create-order route does NOT create a pending WooCommerce order...`);
   const ordersBeforePayPalCreate = await fetchOrdersFromWc();
+
+  const { POST: paypalCreateOrderPost } = await import('@/app/api/checkout/paypal/create-order/route');
+  const paypalCreateReq = new Request('http://localhost:3000/api/checkout/paypal/create-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: [{ id: '101', quantity: 1 }],
+      shippingMethod: 'standard',
+      form: {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane.doe@example.com',
+        address1: '10 Downing Street',
+        city: 'London',
+        postcode: 'SW1A 2AA',
+      },
+    }),
+  });
+
+  const paypalCreateRes = await paypalCreateOrderPost(paypalCreateReq);
+  const paypalCreateJson = await paypalCreateRes.json();
+  if (paypalCreateRes.status !== 200 || (!paypalCreateJson.id && !paypalCreateJson.orderID)) {
+    throw new Error(`FAIL: PayPal create-order route failed: ${JSON.stringify(paypalCreateJson)}`);
+  }
 
   const ordersAfterPayPalCreate = await fetchOrdersFromWc();
   if (ordersAfterPayPalCreate.length !== ordersBeforePayPalCreate.length) {
-    throw new Error(`FAIL: An order was prematurely created in WooCommerce during PayPal modal creation!`);
+    throw new Error(`FAIL: An order was prematurely created in WooCommerce during PayPal create-order!`);
   }
-  console.log(`  ✓ PASS: Zero orders created in WooCommerce during PayPal order creation.`);
+  console.log(`  ✓ PASS: PayPal create-order route succeeded and created 0 premature orders in WooCommerce.`);
 
   // -------------------------------------------------------------
   // Test 3: Stripe Webhook — Creates 1 order marked 'processing'
   // -------------------------------------------------------------
   console.log(`\n[Test 3] Verifying Stripe webhook creates 1 order marked 'processing' with proper note & metadata...`);
   const stripeSync = await import('@/lib/stripe-sync');
-  const woocommerce = await import('@/lib/woocommerce');
 
   const mockPaymentIntent = {
     id: testStripePi,
@@ -143,7 +295,7 @@ async function run() {
   if (allMatchedAfterRetry.length !== 1) {
     throw new Error(`FAIL: Duplicate order detected! Found ${allMatchedAfterRetry.length} orders for ${testStripePi}`);
   }
-  console.log(`  ✓ PASS: Deduplication guard held. Still exactly 1 order in WooCommerce.`);
+  console.log(`  ✓ PASS: In-flight serialization and retry deduplication verified. Still exactly 1 order in WooCommerce.`);
 
   // -------------------------------------------------------------
   // Test 5: Read-Only Order-Status Endpoint
@@ -176,70 +328,91 @@ async function run() {
   console.log(`  ✓ PASS: order-status returned pending: true and created zero orders even with fallback=true.`);
 
   // -------------------------------------------------------------
-  // Test 6: PayPal Capture & Promotion Flow
+  // Test 6: PayPal Capture Route — Creates 1 processing order
   // -------------------------------------------------------------
-  console.log(`\n[Test 6] Verifying PayPal capture creates 1 processing order in WooCommerce...`);
-  const { buildPendingOrderPayload } = await import('@/lib/server-payment-verify');
-  
-  const captureNote = `Payment captured securely via PayPal. Capture ID: ${testPayPalCaptureId}.`;
-  const paypalPayload = buildPendingOrderPayload({
-    items: [{ id: '101', quantity: 1 }],
-    form: {
-      firstName: 'Alice',
-      lastName: 'Smith',
-      email: 'alice.smith@example.com',
-      address1: '25 Oxford Street',
-      city: 'London',
-      postcode: 'W1D 2DW',
-      country: 'GB',
-    },
-    shippingCost: 0,
-    shippingTitle: 'Free Delivery',
-    paymentProvider: 'paypal',
-    status: 'processing',
-    setPaid: true,
-    transactionId: testPayPalCaptureId,
-    customerNote: captureNote,
+  console.log(`\n[Test 6] Verifying PayPal capture-order route creates 1 processing order in WooCommerce...`);
+  const { POST: paypalCapturePost } = await import('@/app/api/checkout/paypal/capture-order/route');
+
+  const captureReq = new Request('http://localhost:3000/api/checkout/paypal/capture-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      orderID: testPayPalOrderId,
+      items: [{ id: '101', quantity: 1 }],
+      shippingMethod: 'standard',
+      form: {
+        firstName: 'Alice',
+        lastName: 'Smith',
+        email: 'alice.smith@example.com',
+        address1: '25 Oxford Street',
+        city: 'London',
+        postcode: 'W1D 2DW',
+        country: 'GB',
+      },
+    }),
   });
 
-  const paypalCreatedOrder = await woocommerce.createWooCommerceOrder(paypalPayload);
+  const captureRes = await paypalCapturePost(captureReq);
+  const captureJson = await captureRes.json();
+
+  if (captureRes.status !== 200 || !captureJson.success || !captureJson.orderId) {
+    throw new Error(`FAIL: PayPal capture route returned error: ${JSON.stringify(captureJson)}`);
+  }
+
+  const paypalCreatedOrder = await (await import('@/lib/woocommerce')).fetchWooCommerceOrder(captureJson.orderId);
   console.log(`  + PayPal order created: #${paypalCreatedOrder.id} (Status: ${paypalCreatedOrder.status})`);
-  
+
   if (paypalCreatedOrder.status !== 'processing') {
     throw new Error(`FAIL: PayPal order status is '${paypalCreatedOrder.status}', expected 'processing'`);
   }
   if (!paypalCreatedOrder.customer_note?.includes(testPayPalCaptureId)) {
     throw new Error(`FAIL: Customer note does not include capture ID: ${paypalCreatedOrder.customer_note}`);
   }
-  console.log(`  ✓ PASS: PayPal order created with status 'processing' and capture note.`);
+  console.log(`  ✓ PASS: PayPal capture route created order #${paypalCreatedOrder.id} with status 'processing' and capture note.`);
 
   // -------------------------------------------------------------
-  // Test 7: PayPal Capture Deduplication Guard
+  // Test 7: PayPal Capture Route Deduplication Guard
   // -------------------------------------------------------------
-  console.log(`\n[Test 7] Verifying PayPal capture deduplication guard...`);
-  // Look up by capture ID before creating
-  const existingPayPalOrder = await woocommerce.searchWooCommerceOrderByPaymentIntent(testPayPalCaptureId);
-  if (!existingPayPalOrder) {
-    throw new Error(`FAIL: Could not find existing PayPal order by capture ID ${testPayPalCaptureId}`);
-  }
-  console.log(`  + Existing order #${existingPayPalOrder.id} found via transaction lookup.`);
+  console.log(`\n[Test 7] Verifying PayPal capture-order route deduplication guard on repeat capture...`);
+  const ordersBeforeSecondCapture = await fetchOrdersFromWc();
 
-  // Simulate deduplication branch:
-  let secondPayPalOrderCreated = false;
-  if (!existingPayPalOrder) {
-    await woocommerce.createWooCommerceOrder(paypalPayload);
-    secondPayPalOrderCreated = true;
+  const secondCaptureReq = new Request('http://localhost:3000/api/checkout/paypal/capture-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      orderID: testPayPalOrderId,
+      items: [{ id: '101', quantity: 1 }],
+      shippingMethod: 'standard',
+      form: {
+        firstName: 'Alice',
+        lastName: 'Smith',
+        email: 'alice.smith@example.com',
+        address1: '25 Oxford Street',
+        city: 'London',
+        postcode: 'W1D 2DW',
+        country: 'GB',
+      },
+    }),
+  });
+
+  const secondCaptureRes = await paypalCapturePost(secondCaptureReq);
+  const secondCaptureJson = await secondCaptureRes.json();
+
+  if (secondCaptureRes.status !== 200 || secondCaptureJson.orderId !== captureJson.orderId) {
+    throw new Error(`FAIL: Expected deduplicated orderId ${captureJson.orderId}, got ${JSON.stringify(secondCaptureJson)}`);
   }
-  if (secondPayPalOrderCreated) {
-    throw new Error(`FAIL: Deduplication check bypassed! Created duplicate PayPal order.`);
+
+  const ordersAfterSecondCapture = await fetchOrdersFromWc();
+  if (ordersAfterSecondCapture.length !== ordersBeforeSecondCapture.length) {
+    throw new Error(`FAIL: Deduplication check bypassed! Created duplicate PayPal order in WooCommerce.`);
   }
-  console.log(`  ✓ PASS: Deduplication check prevented second PayPal order creation.`);
+  console.log(`  ✓ PASS: PayPal capture deduplication guard successfully prevented duplicate order creation.`);
 
   console.log(`\n======================================================`);
   console.log(`🎉 ALL 7 TEST SCENARIOS PASSED IN LOCAL TEST ENVIRONMENT!`);
   console.log(`   - Premature pending orders eliminated`);
   console.log(`   - Clean capture notes & status verified`);
-  console.log(`   - Cross-process and retry deduplication verified`);
+  console.log(`   - In-flight serialization and retry deduplication verified`);
   console.log(`   - Read-only order-status confirmed`);
   console.log(`======================================================\n`);
 }
