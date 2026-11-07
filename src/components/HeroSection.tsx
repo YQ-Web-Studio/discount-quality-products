@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowRight, Truck, ShieldCheck, RotateCcw, Award } from "lucide-react";
+import { Truck, ShieldCheck, RotateCcw } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, Variants } from "framer-motion";
-import { generateSeoAltText } from "@/lib/seo-utils";
 import { PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
 
 const trustSignals = [
@@ -13,7 +12,12 @@ const trustSignals = [
   { icon: RotateCcw, title: "Hassle-Free Returns", desc: "30-day money back" },
 ];
 
-export function HeroSection() {
+interface HeroSectionProps {
+  productCountLabel?: string;
+}
+
+export function HeroSection({ productCountLabel }: HeroSectionProps = {}) {
+  const label = productCountLabel || PRODUCT_COUNT_LABEL;
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
@@ -71,7 +75,7 @@ export function HeroSection() {
         >
           <motion.div variants={childVariants} className="space-y-4">
             <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-5xl 2xl:text-7xl drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]">
-              {PRODUCT_COUNT_LABEL} Products.<br />
+              {label} Products.<br />
               Discounted <span className="text-primary italic">Prices.</span>
             </h1>
             <p className="mx-auto max-w-2xl text-base font-medium text-zinc-200 sm:text-xl 2xl:text-2xl px-4 sm:px-0 hidden sm:block">

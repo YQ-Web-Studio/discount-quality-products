@@ -22,46 +22,51 @@ import { AuthProvider } from "@/context/AuthContext";
 import { StructuredData } from "@/components/seo/StructuredData";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Suspense } from "react";
-import { PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
+import { getDynamicProductCountLabel } from "@/lib/wordpress";
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://www.discountproducts.co.uk"),
-  title: {
-    template: "%s | Discount Quality Products",
-    default: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
-  },
-  description:
-    `Shop ${PRODUCT_COUNT_LABEL} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
-  openGraph: {
-    title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
+export async function generateMetadata(): Promise<Metadata> {
+  const countLabel = await getDynamicProductCountLabel();
+
+  return {
+    metadataBase: new URL("https://www.discountproducts.co.uk"),
+    title: {
+      template: "%s | Discount Quality Products",
+      default: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
+    },
     description:
-      `Shop ${PRODUCT_COUNT_LABEL} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
-    url: "https://www.discountproducts.co.uk",
-    siteName: "Discount Quality Products",
-    type: "website",
-    locale: "en_GB",
-    images: [
-      {
-        url: "/images/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Discount Quality Products — Light Bulbs, Screws, Electricals & Collectibles",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
-    description:
-      `Shop ${PRODUCT_COUNT_LABEL} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
-    images: ["/images/og-image.png"],
-  },
-  icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
-  },
-};
+      `Shop ${countLabel} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
+    openGraph: {
+      title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
+      description:
+        `Shop ${countLabel} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
+      url: "https://www.discountproducts.co.uk",
+      siteName: "Discount Quality Products",
+      type: "website",
+      locale: "en_GB",
+      images: [
+        {
+          url: "/images/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "Discount Quality Products — Light Bulbs, Screws, Electricals & Collectibles",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
+      description:
+        `Shop ${countLabel} items: light bulbs, electrical fittings, screws, bolts, rare coins & stamps, and magazines. Free UK delivery on orders over £5.`,
+      images: ["/images/og-image.png"],
+    },
+    icons: {
+      icon: "/icon.svg",
+      shortcut: "/icon.svg",
+      apple: "/icon.svg",
+    },
+  };
+}
+
 
 import { GlobalRouteLoader } from "@/components/GlobalRouteLoader";
 import { GoogleAnalytics } from '@next/third-parties/google';
