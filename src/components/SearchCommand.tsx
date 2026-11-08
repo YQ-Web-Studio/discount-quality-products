@@ -3,10 +3,9 @@
 import * as React from "react";
 import { Search } from "lucide-react";
 import { useSearchStore } from "@/lib/useSearchStore";
-import { PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
 
 export function SearchCommand() {
-  const { openSearch } = useSearchStore();
+  const { openSearch, productCountLabel } = useSearchStore();
 
   return (
     <>
@@ -17,7 +16,7 @@ export function SearchCommand() {
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="flex-1 text-left truncate">
-          <span className="hidden 2xl:inline">Search {PRODUCT_COUNT_LABEL} products...</span>
+          <span className="hidden 2xl:inline">Search {productCountLabel} products...</span>
           <span className="hidden lg:inline 2xl:hidden">Search</span>
           <span className="lg:hidden">Search...</span>
         </span>

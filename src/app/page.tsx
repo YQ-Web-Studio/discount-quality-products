@@ -1,4 +1,10 @@
-import { getSmartFeaturedProducts, getLatestProducts, Product, PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
+import {
+  getSmartFeaturedProducts,
+  getLatestProducts,
+  Product,
+  PRODUCT_COUNT_LABEL,
+  getDynamicProductCountLabel,
+} from "@/lib/wordpress";
 import ProductCard from "@/components/ProductCard";
 import { HeroSection } from "@/components/HeroSection";
 import { BentoGrid } from "@/components/BentoGrid";
@@ -7,45 +13,51 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
-  description:
-    `Shop ${PRODUCT_COUNT_LABEL} discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. Free UK delivery on orders over £5.`,
-  openGraph: {
+export async function generateMetadata(): Promise<Metadata> {
+  const countLabel = await getDynamicProductCountLabel();
+
+  return {
     title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
     description:
-      `Shop ${PRODUCT_COUNT_LABEL} discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.`,
-    images: [
-      {
-        url: "/images/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: `Discount Quality Products — ${PRODUCT_COUNT_LABEL} Discounted Products`,
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    images: ["/images/og-image.png"],
-  },
-  alternates: {
-    canonical: "https://www.discountproducts.co.uk",
-  },
-};
+      `Shop ${countLabel} discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines. Free UK delivery on orders over £5.`,
+    openGraph: {
+      title: "Discount Quality Products | Light Bulbs, Electricals, Magazines & Collectibles",
+      description:
+        `Shop ${countLabel} discounted products: premium lighting, electric fittings, computing, rare coins & stamps, DVDs, and magazines.`,
+      images: [
+        {
+          url: "/images/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: `Discount Quality Products — ${countLabel} Discounted Products`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      images: ["/images/og-image.png"],
+    },
+    alternates: {
+      canonical: "https://www.discountproducts.co.uk",
+    },
+  };
+}
 
-export const revalidate = 2592000; // 30 days — data freshness is handled by unstable_cache on the underlying functions
+export const revalidate = 3600; // 1 hour — data freshness is handled by unstable_cache on underlying functions
 
 export default async function Home() {
   let products: Product[] = [];
   let newArrivals: Product[] = [];
+  let productCountLabel: string = PRODUCT_COUNT_LABEL;
   let featuredError: string | null = null;
   let newArrivalsError: string | null = null;
 
-  // Fetch Featured Products and New Arrivals in Parallel to reduce latency
+  // Fetch Featured Products, New Arrivals, and Dynamic Product Count in Parallel to reduce latency
   try {
-    const [featuredResult, latestResult] = await Promise.allSettled([
+    const [featuredResult, latestResult, countResult] = await Promise.allSettled([
       getSmartFeaturedProducts(),
       getLatestProducts(6),
+      getDynamicProductCountLabel(),
     ]);
 
     if (featuredResult.status === "fulfilled") {
@@ -61,7 +73,11 @@ export default async function Home() {
       console.error("Home Page New Arrivals Fetch Error:", latestResult.reason);
       newArrivalsError = latestResult.reason?.message || "Failed to fetch new arrivals";
     }
-  } catch (e: any) {
+
+    if (countResult.status === "fulfilled") {
+      productCountLabel = countResult.value;
+    }
+  } catch (e: unknown) {
     console.error("Home Page Parallel Fetch Error:", e);
   }
 
@@ -69,7 +85,7 @@ export default async function Home() {
     <div className="min-h-screen bg-white">
       {/* Phase 2: Modern UI Components */}
       <div className="relative z-40">
-        <HeroSection />
+        <HeroSection productCountLabel={productCountLabel} />
       </div>
       <div className="relative z-0">
         <BentoGrid />

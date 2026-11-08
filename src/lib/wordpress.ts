@@ -18,22 +18,30 @@ function getWordPressGraphqlUrl() {
   return `${trimmedUrl}/graphql`;
 }
 
+function getWordPressBaseUrl() {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_WORDPRESS_API_URL ||
+    "https://admin.discountproducts.co.uk";
+
+  return baseUrl.replace(/\/$/, "").replace(/\/graphql$/, "");
+}
+
 const WP_GRAPHQL_URL = getWordPressGraphqlUrl();
 
 /**
  * Fallback product count in case of backend network failure.
  */
-export const FALLBACK_PRODUCT_COUNT = 14569;
+export const FALLBACK_PRODUCT_COUNT = 15156;
 
 /**
- * Calculates dynamic rounded product count threshold (e.g. 14569 -> 14000, 15200 -> 15000)
+ * Calculates dynamic rounded product count threshold (e.g. 15156 -> 15000, 16200 -> 16000)
  */
 export function getRoundedProductCount(count: number = FALLBACK_PRODUCT_COUNT): number {
   return Math.floor(count / 1000) * 1000;
 }
 
 /**
- * Formats rounded product count string (e.g. "14,000+")
+ * Formats rounded product count string (e.g. "15,000+")
  */
 export function getFormattedProductCount(count: number = FALLBACK_PRODUCT_COUNT): string {
   return `${getRoundedProductCount(count).toLocaleString('en-GB')}+`;
@@ -41,40 +49,69 @@ export function getFormattedProductCount(count: number = FALLBACK_PRODUCT_COUNT)
 
 /**
  * Fetches the live published product count directly from WordPress via GraphQL.
- * Cached for 24 hours (86,400s) to keep page loads instant while staying fully automatic.
+ * Cached for 1 hour (3,600s) to keep page loads instant while staying fully automatic.
  */
 export const getTotalProductCount = cache(async (): Promise<number> => {
-  const cachedFn = unstable_cache(
-    async () => {
-      const query = `
-        query GetTotalProductCount {
-          products(first: 0, where: { status: "PUBLISH", visibility: VISIBLE }) {
-            pageInfo {
-              total
-            }
-          }
+  const fetchTotal = async (): Promise<number> => {
+    // 1. Primary: WordPress WooGraphQL query
+    const query = `
+      query GetTotalProductCount {
+        products(first: 1, where: { status: "PUBLISH", visibility: VISIBLE }) {
+          found
         }
-      `;
-      try {
-        const data = await wpFetch<{ products: { pageInfo?: { total?: number } } }>(query);
-        const total = data?.products?.pageInfo?.total;
-        if (typeof total === 'number' && total > 0) {
-          return total;
-        }
-      } catch (error) {
-        console.warn("Failed to fetch live total product count from WordPress GraphQL:", error);
       }
-      return FALLBACK_PRODUCT_COUNT;
-    },
-    ['total-product-count'],
-    { revalidate: 2592000, tags: ["wc-products"] }
-  );
+    `;
+    try {
+      const data = await wpFetch<{ products?: { found?: number } }>(query);
+      const found = data?.products?.found;
+      if (typeof found === 'number' && found > 0) {
+        return found;
+      }
+    } catch (error) {
+      console.warn("Failed to fetch live total product count from WordPress GraphQL:", error);
+    }
 
-  return cachedFn();
+    // 2. Secondary fallback: WooCommerce Store API
+    try {
+      const storeApiUrl = `${getWordPressBaseUrl()}/wp-json/wc/store/v1/products?per_page=1`;
+      const res = await fetch(storeApiUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)",
+          "Accept": "application/json",
+        },
+      });
+      const totalHeader = res.headers.get("x-wp-total");
+      if (totalHeader) {
+        const parsed = parseInt(totalHeader, 10);
+        if (parsed > 0) {
+          return parsed;
+        }
+      }
+    } catch (storeError) {
+      console.warn("Failed to fetch product count from WooCommerce Store API:", storeError);
+    }
+
+    return FALLBACK_PRODUCT_COUNT;
+  };
+
+  try {
+    const cachedFn = unstable_cache(
+      fetchTotal,
+      ['total-product-count', 'wc-products'],
+      { revalidate: 3600, tags: ["total-product-count", "wc-products"] }
+    );
+    return await cachedFn();
+  } catch (err: any) {
+    // In standalone or test runtimes where incrementalCache is not mounted, execute directly
+    if (err?.message?.includes("incrementalCache missing") || err?.message?.includes("Invariant")) {
+      return await fetchTotal();
+    }
+    throw err;
+  }
 });
 
 /**
- * Helper to fetch formatted dynamic product count string (e.g. "14,000+") asynchronously
+ * Helper to fetch formatted dynamic product count string (e.g. "15,000+") asynchronously
  */
 export async function getDynamicProductCountLabel(): Promise<string> {
   const total = await getTotalProductCount();
@@ -266,6 +303,8 @@ async function wpFetch<T>(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)',
       },
       body: JSON.stringify({
         query,
@@ -579,7 +618,7 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
 
       const sanitize = (s: string) => {
         const decoded = decodeURIComponent(s);
-        let clean = decoded
+        const clean = decoded
           .toLowerCase()
           .replace(/[\u201C\u201D\u2018\u2019"'`’‘]/g, '')
           .replace(/[^a-z0-9+/|-]/g, '-')

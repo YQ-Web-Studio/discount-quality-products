@@ -8,7 +8,8 @@ import { Search, X, ArrowRight, Zap, Box, Tag } from "lucide-react";
 import Image from "next/image";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
-import { UnifiedSearchResult, PRODUCT_COUNT_LABEL } from "@/lib/wordpress";
+import { UnifiedSearchResult } from "@/lib/wordpress";
+import { useSearchStore } from "@/lib/useSearchStore";
 
 const panelContainerVariants: Variants = {
   hidden: {},
@@ -75,6 +76,7 @@ interface SearchOverlayProps {
 
 export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
+  const productCountLabel = useSearchStore((s) => s.productCountLabel);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchCache = useRef<Record<string, { suggestions: string[], bestMatch: UnifiedSearchResult | null }>>({});
   const hasEverLoadedRef = useRef(false); // true after first successful backend response this session
@@ -472,7 +474,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                             !productsLoading && localCategories.length === 0 && (
                               <div className="py-16 text-center">
                                 <p className="text-sm font-medium text-zinc-400">
-                                  No results for <span className="font-bold text-zinc-700">"{query}"</span>
+                                  No results for <span className="font-bold text-zinc-700">&ldquo;{query}&rdquo;</span>
                                 </p>
                                 <p className="mt-1 text-xs text-zinc-400">
                                   Try searching for something else.
@@ -495,7 +497,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         </div>
                         <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
                         <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
-                          Find exactly what you need across our range of {PRODUCT_COUNT_LABEL} premium products and trade accessories.
+                          Find exactly what you need across our range of {productCountLabel} premium products and trade accessories.
                         </p>
                       </motion.div>
                     )}
