@@ -170,3 +170,36 @@ function dqp_rest_instant_search_handler(WP_REST_Request $request) {
 
     return $response;
 }
+
+/**
+ * Boost title relevance in all standard WooCommerce search queries (REST, GraphQL, Storefront).
+ */
+add_filter('posts_orderby', function($orderby, $query) {
+    $search = $query->get('s');
+    $post_type = $query->get('post_type');
+    $is_product = $post_type === 'product' || (is_array($post_type) && in_array('product', $post_type));
+
+    if (!empty($search) && $is_product) {
+        global $wpdb;
+        $clean = trim((string) $search);
+        if (mb_strlen($clean) >= 2) {
+            $escaped = $wpdb->esc_like($clean);
+            $prefix = $escaped . '%';
+            $word = '% ' . $escaped . '%';
+            $like = '%' . $escaped . '%';
+
+            $title_rank = $wpdb->prepare("
+                CASE 
+                    WHEN {$wpdb->posts}.post_title LIKE %s THEN 1
+                    WHEN {$wpdb->posts}.post_title LIKE %s THEN 2
+                    WHEN {$wpdb->posts}.post_title LIKE %s THEN 3
+                    ELSE 4
+                END ASC
+            ", $prefix, $word, $like);
+
+            return empty($orderby) ? $title_rank : $title_rank . ', ' . $orderby;
+        }
+    }
+    return $orderby;
+}, 20, 2);
+

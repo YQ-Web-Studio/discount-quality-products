@@ -284,6 +284,32 @@ async function fetchProductsInternal(
     const rawProducts: WooProductRaw[] = await response.json();
     const products = rawProducts.map(mapProduct);
 
+    // Rank search results by title relevance when a search query was specified
+    if (params.search && products.length > 1) {
+      const qLower = params.search.toLowerCase().trim();
+      products.sort((a, b) => {
+        const aTitle = a.name.toLowerCase();
+        const bTitle = b.name.toLowerCase();
+
+        const aStarts = aTitle.startsWith(qLower);
+        const bStarts = bTitle.startsWith(qLower);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        const aWord = aTitle.includes(` ${qLower}`);
+        const bWord = bTitle.includes(` ${qLower}`);
+        if (aWord && !bWord) return -1;
+        if (!aWord && bWord) return 1;
+
+        const aContains = aTitle.includes(qLower);
+        const bContains = bTitle.includes(qLower);
+        if (aContains && !bContains) return -1;
+        if (!aContains && bContains) return 1;
+
+        return 0;
+      });
+    }
+
     // If search returned nothing, check if the search query is a SKU
     if (products.length === 0 && params.search) {
       const skuCandidate = params.search.trim();

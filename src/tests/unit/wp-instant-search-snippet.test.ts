@@ -50,4 +50,13 @@ describe("WordPress Lean Instant-Search Snippet (004-instant-search-endpoint.php
     expect(content).toContain("price");
     expect(content).toContain("slug");
   });
+
+  it("registers posts_orderby filter to prioritize title prefix matches in standard WooCommerce search", () => {
+    const content = fs.readFileSync(snippetPath, "utf-8");
+
+    expect(content).toContain("add_filter('posts_orderby'");
+    expect(content).toContain("post_title LIKE");
+    expect(content).toContain("CASE");
+  });
 });
+
