@@ -74,11 +74,15 @@ export const getTotalProductCount = cache(async (): Promise<number> => {
     // 2. Secondary fallback: WooCommerce Store API
     try {
       const storeApiUrl = `${getWordPressBaseUrl()}/wp-json/wc/store/v1/products?per_page=1`;
+      const storeTimeoutMs = process.env.NODE_ENV === "test" && process.env.TEST_STORE_API_TIMEOUT
+        ? parseInt(process.env.TEST_STORE_API_TIMEOUT, 10)
+        : 5000;
       const res = await fetch(storeApiUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)",
           "Accept": "application/json",
         },
+        signal: AbortSignal.timeout(storeTimeoutMs),
       });
       const totalHeader = res.headers.get("x-wp-total");
       if (totalHeader) {
@@ -314,8 +318,6 @@ async function wpFetch<T>(
       cache: "no-store",
     });
 
-    clearTimeout(timeoutId);
-
     const responseText = await response.text();
     const contentType = response.headers.get("content-type") || "";
     const looksLikeJson =
@@ -364,7 +366,6 @@ async function wpFetch<T>(
 
     return json.data;
   } catch (error: any) {
-    clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
       console.error(`WordPress GraphQL fetch timed out after ${timeoutMs}ms:`, WP_GRAPHQL_URL);
       throw new Error(
@@ -373,6 +374,8 @@ async function wpFetch<T>(
     }
     console.error('WordPress Fetch Error:', error);
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

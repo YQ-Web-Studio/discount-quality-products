@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, delay } from 'msw';
 import { server } from '../mocks/server';
 import {
   FALLBACK_PRODUCT_COUNT,
@@ -96,5 +96,35 @@ describe('Product Count Calculation & Formatting', () => {
 
     const dynamicLabel = await getDynamicProductCountLabel();
     expect(dynamicLabel).toBe(PRODUCT_COUNT_LABEL);
+  });
+
+  it('falls back safely to FALLBACK_PRODUCT_COUNT when WooCommerce Store API stalls beyond timeout', async () => {
+    process.env.TEST_STORE_API_TIMEOUT = '50';
+    try {
+      server.use(
+        http.post('*/graphql', () => {
+          return HttpResponse.error();
+        }),
+        http.get('*/wp-json/wc/store/v1/products*', async () => {
+          // Simulate a stalled response from an unresponsive WordPress host
+          await delay(200);
+          return new HttpResponse('[]', {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-wp-total': '16500',
+            },
+          });
+        })
+      );
+
+      const total = await getTotalProductCount();
+      expect(total).toBe(FALLBACK_PRODUCT_COUNT);
+
+      const dynamicLabel = await getDynamicProductCountLabel();
+      expect(dynamicLabel).toBe(PRODUCT_COUNT_LABEL);
+    } finally {
+      delete process.env.TEST_STORE_API_TIMEOUT;
+    }
   });
 });
