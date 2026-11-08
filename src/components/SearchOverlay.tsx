@@ -1,73 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Search, X, ArrowRight, Zap, Box, Tag } from "lucide-react";
+import { Search, X, ArrowRight, Tag, Box, ChevronRight, Loader2, Zap, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
-import { UnifiedSearchResult } from "@/lib/wordpress";
 import { useSearchStore } from "@/lib/useSearchStore";
+import type { InstantSearchResponse, InstantSearchProduct, InstantSearchCategory } from "@/app/api/search/route";
+
+function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 const panelContainerVariants: Variants = {
-  hidden: {},
+  hidden: { opacity: 0 },
   visible: {
+    opacity: 1,
     transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.1,
+      duration: 0.15,
+      ease: "easeOut",
+      staggerChildren: 0.04,
+      delayChildren: 0.05,
     },
   },
 };
 
 const panelChildVariants: Variants = {
-  hidden: { opacity: 0, y: -10 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
-    transition: { type: "spring", stiffness: 300, damping: 24 } 
+  hidden: { opacity: 0, y: -6 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 350, damping: 25 },
   },
 };
-
-function getSearchTermSuggestions(query: string, products: UnifiedSearchResult[]): string[] {
-  const q = query.toLowerCase().trim();
-  const termsSet = new Set<string>();
-
-  products.forEach(p => {
-    const decodedName = decodeHtmlEntities(p.name);
-    // Clean name of suffix noise like "Issue X", "Vol X", brackets, parentheses, etc.
-    const cleanName = decodedName
-      .replace(/\s*[\(\[].*?[\)\]]/g, '') // remove bracketed/parenthesized content
-      .replace(/(?:issue|vol|volume|pack|size|no\.?|part|edition)\s*\d+/gi, '') // remove issue, vol, size etc
-      .replace(/\s+\d+(\s*pcs|\s*pk)?$/gi, '') // remove trailing numbers
-      .replace(/[\s\-\,\.\:]+$/g, '') // remove trailing punctuation
-      .trim();
-
-    if (cleanName.toLowerCase().includes(q)) {
-      if (cleanName.toLowerCase() !== q) {
-        termsSet.add(cleanName.toLowerCase());
-      }
-    } else {
-      if (decodedName.toLowerCase() !== q) {
-        termsSet.add(decodedName.toLowerCase());
-      }
-    }
-  });
-
-  return Array.from(termsSet).map(term => {
-    // Find matching product name to keep original capitalization where possible
-    const match = products.find(p => decodeHtmlEntities(p.name).toLowerCase().includes(term));
-    if (match) {
-      const decodedMatchName = decodeHtmlEntities(match.name);
-      const idx = decodedMatchName.toLowerCase().indexOf(term);
-      if (idx !== -1) {
-        return decodedMatchName.substring(idx, idx + term.length);
-      }
-    }
-    return term.replace(/\b\w/g, c => c.toUpperCase());
-  });
-}
 
 interface SearchOverlayProps {
   open: boolean;
@@ -78,37 +51,71 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
   const productCountLabel = useSearchStore((s) => s.productCountLabel);
   const inputRef = useRef<HTMLInputElement>(null);
-  const searchCache = useRef<Record<string, { suggestions: string[], bestMatch: UnifiedSearchResult | null }>>({});
-  const hasEverLoadedRef = useRef(false); // true after first successful backend response this session
+  const searchCache = useRef<Record<string, InstantSearchResponse>>({});
 
   const [inputValue, setInputValue] = useState("");
   const [query, setQuery] = useState("");
-  const [localCategories, setLocalCategories] = useState<any[]>([]);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [productsLoading, setProductsLoading] = useState(false);
-  const [bestMatch, setBestMatch] = useState<UnifiedSearchResult | null>(null);
+  const [featuredProducts, setFeaturedProducts] = useState<InstantSearchProduct[]>([]);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<InstantSearchResponse>({
+    products: [],
+    categories: [],
+    suggestions: [],
+  });
+  const [isSearching, setIsSearching] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   /* Portal & mount guard */
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  /* Reset state and focus input when overlay status changes */
+  /* Pre-fetch curated featured products for instant zero-input display in the blank space */
+  useEffect(() => {
+    if (!open) return;
+
+    if (featuredProducts.length === 0) {
+      setFeaturedLoading(true);
+      fetch("/api/products/featured")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setFeaturedProducts(
+              data.slice(0, 6).map((item: Record<string, unknown>) => ({
+                id: String(item.id ?? ""),
+                name: String(item.name ?? ""),
+                slug: String(item.slug ?? ""),
+                price: String(item.price || item.regularPrice || "£0.00"),
+                imageUrl:
+                  (item.image as { sourceUrl?: string } | undefined)?.sourceUrl ||
+                  (item.featuredImage as { node?: { sourceUrl?: string } } | undefined)?.node?.sourceUrl ||
+                  null,
+                category:
+                  (item.productCategories as { nodes?: Array<{ name?: string }> } | undefined)?.nodes?.[0]?.name || null,
+              }))
+            );
+          }
+        })
+        .catch(() => {})
+        .finally(() => setFeaturedLoading(false));
+    }
+  }, [open, featuredProducts.length]);
+
+  /* Reset state and focus input when overlay opens/closes */
   useEffect(() => {
     if (open) {
-      setTimeout(() => inputRef.current?.focus(), 120);
+      setTimeout(() => inputRef.current?.focus(), 100);
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
       setInputValue("");
       setQuery("");
-      setLocalCategories([]);
-      setSuggestions([]);
-      setBestMatch(null);
-      setProductsLoading(false);
-      searchCache.current = {}; // Clear client cache when overlay closes
-      hasEverLoadedRef.current = false; // Reset so skeleton shows on next open
+      setSearchResults({ products: [], categories: [], suggestions: [] });
+      setIsSearching(false);
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
   /* Escape key handler */
@@ -120,488 +127,607 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  /* Debounce input → query. 30ms is enough to batch paste/auto-repeat; AbortController handles stale requests */
+  /* Debounce input -> query: 100ms delivers snappy response without server spamming */
   useEffect(() => {
     const timer = setTimeout(() => {
-      setQuery(inputValue);
-    }, 30);
+      setQuery(inputValue.trim());
+    }, 100);
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  /* Synchronous local category matching for instant feedback */
+  /* Live search fetcher with AbortController and instant cache */
   useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length === 0) {
-      setLocalCategories([]);
+    const trimmed = query.toLowerCase();
+    if (trimmed.length < 2) {
+      setSearchResults({ products: [], categories: [], suggestions: [] });
+      setIsSearching(false);
       return;
     }
-    
-    const lower = trimmed.toLowerCase();
-    const matches: any[] = [];
 
-    navigationCategories.forEach(parent => {
-      const parentMatch = parent.label.toLowerCase().includes(lower) || parent.slug.toLowerCase().includes(lower);
-      if (parentMatch) {
+    // 1. Instant return from in-memory cache on backspace / repeated terms
+    if (searchCache.current[trimmed]) {
+      setSearchResults(searchCache.current[trimmed]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const controller = new AbortController();
+
+    const fetchLiveResults = async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+        const data: InstantSearchResponse = await res.json();
+
+        searchCache.current[trimmed] = data;
+        setSearchResults(data);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        console.error("Live search fetch error:", err);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    fetchLiveResults();
+
+    return () => {
+      controller.abort();
+    };
+  }, [query]);
+
+  const handleNavigate = useCallback(
+    (href: string) => {
+      onClose();
+      window.dispatchEvent(new CustomEvent("trigger-global-loading"));
+      router.push(href);
+    },
+    [onClose, router]
+  );
+
+  const trimmedInput = inputValue.trim();
+  const hasSearchQuery = trimmedInput.length >= 2;
+
+  // 1. Instant Synchronous Categories (0ms)
+  const instantCategories = useMemo(() => {
+    if (!hasSearchQuery) return [];
+    const lower = trimmedInput.toLowerCase();
+    const matches: InstantSearchCategory[] = [];
+    for (const parent of navigationCategories) {
+      if (parent.label.toLowerCase().includes(lower) || parent.slug.toLowerCase().includes(lower)) {
         matches.push({
           id: `local-${parent.id}`,
           name: parent.label,
           slug: parent.slug,
           parentName: null,
-          parentSlug: null,
           route: `/categories/${parent.slug}`,
           accentColor: parent.accentColor,
         });
       }
-      parent.subcategories.forEach(sub => {
-        const subMatch = sub.label.toLowerCase().includes(lower) || sub.slug.toLowerCase().includes(lower);
-        if (subMatch) {
+      for (const sub of parent.subcategories) {
+        if (sub.label.toLowerCase().includes(lower) || sub.slug.toLowerCase().includes(lower)) {
           matches.push({
             id: `local-${sub.id}`,
             name: sub.label,
             slug: sub.slug,
             parentName: parent.label,
-            parentSlug: parent.slug,
             route: `/categories/${parent.slug}?category=${sub.slug}`,
             accentColor: parent.accentColor,
           });
         }
-      });
-    });
-
-    setLocalCategories(matches);
-  }, [query]);
-
-  /* Remote product search — uses fetch + AbortController so stale requests cancel instantly */
-  useEffect(() => {
-    const trimmed = query.trim().toLowerCase();
-    if (trimmed.length < 2) {
-      setSuggestions([]);
-      setBestMatch(null);
-      setProductsLoading(false);
-      return;
-    }
-
-    // Serve instantly from client cache if already queried
-    if (searchCache.current[trimmed]) {
-      const cached = searchCache.current[trimmed];
-      setSuggestions(cached.suggestions);
-      setBestMatch(cached.bestMatch);
-      setProductsLoading(false);
-      return;
-    }
-
-    // Stale suggestions stay on screen; only show loading if nothing cached yet
-    setProductsLoading(true);
-
-    const controller = new AbortController();
-
-    const fetchResults = async () => {
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-        const backendResults: UnifiedSearchResult[] = await res.json();
-
-        // Filter for products only
-        const productResults = backendResults.filter(item => item.type === 'product');
-
-        // Scoring for Best Match (Exact or high-relevance score >= 90)
-        let highestScore = 0;
-        let bestItem: UnifiedSearchResult | null = null;
-
-        productResults.forEach(item => {
-          const name = item.name.toLowerCase();
-          let score = 0;
-
-          if (name === trimmed) {
-            score = 100;
-          } else if (name.startsWith(trimmed)) {
-            score = 95;
-          } else {
-            const queryWords = trimmed.split(/\s+/).filter(Boolean);
-            const nameWords = name.split(/\s+/).filter(Boolean);
-            let matchCount = 0;
-            queryWords.forEach(qw => {
-              if (nameWords.includes(qw)) {
-                matchCount++;
-              }
-            });
-            if (queryWords.length > 0) {
-              const ratio = matchCount / queryWords.length;
-              if (ratio === 1) {
-                score = 90;
-              } else {
-                score = Math.round(ratio * 80);
-              }
-            }
-          }
-
-          if (score > highestScore) {
-            highestScore = score;
-            bestItem = item;
-          }
-        });
-
-        let finalBestMatch: UnifiedSearchResult | null = null;
-        if (highestScore >= 90 && bestItem) {
-          finalBestMatch = bestItem;
-        }
-
-        const derivedSuggestions = getSearchTermSuggestions(trimmed, productResults);
-
-        // Cache results for instant backspace/repeat
-        searchCache.current[trimmed] = {
-          suggestions: derivedSuggestions,
-          bestMatch: finalBestMatch
-        };
-
-        setBestMatch(finalBestMatch);
-        setSuggestions(derivedSuggestions);
-        hasEverLoadedRef.current = true; // mark that results have loaded at least once
-      } catch (error: any) {
-        if (error?.name === 'AbortError') return; // request was cancelled — ignore
-        console.error("Failed to fetch products:", error);
-      } finally {
-        setProductsLoading(false);
       }
-    };
+    }
+    return matches.slice(0, 3);
+  }, [trimmedInput, hasSearchQuery]);
 
-    fetchResults();
+  // 2. Suggestions (0ms initial typed term, enriched when remote results arrive)
+  const displaySuggestions = useMemo(() => {
+    if (!hasSearchQuery) return [];
+    const typed = toTitleCase(trimmedInput);
+    const fromResults = searchResults.suggestions || [];
+    const list = [typed, ...fromResults];
+    return list.filter((s, idx, arr) => arr.indexOf(s) === idx).slice(0, 5);
+  }, [trimmedInput, hasSearchQuery, searchResults.suggestions]);
 
-    return () => {
-      controller.abort(); // cancel any in-flight request when query changes
-    };
-  }, [query]);
+  // 3. Display categories (combine instant local matches with remote categories)
+  const displayCategories = useMemo(() => {
+    if (searchResults.categories.length > 0) {
+      return searchResults.categories;
+    }
+    return instantCategories;
+  }, [searchResults.categories, instantCategories]);
 
-  const handleNavigate = useCallback((href: string) => {
-    onClose();
-    window.dispatchEvent(new CustomEvent("trigger-global-loading"));
-    router.push(href);
-  }, [onClose, router]);
+  // 4. Calculate Best Match product
+  const bestMatch = useMemo<InstantSearchProduct | null>(() => {
+    if (!hasSearchQuery || searchResults.products.length === 0 || searchResults.isFallback) {
+      return null;
+    }
+
+    const lower = trimmedInput.toLowerCase();
+    let highestScore = 0;
+    let candidate: InstantSearchProduct | null = null;
+
+    for (const item of searchResults.products) {
+      const name = item.name.toLowerCase();
+      let score = 0;
+
+      if (name === lower) {
+        score = 100;
+      } else if (name.startsWith(lower)) {
+        score = 95;
+      } else {
+        const queryWords = lower.split(/\s+/).filter(Boolean);
+        const nameWords = name.split(/\s+/).filter(Boolean);
+        let matchCount = 0;
+        for (const qw of queryWords) {
+          if (nameWords.includes(qw)) matchCount++;
+        }
+        if (queryWords.length > 0) {
+          const ratio = matchCount / queryWords.length;
+          score = ratio === 1 ? 90 : Math.round(ratio * 80);
+        }
+      }
+
+      if (score > highestScore) {
+        highestScore = score;
+        candidate = item;
+      }
+    }
+
+    return highestScore >= 90 ? candidate : searchResults.products[0] || null;
+  }, [hasSearchQuery, searchResults.products, searchResults.isFallback, trimmedInput]);
 
   if (!mounted) return null;
 
   const overlay = (
     <AnimatePresence>
       {open && (
-        <>
-          {/* Backdrop */}
+        <motion.div
+          key="panel"
+          className="fixed inset-0 z-[10003] h-dvh min-h-screen h-screen w-screen overflow-x-hidden overflow-y-auto overscroll-contain bg-white flex flex-col"
+          variants={panelContainerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+        >
+          {/* Search Bar Input Row */}
           <motion.div
-            key="backdrop"
-            className="fixed inset-0 z-[10002] bg-black/60"
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            transition={{ duration: 0.18 }}
-            onClick={onClose}
-          />
-
-          {/* Panel */}
-          <motion.div
-            key="panel"
-            className="fixed inset-x-0 top-0 z-[10003] max-h-[90vh] overflow-y-auto bg-white shadow-2xl border-b border-zinc-200"
-            variants={panelContainerVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            variants={panelChildVariants}
+            className="border-b border-zinc-200/80 px-3 py-2.5 sm:px-6 sm:py-3.5 2xl:px-8 bg-white/95 sticky top-0 z-20 backdrop-blur-md pt-[max(0.625rem,env(safe-area-inset-top))]"
           >
-            {/* Search bar row */}
-            <motion.div variants={panelChildVariants} className="border-b border-zinc-100 px-4 py-4 md:px-6 2xl:px-8">
-              <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-4">
-                <Search className="h-5 w-5 shrink-0 text-zinc-400" />
-                 <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Search 13,000+ products..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && inputValue.trim()) {
-                      handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`);
-                    }
-                  }}
-                  className="flex-1 bg-transparent text-lg font-medium text-zinc-900 placeholder:text-zinc-400 outline-none"
-                />
+            <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-2 sm:gap-3">
+              <Search className="h-4.5 w-4.5 sm:h-5 sm:w-5 shrink-0 text-zinc-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={productCountLabel ? `Search ${productCountLabel} products, parts...` : "Search products, categories, or parts..."}
+                value={inputValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setInputValue(val);
+                  if (val.trim().length >= 2) {
+                    setIsSearching(true);
+                  } else {
+                    setIsSearching(false);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && inputValue.trim()) {
+                    handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`);
+                  }
+                }}
+                className="flex-1 bg-transparent text-[16px] sm:text-base md:text-lg font-medium text-zinc-900 placeholder:text-zinc-400 placeholder:truncate outline-none min-w-0"
+                aria-label="Search catalogue"
+              />
+
+              {isSearching && (
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400 shrink-0" />
+              )}
+
+              {inputValue && (
                 <button
                   onClick={() => {
-                    if (inputValue) {
-                      setInputValue("");
-                      setQuery("");
-                      inputRef.current?.focus();
-                    } else {
-                      onClose();
-                    }
+                    setInputValue("");
+                    setQuery("");
+                    inputRef.current?.focus();
                   }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-                  aria-label={inputValue ? "Clear search" : "Close search"}
+                  className="flex h-8 w-8 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 transition-colors touch-manipulation"
+                  aria-label="Clear search"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
-              </div>
-            </motion.div>
+              )}
 
-            <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 py-6 md:px-6 2xl:px-8">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-                
-                {/* Left Column: Search Results */}
-                <div className="lg:col-span-9 flex flex-col">
-                  <AnimatePresence mode="wait">
-                    {inputValue.trim().length > 0 ? (
-                      <motion.div
-                        key="search-results"
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        className="pb-6"
-                      >
-                        {/* Instant Categories matching local Config */}
-                        {localCategories.length > 0 && (
-                          <div className="mb-6">
-                            <h4 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                              Categories & Departments
-                            </h4>
-                            <div className="flex flex-col gap-1.5">
-                              {localCategories.slice(0, 5).map((cat) => (
+              <button
+                onClick={onClose}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 sm:py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 transition-colors shrink-0 touch-manipulation min-h-[38px] sm:min-h-0"
+                aria-label="Close search overlay"
+              >
+                <span>Close</span>
+                <kbd className="hidden sm:inline-block rounded border border-zinc-200 bg-white px-1 py-0.5 font-mono text-[10px] text-zinc-400">Esc</kbd>
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Content Container */}
+          <div className="flex-1 mx-auto w-full max-w-[1440px] 2xl:max-w-[1750px] px-3.5 py-4 sm:px-6 2xl:px-8 pb-[max(5rem,calc(env(safe-area-inset-bottom)+3rem))]">
+              <AnimatePresence mode="wait">
+                {!hasSearchQuery ? (
+                  /* Initial State: Category Cards across top in 1 row + Featured Products below */
+                  <motion.div
+                    key="initial-browse-state"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="space-y-6"
+                  >
+                    {/* Category Cards across the whole box along the top in 1 row */}
+                    <div>
+                      <p className="mb-2 sm:mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        Browse by Department
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-5 gap-2 sm:gap-2.5 lg:gap-3">
+                        {navigationCategories.map((category, idx) => (
+                          <div
+                            key={category.slug}
+                            className={cn(
+                              "rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-2.5 sm:p-3 hover:bg-white hover:border-zinc-300 hover:shadow-xs transition-all flex flex-col justify-between",
+                              idx === 4 && "col-span-2 md:col-span-1 lg:col-span-1"
+                            )}
+                          >
+                            <div>
+                              <button
+                                onClick={() => handleNavigate(`/categories/${category.slug}`)}
+                                className={cn(
+                                  "text-xs sm:text-sm font-bold mb-1.5 sm:mb-2 transition-opacity hover:opacity-80 text-left w-full flex items-center justify-between group touch-manipulation",
+                                  category.accentColor
+                                )}
+                              >
+                                <span className="truncate">{category.label}</span>
+                                <ChevronRight className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                              </button>
+                              <div className="flex flex-col gap-0.5 sm:gap-1">
+                                {category.subcategories.map((sub) => (
+                                  <button
+                                    key={sub.slug}
+                                    onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
+                                    className="flex items-center justify-between text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left py-1 sm:py-0.5 truncate group touch-manipulation"
+                                  >
+                                    <span className="truncate">{sub.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Featured Products filling the space below category cards */}
+                    <div className="border-t border-zinc-100 pt-4 sm:pt-5 space-y-3 sm:space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+                            <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-current" />
+                          </div>
+                          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
+                            Featured Products
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => handleNavigate("/shop")}
+                          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                        >
+                          Browse all
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {featuredLoading && featuredProducts.length === 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+                          {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div
+                              key={i}
+                              className="h-40 sm:h-44 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse p-3"
+                            />
+                          ))}
+                        </div>
+                      ) : featuredProducts.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+                          {featuredProducts.map((prod) => (
+                            <button
+                              key={`featured-${prod.id}`}
+                              onClick={() => handleNavigate(`/products/${prod.slug}`)}
+                              className="group flex flex-col rounded-xl border border-zinc-200/70 bg-white p-2 sm:p-2.5 text-left transition-all hover:border-zinc-300 hover:shadow-xs"
+                            >
+                              <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100 mb-2">
+                                {prod.imageUrl ? (
+                                  <Image
+                                    src={prod.imageUrl}
+                                    alt={decodeHtmlEntities(prod.name)}
+                                    fill
+                                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 160px"
+                                    className="object-cover transition-transform group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                    <Box className="h-6 w-6" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1 flex flex-col justify-between">
+                                <div>
+                                  {prod.category && (
+                                    <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-400 truncate mb-0.5">
+                                      {prod.category}
+                                    </span>
+                                  )}
+                                  <h4 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors min-h-[2rem]">
+                                    {decodeHtmlEntities(prod.name)}
+                                  </h4>
+                                </div>
+                                <p className="mt-1 text-xs font-bold text-primary">
+                                  {prod.price}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {/* Shortcut hint */}
+                      <div className="border-t border-zinc-100 pt-3 text-[10px] sm:text-xs text-zinc-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-4">
+                        <span>Select a department above or type to search products</span>
+                        <span className="hidden sm:inline">Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-zinc-500">Esc</kbd> to close</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  /* Active Search Stream with Best Match alongside (Categories hidden while typing) */
+                  <motion.div
+                    key="search-active-stream"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+                      
+                      {/* Left Column: Search Results */}
+                      <div className={cn(bestMatch ? "lg:col-span-8 xl:col-span-9" : "lg:col-span-12", "flex flex-col space-y-4 sm:space-y-5")}>
+                        {/* Section A: Matching Departments */}
+                        {displayCategories.length > 0 && (
+                          <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-2 sm:p-3">
+                            <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              Matching Departments
+                            </p>
+                            <div className="space-y-1">
+                              {displayCategories.map((cat) => (
                                 <button
-                                  key={cat.id}
+                                  key={`cat-${cat.id}`}
                                   onClick={() => handleNavigate(cat.route)}
-                                  className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
+                                  className="group flex w-full items-center justify-between rounded-lg px-2.5 sm:px-3 py-2 sm:py-2.5 text-left transition-colors hover:bg-white border border-transparent hover:border-zinc-200/60"
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
-                                      <Tag className="h-4 w-4" />
+                                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                                    <div className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-md bg-white border border-zinc-200/60 text-zinc-500 group-hover:text-primary transition-colors shrink-0">
+                                      <Tag className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                     </div>
-                                    <div className="flex items-baseline">
-                                      <span className="text-sm font-semibold text-zinc-800 group-hover:text-zinc-950 transition-colors">
+                                    <div className="flex items-baseline gap-1.5 truncate">
+                                      <span className="text-xs sm:text-sm font-semibold text-zinc-900 group-hover:text-primary transition-colors truncate">
                                         {cat.name}
                                       </span>
                                       {cat.parentName && (
-                                        <span className="ml-2 text-xs text-zinc-400">
+                                        <span className="text-[11px] sm:text-xs text-zinc-400 truncate">
                                           in {cat.parentName}
                                         </span>
                                       )}
                                     </div>
                                   </div>
-                                  <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
+                                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
                                 </button>
                               ))}
                             </div>
                           </div>
                         )}
 
-                        {/* Product suggestions */}
-                        <div>
-                          <h4 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                            Search Suggestions
-                          </h4>
-
-                          {/* Top line: always instant, never skeletonised */}
-                          {inputValue.trim().length >= 2 && (
-                            <button
-                              onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
-                              className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50 mb-1.5"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
-                                  <Search className="h-4 w-4" />
-                                </div>
-                                <span className="text-sm font-semibold text-zinc-900 truncate transition-colors">
-                                  {inputValue.trim()}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">Search term</span>
-                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
-                              </div>
-                            </button>
-                          )}
-
-                          {/* Skeleton: only on first cold load (no results ever received yet) */}
-                          {productsLoading && !hasEverLoadedRef.current && suggestions.length === 0 ? (
-                            <div className="space-y-1.5">
-                              {[1, 2, 3, 4].map((i) => (
-                                <div key={i} className="flex items-center justify-between px-4 py-3 border border-zinc-50 rounded-xl animate-pulse bg-zinc-50/50">
-                                  <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-lg bg-zinc-100" />
-                                    <div className="h-4 w-48 rounded bg-zinc-100" />
+                        {/* Section B: Suggestions */}
+                        {displaySuggestions.length > 0 && (
+                          <div>
+                            <p className="px-2 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              Search Suggestions
+                            </p>
+                            <div className="space-y-1">
+                              {displaySuggestions.map((phrase, idx) => (
+                                <button
+                                  key={`phrase-${idx}`}
+                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(phrase)}`)}
+                                  className="group flex w-full items-center justify-between rounded-lg px-2.5 sm:px-3 py-2 sm:py-2.5 text-left transition-colors hover:bg-zinc-50 border border-transparent hover:border-zinc-200/60"
+                                >
+                                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                                    <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-zinc-400 group-hover:text-zinc-700 transition-colors shrink-0" />
+                                    <span className="text-xs sm:text-sm font-medium text-zinc-800 group-hover:text-zinc-950 truncate">
+                                      {phrase}
+                                    </span>
                                   </div>
-                                  <div className="h-4 w-12 rounded bg-zinc-100" />
-                                </div>
+                                  <ArrowRight className="h-3.5 w-3.5 text-zinc-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                                </button>
                               ))}
                             </div>
-                          ) : suggestions.length > 0 ? (
-                            <div className="flex flex-col gap-1.5">
-                              {/* Exact query match suggestion (updates instantly with inputValue) — already rendered above as top line */}
+                          </div>
+                        )}
 
-                              {/* Other suggestions from the backend (sliced to 5) */}
-                              {suggestions
-                                .filter(s => s.toLowerCase() !== inputValue.trim().toLowerCase())
-                                .slice(0, 5)
-                                .map((suggestion, idx) => (
-                                  <button
-                                    key={`suggestion-${idx}`}
-                                    onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(suggestion)}`)}
-                                    className="group flex items-center justify-between rounded-xl px-4 py-2.5 text-left transition-all hover:bg-zinc-50 border border-transparent hover:border-zinc-100/50"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-emerald-700 transition-colors border border-zinc-100/50">
-                                        <Search className="h-4 w-4" />
-                                      </div>
-                                      <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-950 truncate transition-colors">
-                                        {suggestion}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 text-zinc-400 transition-all transform group-hover:translate-x-1" />
-                                    </div>
-                                  </button>
-                                ))
-                              }
-
-                              {/* View all button */}
-                              {suggestions.length > 5 && (
-                                <button
-                                  onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(query)}`)}
-                                  className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:underline py-2 w-fit mx-auto"
-                                >
-                                  View all
-                                  <ArrowRight className="h-3 w-3" />
-                                </button>
+                        {/* Section C: Products Stream */}
+                        {searchResults.products.length > 0 ? (
+                          <div>
+                            <div className="px-2 mb-2">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                {searchResults.isFallback
+                                  ? "Popular Products"
+                                  : searchResults.broadenedQuery
+                                  ? `Matching Products for "${searchResults.broadenedQuery}"`
+                                  : "Matching Products"}
+                              </p>
+                              {searchResults.isFallback && (
+                                <p className="mt-0.5 text-xs text-zinc-500">
+                                  No exact matches for &ldquo;{inputValue.trim()}&rdquo; &mdash; you may be interested in:
+                                </p>
                               )}
                             </div>
-                          ) : (
-                            !productsLoading && localCategories.length === 0 && (
-                              <div className="py-16 text-center">
-                                <p className="text-sm font-medium text-zinc-400">
-                                  No results for <span className="font-bold text-zinc-700">&ldquo;{query}&rdquo;</span>
-                                </p>
-                                <p className="mt-1 text-xs text-zinc-400">
-                                  Try searching for something else.
-                                </p>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="initial-state"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="flex-1 flex flex-col items-center justify-center text-center py-12 pb-24"
-                      >
-                        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-300 mx-auto">
-                          <Search className="h-7 w-7" />
-                        </div>
-                        <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
-                        <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
-                          Find exactly what you need across our range of {productCountLabel} premium products and trade accessories.
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
 
-                {/* Right Column: Persistent Browse Categories OR Best Match */}
-                <div className="lg:col-span-3">
-                  <AnimatePresence mode="wait">
-                    {bestMatch ? (
-                      <motion.div
-                        key="best-match"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                          Best Match
-                        </p>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                          <div className="absolute top-3 left-3 z-10 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1 border border-emerald-200">
-                            <Zap className="h-3 w-3 fill-current" />
-                            Best Match
+                            <div className="space-y-1.5">
+                              {searchResults.products.map((prod) => (
+                                <button
+                                  key={`prod-${prod.id}`}
+                                  onClick={() => handleNavigate(`/products/${prod.slug}`)}
+                                  className="group flex w-full items-center justify-between gap-2.5 sm:gap-3 rounded-xl border border-zinc-200/70 bg-white p-2.5 sm:p-3 text-left transition-all hover:border-zinc-300 hover:shadow-xs active:scale-[0.99] touch-manipulation"
+                                >
+                                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                                    <div className="relative h-12 w-12 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100">
+                                      {prod.imageUrl ? (
+                                        <Image
+                                          src={prod.imageUrl}
+                                          alt={decodeHtmlEntities(prod.name)}
+                                          fill
+                                          sizes="(max-width: 640px) 48px, 56px"
+                                          className="object-cover transition-transform group-hover:scale-105"
+                                        />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                          <Box className="h-5 w-5" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      {prod.category && (
+                                        <span className="inline-block rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-zinc-500 mb-0.5">
+                                          {prod.category}
+                                        </span>
+                                      )}
+                                      <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 truncate group-hover:text-primary transition-colors">
+                                        {decodeHtmlEntities(prod.name)}
+                                      </h4>
+                                      <span className="text-xs font-bold text-primary">
+                                        {prod.price}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 flex items-center pl-2">
+                                    <span className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-zinc-400 group-hover:text-zinc-800 transition-colors">
+                                      View Product
+                                      <ArrowRight className="h-3 w-3" />
+                                    </span>
+                                    <ChevronRight className="h-4 w-4 text-zinc-400 sm:hidden" />
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                          <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-zinc-50 mb-4 mt-2">
-                            {bestMatch.imageUrl ? (
-                              <Image
-                                src={bestMatch.imageUrl}
-                                alt={bestMatch.imageAlt || decodeHtmlEntities(bestMatch.name)}
-                                fill
-                                sizes="(max-width: 768px) 100vw, 300px"
-                                className="object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <Box className="h-10 w-10 text-zinc-300" />
-                              </div>
-                            )}
+                        ) : isSearching ? (
+                          <div>
+                            <p className="px-2 mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              Searching Products...
+                            </p>
+                            <div className="space-y-1.5">
+                              {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-16 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse" />
+                              ))}
+                            </div>
                           </div>
-                          <h4 className="font-bold text-zinc-900 group-hover:text-primary transition-colors line-clamp-2 min-h-[2.5rem] text-sm leading-snug">
-                            {decodeHtmlEntities(bestMatch.name)}
-                          </h4>
-                          <div className="mt-2 flex items-center justify-between">
-                            <span className="text-sm font-extrabold text-primary">
-                              {bestMatch.price || "View Price"}
-                            </span>
-                          </div>
+                        ) : null}
+
+                        {/* Section D: Clean Text Button */}
+                        <div className="pt-2 flex justify-center">
                           <button
-                            onClick={() => handleNavigate(`/products/${bestMatch.slug}`)}
-                            className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-zinc-950 py-2.5 text-xs font-bold text-white transition-all hover:bg-zinc-800"
+                            onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
+                            className="inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-zinc-700 hover:text-zinc-950 hover:underline transition-colors py-2.5 px-4 rounded-xl border border-zinc-200 sm:border-transparent bg-zinc-50 sm:bg-transparent text-center w-full sm:w-auto touch-manipulation"
                           >
-                            View Details
-                            <ArrowRight className="h-3.5 w-3.5" />
+                            <span>Search for &ldquo;{inputValue.trim()}&rdquo; in all products</span>
+                            <ArrowRight className="h-4 w-4 shrink-0" />
                           </button>
                         </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="browse-categories"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                          Browse by Category
-                        </p>
-                        <div className="flex flex-col gap-3">
-                          {navigationCategories.map((category) => (
-                            <div key={category.slug} className="rounded-xl border border-zinc-100 p-4 bg-zinc-50/50">
-                              <button
-                                onClick={() => handleNavigate(`/categories/${category.slug}`)}
-                                className={cn("text-sm font-bold mb-3 transition-opacity hover:opacity-70 text-left w-full", category.accentColor)}
-                              >
-                                {category.label}
-                              </button>
-                              <div className="flex flex-col gap-2">
-                                {category.subcategories.map((sub) => (
+
+                        {/* Section E: Zero Results State (Only for True Gibberish) */}
+                        {!isSearching && trimmedInput.length >= 2 && searchResults.products.length === 0 && displayCategories.length === 0 && (
+                          <div className="py-8 sm:py-12 text-center rounded-xl bg-zinc-50/50 border border-zinc-100 px-4">
+                            <p className="text-sm font-semibold text-zinc-800">
+                              No results found for &ldquo;{inputValue.trim()}&rdquo;
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-400">
+                              Check your spelling or clear search to browse departments.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Column: Best Match Card (ordered first on mobile/tablet for instant glance, in right col on desktop) */}
+                      {bestMatch && (
+                        <div className="order-first lg:order-last lg:col-span-4 xl:col-span-3">
+                          <motion.div
+                            key={`best-match-${bestMatch.id}`}
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                                Best Match
+                              </p>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 rounded-full px-2 py-0.5 border border-emerald-200 inline-flex items-center gap-1">
+                                <Zap className="h-2.5 w-2.5 fill-current" />
+                                Top Result
+                              </span>
+                            </div>
+                            <div className="rounded-2xl border border-zinc-200 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                              <div className="flex lg:block gap-3.5 sm:gap-4 items-center lg:items-start">
+                                <div className="relative h-20 w-20 sm:h-24 sm:w-24 lg:h-auto lg:w-full lg:aspect-square shrink-0 overflow-hidden rounded-xl bg-zinc-50 lg:mb-4 lg:mt-1">
+                                  {bestMatch.imageUrl ? (
+                                    <Image
+                                      src={bestMatch.imageUrl}
+                                      alt={decodeHtmlEntities(bestMatch.name)}
+                                      fill
+                                      sizes="(max-width: 640px) 80px, (max-width: 1024px) 96px, 300px"
+                                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                      <Box className="h-8 w-8 sm:h-10 sm:w-10 text-zinc-300" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-bold text-zinc-900 group-hover:text-primary transition-colors line-clamp-2 text-xs sm:text-sm lg:text-base leading-snug lg:min-h-[2.5rem]">
+                                    {decodeHtmlEntities(bestMatch.name)}
+                                  </h4>
+                                  <div className="mt-1 sm:mt-1.5 lg:mt-2 flex items-center justify-between">
+                                    <span className="text-xs sm:text-sm font-extrabold text-primary">
+                                      {bestMatch.price || "View Price"}
+                                    </span>
+                                  </div>
                                   <button
-                                    key={sub.slug}
-                                    onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
-                                    className="flex items-center justify-between text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left"
+                                    onClick={() => handleNavigate(`/products/${bestMatch.slug}`)}
+                                    className="mt-2.5 sm:mt-3 lg:mt-4 w-full sm:w-auto lg:w-full px-4 flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-zinc-950 py-2 sm:py-2.5 text-xs font-bold text-white transition-all hover:bg-zinc-800 touch-manipulation"
                                   >
-                                    {sub.label}
-                                    <ArrowRight className="h-3 w-3 text-zinc-300" />
+                                    View Details
+                                    <ArrowRight className="h-3.5 w-3.5" />
                                   </button>
-                                ))}
+                                </div>
                               </div>
                             </div>
-                          ))}
+                          </motion.div>
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Shortcut hint */}
-                  <p className="mt-10 text-[10px] text-zinc-400">
-                    Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono font-medium text-zinc-500">Esc</kbd> to close
-                  </p>
-                </div>
-              </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
-        </>
       )}
     </AnimatePresence>
   );

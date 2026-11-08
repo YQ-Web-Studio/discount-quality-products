@@ -4,7 +4,7 @@ All PHP modifications and custom functions targeting WordPress/WooCommerce must 
 
 ## File Naming Convention
 
-Format: `NNN-kebab-case-description.php` (e.g., `001-vat-first-class-exemption.php`).
+Format: `NNN-kebab-case-description.php` (e.g., `001-vat-first-class-exemption.php`, `004-instant-search-endpoint.php`).
 
 ## Header Standard
 

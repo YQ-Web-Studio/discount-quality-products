@@ -2,6 +2,8 @@ import SearchHub, { SearchHubSkeleton } from "./SearchHub";
 import type { Metadata } from "next";
 import { fetchWooCommerceProducts, getCategories, type DynamicNavCategory } from "@/lib/woocommerce";
 import { productMatchesAttributeFilters } from "./filterAttributes";
+import { broadenSearchQuery } from "./broadenSearch";
+import { isGibberishQuery } from "@/lib/gibberish";
 import { Suspense } from "react";
 
 type SearchPageProps = {
@@ -88,11 +90,11 @@ async function getProductsData(
           if (cat.slug === part) {
             resolvedIds.push(cat.id);
             if (cat.subcategories) {
-              cat.subcategories.forEach((sub: any) => resolvedIds.push(sub.id));
+              cat.subcategories.forEach((sub: { id: number }) => resolvedIds.push(sub.id));
             }
             break;
           }
-          const sub = cat.subcategories?.find((s: any) => s.slug === part);
+          const sub = cat.subcategories?.find((s: { slug: string }) => s.slug === part);
           if (sub) {
             resolvedIds.push(sub.id);
             break;
@@ -150,11 +152,74 @@ async function getProductsData(
   const visibleTotal = hasAttributeFilters ? strictProducts.length : response.total;
   const visibleTotalPages = hasAttributeFilters ? Math.ceil(strictProducts.length / 24) : response.totalPages;
 
+  // Zero-results resilience: if searching yields 0 products, attempt auto-broadening or popular catalog fallback
+  const broadenedQuery: string | undefined = undefined;
+  const isFallbackCatalog = false;
+
+  if (visibleTotal === 0 && searchQ && page === 1 && !hasAttributeFilters) {
+    // Only unpronounceable gibberish (e.g. "aekjsghslggjkfdg") should return zero results.
+    // Human queries should always return results (via broadening or popular catalog fallback).
+    if (isGibberishQuery(searchQ)) {
+      return {
+        products: [],
+        filterProducts: [],
+        total: 0,
+        totalPages: 0,
+        broadenedQuery: undefined,
+        originalQuery: searchQ,
+        isFallbackCatalog: false,
+      };
+    }
+
+    const broadened = broadenSearchQuery(searchQ);
+    if (broadened) {
+      const broadenedRes = await fetchWooCommerceProducts({
+        ...productParams,
+        search: broadened,
+      });
+
+      if (broadenedRes.total > 0) {
+        return {
+          products: broadenedRes.products,
+          filterProducts: broadenedRes.products,
+          total: broadenedRes.total,
+          totalPages: broadenedRes.totalPages,
+          broadenedQuery: broadened,
+          originalQuery: searchQ,
+          isFallbackCatalog: false,
+        };
+      }
+    }
+
+    // If broadened query still yields 0 results (or cannot be broadened), fall back to popular catalog
+    const fallbackRes = await fetchWooCommerceProducts({
+      page: 1,
+      per_page: 24,
+      orderby: "popularity",
+      order: "desc",
+    });
+
+    if (fallbackRes.total > 0) {
+      return {
+        products: fallbackRes.products,
+        filterProducts: fallbackRes.products,
+        total: fallbackRes.total,
+        totalPages: fallbackRes.totalPages,
+        broadenedQuery: undefined,
+        originalQuery: searchQ,
+        isFallbackCatalog: true,
+      };
+    }
+  }
+
   return {
     products: visibleProducts,
     filterProducts: filterResponse.products,
     total: visibleTotal,
     totalPages: visibleTotalPages,
+    broadenedQuery,
+    originalQuery: searchQ,
+    isFallbackCatalog,
   };
 }
 
