@@ -26,9 +26,12 @@
 Upgrade the search system to an enterprise-grade live search subsystem:
 1. **Instant Curated Initial State**: Opening the search box instantly displays a curated mix of **Featured & New Arrivals** (4–6 product cards with photo, price, title, and badges) and category shortcuts, pre-cached via `getSmartFeaturedProducts()`.
 2. **Sub-80ms Edge Search Pipeline**: Implement a lean WordPress search REST endpoint (`/wp-json/dqp/v1/instant-search`) running an indexed, lightweight SQL query returning only core card attributes (`id`, `title`, `slug`, `price`, `thumbnail`, `category`), served through Next.js on the Edge runtime (`runtime = "edge"`) with Edge CDN caching (`s-maxage=600, stale-while-revalidate=86400`).
-3. **Rich Two-Column Live Search Dropdown**:
-   - **Left Column**: Department & category matches + synthesized search suggestions (category, tag, and attribute combinations like *"fluorescent light bulbs"*).
-   - **Right Column**: 4–6 instant product cards (thumbnail, title, price, badges) linking directly to the product detail page (`/products/[slug]`) + a prominent *"View all X results for '[query]' →"* CTA.
+3. **Unified Single-Column Live Search Dropdown (Relevance-Sorted)**:
+   - A single cohesive, streamlined dropdown list that incorporates all result types sorted by relevance:
+     1. **Top Category / Department Matches**: Relevant categories matching the query (e.g. *Light Bulbs in Hardware*), with tag icon.
+     2. **Synthesized Search Suggestions**: High-intent multi-product query phrases (e.g. *"fluorescent light bulbs"*, *"cfl light bulbs"*), leading to `/shop?q=...`.
+     3. **Direct Product Matches**: High-relevance matching products displayed inline with photo thumbnail, decoded title, category badge, and formatted price, directing straight to PDP (`/products/[slug]`).
+     4. **Bottom Search Action**: Prominent *"Search for '[query]' (View all results) →"* button.
 4. **Auto-Broadening & Catalog Fallback on `/shop`**:
    - When an exact search produces 0 results, the system automatically broadens the query (keyword relaxation / partial token matching).
    - If broadened results exist, display them with a clear notice (*“Showing results for ‘[broadened]’. (0 exact matches for ‘[query]’).”*).
@@ -61,9 +64,11 @@ Upgrade the search system to an enterprise-grade live search subsystem:
 │              c. Product cards (id, name, slug, price, imageUrl)                  │
 │            Set Cache-Control: s-maxage=600, stale-while-revalidate=86400         │
 │                                                                                  │
-│   4. Live Search UI Render                                                       │
-│      ├── Left Column: Matching Categories + Query Suggestions                    │
-│      └── Right Column: 4-6 Clickable Product Cards (→ PDP) + View All CTA        │
+│   4. Live Search UI Render (Unified Single-Column, Sorted by Relevance)          │
+│      ├── Top: High-relevance Category Matches                                    │
+│      ├── Middle: Synthesized Query Suggestions (e.g. "fluorescent light bulbs")  │
+│      ├── Products: High-match Product items (thumbnail, title, price → PDP)     │
+│      └── Bottom: "Search for '[query]' (View all results) →"                     │
 └──────────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────────────────┐
@@ -160,12 +165,11 @@ Upgrade the search system to an enterprise-grade live search subsystem:
   - Renders a 4-to-6 product card grid showcasing curated items from `getSmartFeaturedProducts()`.
   - Displays quick-access Category chips across the top/side so users can immediately jump to popular departments.
 - **Active Search State (While Typing):**
-  - **Left Column (width ~38%):**
-    - **Categories & Departments**: Top 3–4 matching categories (local + remote) with navigation icons.
-    - **Search Suggestions**: Top 4–5 synthesized query phrases. Clicking navigates to `/shop?q=${suggestion}`.
-  - **Right Column (width ~62%):**
-    - **Matching Products**: Grid of up to 6 product cards with image, decoded title, formatted price, and stock status. Clicking navigates directly to `/products/${product.slug}`.
-    - **Bottom CTA**: *"View all results for '[query]' →"* linking to `/shop?q=${query}`.
+  - **Unified Single-Column Dropdown Stream (Sorted by Relevance):**
+    - **1. Matching Categories (Top Relevance)**: Top 1–2 categories matching the query (e.g. *Light Bulbs* in *Hardware*) with category icon and arrow.
+    - **2. Suggested Search Terms**: Top 3–4 synthesized query suggestions (e.g. *"fluorescent light bulbs"*) with search icon. Clicking navigates to `/shop?q=${suggestion}`.
+    - **3. Direct Product Results**: Top 4–6 matching products presented as streamlined list items with crisp product thumbnail, decoded title, category pill, and price. Clicking navigates directly to PDP (`/products/${product.slug}`).
+    - **4. Bottom Action CTA**: *"Search for '[query]' (View all results) →"* linking to `/shop?q=${query}`.
 - **Micro-Interactions & Performance:**
   - Client-side LRU memory cache (`searchCache.current[query]`) for instant 0ms backspace navigation.
   - AbortController on every keystroke to eliminate stale race conditions.
