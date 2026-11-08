@@ -120,10 +120,13 @@ export function extractSearchSuggestions(
     }
   }
 
-  // Sort by score descending and return top 5 in Title Case
-  return Array.from(suggestionScores.entries())
+  // Always include the typed query itself in suggestions, followed by extracted dynamic phrases
+  const typedSuggestion = toTitleCase(rawQuery.trim());
+  const extracted = Array.from(suggestionScores.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([phrase]) => toTitleCase(phrase))
+    .map(([phrase]) => toTitleCase(phrase));
+
+  return [typedSuggestion, ...extracted]
     .filter((phrase, index, self) => self.indexOf(phrase) === index)
     .slice(0, 5);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractSearchSuggestions } from "@/lib/search-phrases";
+import { extractSearchSuggestions } from "../../lib/search-phrases";
 
 describe("Dynamic Search Phrase & Suggestion Extractor (src/lib/search-phrases.ts)", () => {
   const sampleProducts = [
@@ -52,14 +52,14 @@ describe("Dynamic Search Phrase & Suggestion Extractor (src/lib/search-phrases.t
 
     expect(suggestions.length).toBeGreaterThan(0);
     // Should include phrases like "Fluorescent Light Bulb(s)" or "Led Light Bulb(s)"
-    const lowerSuggestions = suggestions.map((s) => s.toLowerCase());
-    expect(lowerSuggestions.some((s) => s.includes("fluorescent") && s.includes("light bulb"))).toBe(true);
+    const lowerSuggestions = suggestions.map((s: string) => s.toLowerCase());
+    expect(lowerSuggestions.some((s: string) => s.includes("fluorescent") && s.includes("light bulb"))).toBe(true);
   });
 
   it("strips packaging and spec noise like brackets, packs, wattage codes from suggestions", () => {
     const suggestions = extractSearchSuggestions("bulb", sampleProducts, sampleCategories);
 
-    suggestions.forEach((suggestion) => {
+    suggestions.forEach((suggestion: string) => {
       expect(suggestion).not.toMatch(/\(pack of \d+\)/i);
       expect(suggestion).not.toMatch(/\[.*?\]/);
       expect(suggestion).not.toMatch(/\b4-pin\b/i);
@@ -75,9 +75,14 @@ describe("Dynamic Search Phrase & Suggestion Extractor (src/lib/search-phrases.t
 
   it("deduplicates suggestions and limits to maximum 5 items", () => {
     const suggestions = extractSearchSuggestions("light", sampleProducts, sampleCategories);
-    const unique = Array.from(new Set(suggestions.map((s) => s.toLowerCase())));
+    const unique = Array.from(new Set(suggestions.map((s: string) => s.toLowerCase())));
 
     expect(suggestions.length).toBe(unique.length);
     expect(suggestions.length).toBeLessThanOrEqual(5);
+  });
+
+  it("always includes the typed query in suggestions even if no products or categories match", () => {
+    const suggestions = extractSearchSuggestions("randomterm", [], []);
+    expect(suggestions).toEqual(["Randomterm"]);
   });
 });

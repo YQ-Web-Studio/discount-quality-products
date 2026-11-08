@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Search, X, ArrowRight, Tag, Sparkles, Box, ChevronRight, Loader2 } from "lucide-react";
+import { Search, X, ArrowRight, Tag, Sparkles, Box, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
 import { useSearchStore } from "@/lib/useSearchStore";
-import type { InstantSearchResponse, InstantSearchProduct } from "@/app/api/search/route";
+import type { InstantSearchResponse, InstantSearchProduct, InstantSearchCategory } from "@/app/api/search/route";
+
+function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 const panelContainerVariants: Variants = {
   hidden: {},
@@ -51,6 +60,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     suggestions: [],
   });
   const [isSearching, setIsSearching] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   /* Portal & mount guard */
@@ -175,13 +185,59 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     [onClose, router]
   );
 
-  if (!mounted) return null;
+  const trimmedInput = inputValue.trim();
+  const hasSearchQuery = trimmedInput.length >= 2;
 
-  const hasSearchQuery = inputValue.trim().length >= 2;
-  const hasResults =
-    searchResults.categories.length > 0 ||
-    searchResults.suggestions.length > 0 ||
-    searchResults.products.length > 0;
+  // 1. Instant Synchronous Categories (0ms)
+  const instantCategories = useMemo(() => {
+    if (!hasSearchQuery) return [];
+    const lower = trimmedInput.toLowerCase();
+    const matches: InstantSearchCategory[] = [];
+    for (const parent of navigationCategories) {
+      if (parent.label.toLowerCase().includes(lower) || parent.slug.toLowerCase().includes(lower)) {
+        matches.push({
+          id: `local-${parent.id}`,
+          name: parent.label,
+          slug: parent.slug,
+          parentName: null,
+          route: `/categories/${parent.slug}`,
+          accentColor: parent.accentColor,
+        });
+      }
+      for (const sub of parent.subcategories) {
+        if (sub.label.toLowerCase().includes(lower) || sub.slug.toLowerCase().includes(lower)) {
+          matches.push({
+            id: `local-${sub.id}`,
+            name: sub.label,
+            slug: sub.slug,
+            parentName: parent.label,
+            route: `/categories/${parent.slug}?category=${sub.slug}`,
+            accentColor: parent.accentColor,
+          });
+        }
+      }
+    }
+    return matches.slice(0, 3);
+  }, [trimmedInput, hasSearchQuery]);
+
+  // 2. Suggestions are ALWAYS shown (0ms initial typed term, enriched when remote results arrive)
+  const displaySuggestions = useMemo(() => {
+    if (!hasSearchQuery) return [];
+    const typed = toTitleCase(trimmedInput);
+    const fromResults = searchResults.suggestions || [];
+    const list = [typed, ...fromResults];
+    return list.filter((s, idx, arr) => arr.indexOf(s) === idx).slice(0, 5);
+  }, [trimmedInput, hasSearchQuery, searchResults.suggestions]);
+
+  // 3. Display categories (combine instant local matches with remote categories)
+  const displayCategories = useMemo(() => {
+    if (searchResults.categories.length > 0) {
+      return searchResults.categories;
+    }
+    return instantCategories;
+  }, [searchResults.categories, instantCategories]);
+
+  if (!mounted) return null;
 
   const overlay = (
     <AnimatePresence>
@@ -219,7 +275,15 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                   type="text"
                   placeholder={`Search ${productCountLabel} products, categories, or parts...`}
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInputValue(val);
+                    if (val.trim().length >= 2) {
+                      setIsSearching(true);
+                    } else {
+                      setIsSearching(false);
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && inputValue.trim()) {
                       handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`);
@@ -266,25 +330,103 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     transition={{ duration: 0.15 }}
                     className="space-y-6"
                   >
-                    {/* Quick Category Chips */}
+                    {/* Expandable Department & Subcategory Explorer */}
                     <div>
-                      <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                        Popular Departments
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {navigationCategories.map((cat) => (
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                          Popular Departments & Subcategories
+                        </p>
+                        {expandedCategory && (
                           <button
-                            key={cat.slug}
-                            onClick={() => handleNavigate(`/categories/${cat.slug}`)}
-                            className={cn(
-                              "inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-700 shadow-2xs transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-950",
-                              cat.accentColor
-                            )}
+                            onClick={() => setExpandedCategory(null)}
+                            className="text-[11px] font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
                           >
-                            <Tag className="h-3 w-3 opacity-60" />
-                            {cat.label}
+                            Collapse all
                           </button>
-                        ))}
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                        {navigationCategories.map((cat) => {
+                          const isExpanded = expandedCategory === cat.slug;
+                          return (
+                            <div
+                              key={cat.slug}
+                              className={cn(
+                                "rounded-xl border transition-all duration-200 overflow-hidden",
+                                isExpanded
+                                  ? "border-zinc-300 bg-zinc-50/80 shadow-xs ring-1 ring-zinc-200/50"
+                                  : "border-zinc-200/80 bg-white hover:border-zinc-300"
+                              )}
+                            >
+                              {/* Department Header */}
+                              <div className="flex items-center justify-between p-2.5">
+                                <button
+                                  onClick={() => handleNavigate(`/categories/${cat.slug}`)}
+                                  className="flex items-center gap-2 text-left flex-1 min-w-0 group"
+                                >
+                                  <div
+                                    className={cn(
+                                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-100 group-hover:bg-zinc-200/80 transition-colors",
+                                      cat.accentColor
+                                    )}
+                                  >
+                                    <Tag className="h-3.5 w-3.5" />
+                                  </div>
+                                  <span className="text-xs font-bold text-zinc-900 group-hover:text-primary truncate transition-colors">
+                                    {cat.label}
+                                  </span>
+                                </button>
+
+                                {cat.subcategories.length > 0 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedCategory((prev) => (prev === cat.slug ? null : cat.slug));
+                                    }}
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/60 transition-colors ml-1"
+                                    aria-label={isExpanded ? `Collapse ${cat.label}` : `Expand ${cat.label} subcategories`}
+                                    aria-expanded={isExpanded}
+                                  >
+                                    <ChevronDown
+                                      className={cn(
+                                        "h-4 w-4 transition-transform duration-200",
+                                        isExpanded && "rotate-180 text-zinc-700"
+                                      )}
+                                    />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Expandable Subcategories Tray */}
+                              {isExpanded && cat.subcategories.length > 0 && (
+                                <div className="border-t border-zinc-200/60 bg-white px-3 py-2 space-y-1.5 animate-in fade-in duration-150">
+                                  <div className="flex flex-col gap-1">
+                                    {cat.subcategories.map((sub) => (
+                                      <button
+                                        key={sub.slug}
+                                        onClick={() => handleNavigate(`/categories/${cat.slug}?category=${sub.slug}`)}
+                                        className="flex items-center justify-between py-1 px-1.5 rounded text-left text-xs text-zinc-600 hover:text-zinc-950 hover:bg-zinc-50 transition-colors group"
+                                      >
+                                        <span className="truncate">{sub.label}</span>
+                                        <ChevronRight className="h-3 w-3 text-zinc-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <div className="pt-1 border-t border-zinc-100">
+                                    <button
+                                      onClick={() => handleNavigate(`/categories/${cat.slug}`)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                                    >
+                                      View all in {cat.label}
+                                      <ArrowRight className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -372,14 +514,14 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     transition={{ duration: 0.12 }}
                     className="space-y-4"
                   >
-                    {/* SECTION A: High-Relevance Matching Categories */}
-                    {searchResults.categories.length > 0 && (
+                    {/* SECTION A: High-Relevance Matching Categories (Instant 0ms or Remote) */}
+                    {displayCategories.length > 0 && (
                       <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-2 sm:p-3">
                         <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                           Matching Departments
                         </p>
                         <div className="space-y-1">
-                          {searchResults.categories.map((cat) => (
+                          {displayCategories.map((cat) => (
                             <button
                               key={`cat-${cat.id}`}
                               onClick={() => handleNavigate(cat.route)}
@@ -407,14 +549,14 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                       </div>
                     )}
 
-                    {/* SECTION B: Suggested Search Query Phrases */}
-                    {searchResults.suggestions.length > 0 && (
+                    {/* SECTION B: Suggested Search Query Phrases (Always Shown) */}
+                    {displaySuggestions.length > 0 && (
                       <div>
                         <p className="px-2 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                           Search Suggestions
                         </p>
                         <div className="space-y-1">
-                          {searchResults.suggestions.map((phrase, idx) => (
+                          {displaySuggestions.map((phrase, idx) => (
                             <button
                               key={`phrase-${idx}`}
                               onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(phrase)}`)}
@@ -434,7 +576,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     )}
 
                     {/* SECTION C: Direct Matching Product Cards (Straight to PDP) */}
-                    {searchResults.products.length > 0 && (
+                    {searchResults.products.length > 0 ? (
                       <div>
                         <p className="px-2 mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                           Matching Products
@@ -484,36 +626,39 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           ))}
                         </div>
                       </div>
-                    )}
+                    ) : isSearching ? (
+                      <div>
+                        <p className="px-2 mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                          Searching Products...
+                        </p>
+                        <div className="space-y-1.5">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className="h-16 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse" />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
                     {/* SECTION D: Bottom CTA - "View All Results on Shop" */}
-                    {hasResults && (
-                      <div className="pt-2">
-                        <button
-                          onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-xs sm:text-sm font-bold text-white transition-colors hover:bg-zinc-800 shadow-xs"
-                        >
-                          <span>Search for &ldquo;{inputValue.trim()}&rdquo; (View all results)</span>
-                          <ArrowRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="pt-2">
+                      <button
+                        onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-xs sm:text-sm font-bold text-white transition-colors hover:bg-zinc-800 shadow-xs"
+                      >
+                        <span>Search for &ldquo;{inputValue.trim()}&rdquo; (View all results)</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
 
-                    {/* SECTION E: Zero Results State */}
-                    {!isSearching && !hasResults && (
-                      <div className="py-12 text-center">
-                        <p className="text-base font-semibold text-zinc-800">
-                          No instant matches for &ldquo;{inputValue}&rdquo;
+                    {/* SECTION E: Zero Results State (Only when search finishes with 0 products and 0 categories) */}
+                    {!isSearching && searchResults.products.length === 0 && displayCategories.length === 0 && (
+                      <div className="py-8 text-center rounded-xl bg-zinc-50 border border-zinc-100">
+                        <p className="text-sm font-semibold text-zinc-800">
+                          No exact product matches for &ldquo;{inputValue.trim()}&rdquo;
                         </p>
                         <p className="mt-1 text-xs text-zinc-400">
-                          Press Enter to search the full catalog or check your spelling.
+                          Click a search suggestion above or press Enter to search the entire store catalogue.
                         </p>
-                        <button
-                          onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
-                          className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
-                        >
-                          Search full catalogue →
-                        </button>
                       </div>
                     )}
                   </motion.div>
