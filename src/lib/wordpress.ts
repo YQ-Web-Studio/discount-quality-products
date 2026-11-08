@@ -79,6 +79,7 @@ export const getTotalProductCount = cache(async (): Promise<number> => {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)",
           "Accept": "application/json",
         },
+        signal: AbortSignal.timeout(5000),
       });
       const totalHeader = res.headers.get("x-wp-total");
       if (totalHeader) {
