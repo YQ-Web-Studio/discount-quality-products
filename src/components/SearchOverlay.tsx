@@ -578,9 +578,25 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     {/* SECTION C: Direct Matching Product Cards (Straight to PDP) */}
                     {searchResults.products.length > 0 ? (
                       <div>
-                        <p className="px-2 mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                          Matching Products
-                        </p>
+                        <div className="px-2 mb-2 flex items-center justify-between">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                            {searchResults.isFallback
+                              ? "Recommended Products"
+                              : searchResults.broadenedQuery
+                              ? `Matching Products for "${searchResults.broadenedQuery}"`
+                              : "Matching Products"}
+                          </p>
+                          {searchResults.isFallback && (
+                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                              Popular fallback
+                            </span>
+                          )}
+                        </div>
+                        {searchResults.isFallback && (
+                          <p className="px-2 pb-2 text-xs text-zinc-500">
+                            No direct matches for &ldquo;{inputValue.trim()}&rdquo; &mdash; explore popular products from our catalogue:
+                          </p>
+                        )}
                         <div className="space-y-1.5">
                           {searchResults.products.map((prod) => (
                             <button
@@ -650,14 +666,14 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                       </button>
                     </div>
 
-                    {/* SECTION E: Zero Results State (Only when search finishes with 0 products and 0 categories) */}
+                    {/* SECTION E: Zero Results State (Only when search finishes with 0 products and 0 categories - e.g. gibberish) */}
                     {!isSearching && searchResults.products.length === 0 && displayCategories.length === 0 && (
                       <div className="py-8 text-center rounded-xl bg-zinc-50 border border-zinc-100">
                         <p className="text-sm font-semibold text-zinc-800">
-                          No exact product matches for &ldquo;{inputValue.trim()}&rdquo;
+                          No results found for &ldquo;{inputValue.trim()}&rdquo;
                         </p>
                         <p className="mt-1 text-xs text-zinc-400">
-                          Click a search suggestion above or press Enter to search the entire store catalogue.
+                          Check your spelling or try searching for a product name or category.
                         </p>
                       </div>
                     )}

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sanitiseSearchQuery } from "@/lib/utils";
 import { extractSearchSuggestions } from "@/lib/search-phrases";
 import { navigationCategories } from "@/lib/navigationConfig";
+import { isGibberishQuery } from "@/lib/gibberish";
+import { broadenSearchQuery } from "@/app/shop/broadenSearch";
 
 export const runtime = "edge";
 
@@ -27,6 +29,8 @@ export interface InstantSearchResponse {
   products: InstantSearchProduct[];
   categories: InstantSearchCategory[];
   suggestions: string[];
+  isFallback?: boolean;
+  broadenedQuery?: string;
 }
 
 function getWordPressBaseUrl(): string {
@@ -74,6 +78,59 @@ function matchLocalCategories(query: string): InstantSearchCategory[] {
   return matches.slice(0, 4);
 }
 
+/**
+ * Helper to query Snippet 004 instant search endpoint.
+ */
+async function queryInstantSearch(
+  wpBase: string,
+  term: string,
+  limit: number = 8
+): Promise<{ products: InstantSearchProduct[]; categories: InstantSearchCategory[] } | null> {
+  try {
+    const endpoint = `${wpBase}/wp-json/dqp/v1/instant-search?q=${encodeURIComponent(term)}&limit=${limit}`;
+    const res = await fetch(endpoint, {
+      signal: AbortSignal.timeout(3000),
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const products: InstantSearchProduct[] = [];
+    if (Array.isArray(data?.products)) {
+      for (const p of data.products) {
+        products.push({
+          id: String(p.id ?? ""),
+          name: String(p.name ?? ""),
+          slug: String(p.slug ?? ""),
+          price: String(p.price || "£0.00"),
+          imageUrl: typeof p.imageUrl === "string" ? p.imageUrl : null,
+          category: typeof p.category === "string" ? p.category : null,
+        });
+      }
+    }
+
+    const categories: InstantSearchCategory[] = [];
+    if (Array.isArray(data?.categories)) {
+      for (const c of data.categories) {
+        categories.push({
+          id: typeof c.id === "number" ? c.id : Number(c.id) || 0,
+          name: String(c.name ?? ""),
+          slug: String(c.slug ?? ""),
+          parentName: typeof c.parentName === "string" ? c.parentName : null,
+          route: `/categories/${c.slug}`,
+        });
+      }
+    }
+
+    return { products, categories };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("q")?.trim() ?? "";
@@ -102,91 +159,105 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // True unpronounceable keyboard mash / gibberish (e.g. "aekjsghslggjkfdg")
+  // should immediately return zero results.
+  if (isGibberishQuery(q)) {
+    return NextResponse.json(
+      {
+        products: [],
+        categories: [],
+        suggestions: [],
+        isFallback: false,
+      },
+      { status: 200 }
+    );
+  }
+
   const localCategories = matchLocalCategories(q);
 
   try {
     const wpBase = getWordPressBaseUrl();
-    const endpoint = `${wpBase}/wp-json/dqp/v1/instant-search?q=${encodeURIComponent(q)}&limit=8`;
 
     let remoteProducts: InstantSearchProduct[] = [];
     let remoteCategories: InstantSearchCategory[] = [];
+    let isFallback = false;
+    let broadenedQuery: string | undefined = undefined;
 
-    try {
-      const res = await fetch(endpoint, {
-        signal: AbortSignal.timeout(3000),
-        headers: {
-          Accept: "application/json",
-        },
-      });
+    // TIER 1: Direct match query
+    const tier1 = await queryInstantSearch(wpBase, q, 8);
+    if (tier1 && tier1.products.length > 0) {
+      remoteProducts = tier1.products;
+      remoteCategories = tier1.categories;
+    }
 
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data?.products)) {
-          remoteProducts = data.products.map((p: Record<string, unknown>) => ({
-            id: String(p.id ?? ""),
-            name: String(p.name ?? ""),
-            slug: String(p.slug ?? ""),
-            price: String(p.price || "£0.00"),
-            imageUrl: typeof p.imageUrl === "string" ? p.imageUrl : null,
-            category: typeof p.category === "string" ? p.category : null,
-          }));
+    // TIER 2: Auto-broaden / stem if 0 products found (e.g. "lightbulbs" -> "light bulb", "hell" -> "hel")
+    if (remoteProducts.length === 0) {
+      const broadened = broadenSearchQuery(q);
+      if (broadened && broadened !== q) {
+        const tier2 = await queryInstantSearch(wpBase, broadened, 8);
+        if (tier2 && tier2.products.length > 0) {
+          remoteProducts = tier2.products;
+          remoteCategories = tier2.categories;
+          broadenedQuery = broadened;
         }
+      }
+    }
 
-        if (Array.isArray(data?.categories)) {
-          remoteCategories = data.categories.map((c: Record<string, unknown>) => ({
-            id: typeof c.id === "number" ? c.id : Number(c.id) || 0,
-            name: String(c.name ?? ""),
-            slug: String(c.slug ?? ""),
-            parentName: typeof c.parentName === "string" ? c.parentName : null,
-            route: `/categories/${c.slug}`,
-          }));
-        }
+    // TIER 3: Popular Catalog Fallback if still 0 products (and query is NOT gibberish)
+    // Ensures the user always sees relevant products instead of a dead-end blank drop-off
+    if (remoteProducts.length === 0) {
+      const fallback = await queryInstantSearch(wpBase, "light", 6);
+      if (fallback && fallback.products.length > 0) {
+        remoteProducts = fallback.products;
+        isFallback = true;
       } else {
-        // Fallback to standard WooCommerce REST API if snippet not yet uploaded to WP
+        // Fallback to standard WooCommerce REST API if snippet is unavailable
         const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;
         const consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
         if (consumerKey && consumerSecret) {
           const authString = btoa(`${consumerKey}:${consumerSecret}`);
-          const wcRes = await fetch(
-            `${wpBase}/wp-json/wc/v3/products?search=${encodeURIComponent(q)}&per_page=6&status=publish`,
-            {
-              signal: AbortSignal.timeout(4000),
-              headers: {
-                Authorization: `Basic ${authString}`,
-                Accept: "application/json",
-              },
-            }
-          );
-          if (wcRes.ok) {
-            const wcData = await wcRes.json();
-            if (Array.isArray(wcData)) {
-              remoteProducts = wcData.map((p: Record<string, unknown>) => {
-                const rawPrice = p.price;
-                const formattedPrice =
-                  typeof rawPrice === "string" && rawPrice.startsWith("£")
-                    ? rawPrice
-                    : rawPrice
-                    ? `£${Number(rawPrice).toFixed(2)}`
-                    : "£0.00";
-                const images = p.images as Array<{ src?: string }> | undefined;
-                const categories = p.categories as Array<{ name?: string }> | undefined;
+          try {
+            const wcRes = await fetch(
+              `${wpBase}/wp-json/wc/v3/products?per_page=6&status=publish`,
+              {
+                signal: AbortSignal.timeout(4000),
+                headers: {
+                  Authorization: `Basic ${authString}`,
+                  Accept: "application/json",
+                },
+              }
+            );
+            if (wcRes.ok) {
+              const wcData = await wcRes.json();
+              if (Array.isArray(wcData) && wcData.length > 0) {
+                remoteProducts = wcData.map((p: Record<string, unknown>) => {
+                  const rawPrice = p.price;
+                  const formattedPrice =
+                    typeof rawPrice === "string" && rawPrice.startsWith("£")
+                      ? rawPrice
+                      : rawPrice
+                      ? `£${Number(rawPrice).toFixed(2)}`
+                      : "£0.00";
+                  const images = p.images as Array<{ src?: string }> | undefined;
+                  const categories = p.categories as Array<{ name?: string }> | undefined;
 
-                return {
-                  id: String(p.id ?? ""),
-                  name: String(p.name ?? ""),
-                  slug: String(p.slug ?? ""),
-                  price: formattedPrice,
-                  imageUrl: images?.[0]?.src || null,
-                  category: categories?.[0]?.name || null,
-                };
-              });
+                  return {
+                    id: String(p.id ?? ""),
+                    name: String(p.name ?? ""),
+                    slug: String(p.slug ?? ""),
+                    price: formattedPrice,
+                    imageUrl: images?.[0]?.src || null,
+                    category: categories?.[0]?.name || null,
+                  };
+                });
+                isFallback = true;
+              }
             }
+          } catch {
+            // Ignore fallback network error
           }
         }
       }
-    } catch (fetchError) {
-      // Endpoint might be unavailable in local dev / tests without live WP; fail gracefully
-      console.warn("Instant search fetch failed, continuing with local resolution:", fetchError);
     }
 
     // Merge categories without duplicates (local takes precedence for instant navigation routes)
@@ -208,6 +279,8 @@ export async function GET(request: NextRequest) {
       products: remoteProducts,
       categories: combinedCategories.slice(0, 4),
       suggestions,
+      isFallback,
+      broadenedQuery,
     };
 
     return NextResponse.json(payload, {

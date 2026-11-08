@@ -82,4 +82,40 @@ describe("Next.js Edge Search API Route (src/app/api/search/route.ts)", () => {
     expect(data).toHaveProperty("categories");
     expect(data).toHaveProperty("suggestions");
   });
+
+  it("immediately returns zero results for true unpronounceable gibberish", async () => {
+    const req = new NextRequest("https://www.discountproducts.co.uk/api/search?q=aekjsghslggjkfdg");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.products).toHaveLength(0);
+    expect(data.categories).toHaveLength(0);
+    expect(data.isFallback).toBe(false);
+  });
+
+  it("falls back to popular products when non-gibberish query has no direct matches", async () => {
+    // Mock primary and broadened queries returning 0 products, then fallback returning 2 products
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ products: [], categories: [] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            products: [
+              { id: 991, name: "Popular LED Bulb", slug: "popular-led-bulb", price: "£2.99", imageUrl: null },
+            ],
+            categories: [],
+          }),
+          { status: 200 }
+        )
+      );
+
+    const req = new NextRequest("https://www.discountproducts.co.uk/api/search?q=telescope");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.products.length).toBeGreaterThan(0);
+    expect(data.isFallback).toBe(true);
+  });
 });

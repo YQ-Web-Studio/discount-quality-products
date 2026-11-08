@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { fetchWooCommerceProducts, getCategories, type DynamicNavCategory } from "@/lib/woocommerce";
 import { productMatchesAttributeFilters } from "./filterAttributes";
 import { broadenSearchQuery } from "./broadenSearch";
+import { isGibberishQuery } from "@/lib/gibberish";
 import { Suspense } from "react";
 
 type SearchPageProps = {
@@ -156,6 +157,20 @@ async function getProductsData(
   const isFallbackCatalog = false;
 
   if (visibleTotal === 0 && searchQ && page === 1 && !hasAttributeFilters) {
+    // Only unpronounceable gibberish (e.g. "aekjsghslggjkfdg") should return zero results.
+    // Human queries should always return results (via broadening or popular catalog fallback).
+    if (isGibberishQuery(searchQ)) {
+      return {
+        products: [],
+        filterProducts: [],
+        total: 0,
+        totalPages: 0,
+        broadenedQuery: undefined,
+        originalQuery: searchQ,
+        isFallbackCatalog: false,
+      };
+    }
+
     const broadened = broadenSearchQuery(searchQ);
     if (broadened) {
       const broadenedRes = await fetchWooCommerceProducts({
