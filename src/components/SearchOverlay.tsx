@@ -21,11 +21,14 @@ function toTitleCase(str: string): string {
 }
 
 const panelContainerVariants: Variants = {
-  hidden: {},
+  hidden: { opacity: 0 },
   visible: {
+    opacity: 1,
     transition: {
+      duration: 0.15,
+      ease: "easeOut",
       staggerChildren: 0.04,
-      delayChildren: 0.08,
+      delayChildren: 0.05,
     },
   },
 };
@@ -187,11 +190,11 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   );
 
   const trimmedInput = inputValue.trim();
-  const hasSearchQuery = trimmedInput.length > 0;
+  const hasSearchQuery = trimmedInput.length >= 2;
 
-  // 1. Instant Synchronous Categories (0ms) - only match on 2+ chars
+  // 1. Instant Synchronous Categories (0ms)
   const instantCategories = useMemo(() => {
-    if (!hasSearchQuery || trimmedInput.length < 2) return [];
+    if (!hasSearchQuery) return [];
     const lower = trimmedInput.toLowerCase();
     const matches: InstantSearchCategory[] = [];
     for (const parent of navigationCategories) {
@@ -221,9 +224,9 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return matches.slice(0, 3);
   }, [trimmedInput, hasSearchQuery]);
 
-  // 2. Suggestions (0ms initial typed term on 2+ chars, enriched when remote results arrive)
+  // 2. Suggestions (0ms initial typed term, enriched when remote results arrive)
   const displaySuggestions = useMemo(() => {
-    if (!hasSearchQuery || trimmedInput.length < 2) return [];
+    if (!hasSearchQuery) return [];
     const typed = toTitleCase(trimmedInput);
     const fromResults = searchResults.suggestions || [];
     const list = [typed, ...fromResults];
@@ -283,81 +286,75 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const overlay = (
     <AnimatePresence>
       {open && (
-        <>
-          {/* Backdrop */}
+        <motion.div
+          key="panel"
+          className="fixed inset-0 z-[10003] h-screen w-screen overflow-y-auto bg-white flex flex-col"
+          variants={panelContainerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+        >
+          {/* Search Bar Input Row */}
           <motion.div
-            key="backdrop"
-            className="fixed inset-0 z-[10002] bg-black/60 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={onClose}
-          />
-
-          {/* Panel */}
-          <motion.div
-            key="panel"
-            className="fixed inset-x-0 top-0 z-[10003] max-h-[88vh] overflow-y-auto bg-white shadow-2xl border-b border-zinc-200"
-            variants={panelContainerVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            variants={panelChildVariants}
+            className="border-b border-zinc-200/80 px-4 py-3.5 md:px-6 2xl:px-8 bg-white/95 sticky top-0 z-20 backdrop-blur-md"
           >
-            {/* Search Bar Input Row */}
-            <motion.div
-              variants={panelChildVariants}
-              className="border-b border-zinc-100 px-4 py-4 md:px-6 2xl:px-8 bg-zinc-50/60 sticky top-0 z-20 backdrop-blur-md"
-            >
-              <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-3">
-                <Search className="h-5 w-5 shrink-0 text-zinc-400" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder={`Search ${productCountLabel} products, categories, or parts...`}
-                  value={inputValue}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setInputValue(val);
-                    if (val.trim().length >= 2) {
-                      setIsSearching(true);
-                    } else {
-                      setIsSearching(false);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && inputValue.trim()) {
-                      handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`);
-                    }
-                  }}
-                  className="flex-1 bg-transparent text-base sm:text-lg font-medium text-zinc-900 placeholder:text-zinc-400 outline-none"
-                  aria-label="Search catalogue"
-                />
+            <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1750px] items-center gap-3">
+              <Search className="h-5 w-5 shrink-0 text-zinc-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={`Search ${productCountLabel} products, categories, or parts...`}
+                value={inputValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setInputValue(val);
+                  if (val.trim().length >= 2) {
+                    setIsSearching(true);
+                  } else {
+                    setIsSearching(false);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && inputValue.trim()) {
+                    handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`);
+                  }
+                }}
+                className="flex-1 bg-transparent text-base sm:text-lg font-medium text-zinc-900 placeholder:text-zinc-400 outline-none"
+                aria-label="Search catalogue"
+              />
 
-                {isSearching && (
-                  <Loader2 className="h-4 w-4 animate-spin text-zinc-400 shrink-0" />
-                )}
+              {isSearching && (
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400 shrink-0" />
+              )}
 
+              {inputValue && (
                 <button
                   onClick={() => {
-                    if (inputValue) {
-                      setInputValue("");
-                      setQuery("");
-                      inputRef.current?.focus();
-                    } else {
-                      onClose();
-                    }
+                    setInputValue("");
+                    setQuery("");
+                    inputRef.current?.focus();
                   }}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-200/70 text-zinc-600 transition-colors hover:bg-zinc-300 hover:text-zinc-900"
-                  aria-label={inputValue ? "Clear search" : "Close search"}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 transition-colors"
+                  aria-label="Clear search"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              </div>
-            </motion.div>
+              )}
 
-            {/* Content Container */}
-            <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 py-6 md:px-6 2xl:px-8">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 transition-colors shrink-0"
+                aria-label="Close search overlay"
+              >
+                <span>Close</span>
+                <kbd className="hidden sm:inline-block rounded border border-zinc-200 bg-white px-1 py-0.5 font-mono text-[10px] text-zinc-400">Esc</kbd>
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Content Container */}
+          <div className="flex-1 mx-auto w-full max-w-[1440px] 2xl:max-w-[1750px] px-4 py-6 md:px-6 2xl:px-8 pb-16">
               <AnimatePresence mode="wait">
                 {!hasSearchQuery ? (
                   /* Initial State: Category Cards across top in 1 row + Featured Products below */
@@ -719,7 +716,6 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               </AnimatePresence>
             </div>
           </motion.div>
-        </>
       )}
     </AnimatePresence>
   );
