@@ -19,6 +19,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  Info,
 } from "lucide-react";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import type { MappedProduct, DynamicNavCategory } from "@/lib/woocommerce";
@@ -360,11 +361,31 @@ export type ProductDataResolved = {
   filterProducts: MappedProduct[];
   total: number;
   totalPages: number;
+  broadenedQuery?: string;
+  originalQuery?: string;
+  isFallbackCatalog?: boolean;
 };
 
 /* ─── Resolver components to enable Suspense and Streaming ─── */
 function ProductCount({ productsPromise }: { productsPromise: Promise<ProductDataResolved> }) {
-  const { total } = use(productsPromise);
+  const { total, isFallbackCatalog, broadenedQuery } = use(productsPromise);
+
+  if (isFallbackCatalog) {
+    return (
+      <p className="mt-0.5 text-sm text-zinc-500 animate-in fade-in duration-200">
+        0 exact matches — showing our popular catalogue ({total} items)
+      </p>
+    );
+  }
+
+  if (broadenedQuery) {
+    return (
+      <p className="mt-0.5 text-sm text-zinc-500 animate-in fade-in duration-200">
+        {total} product{total !== 1 ? "s" : ""} found for &ldquo;{broadenedQuery}&rdquo;
+      </p>
+    );
+  }
+
   return (
     <p className="mt-0.5 text-sm text-zinc-500 animate-in fade-in duration-200">
       {total} product{total !== 1 ? "s" : ""} found
@@ -435,11 +456,39 @@ function ProductGridAndPagination({
   handleClearAll: () => void;
   initialQuery?: string;
 }) {
-  const { products, totalPages } = use(productsPromise);
+  const { products, totalPages, broadenedQuery, originalQuery, isFallbackCatalog } = use(productsPromise);
 
   if (products.length > 0) {
     return (
       <>
+        {broadenedQuery && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900 flex items-start gap-3">
+            <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                No exact matches found for &ldquo;{originalQuery || initialQuery}&rdquo;.
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Showing results for <span className="font-bold">&ldquo;{broadenedQuery}&rdquo;</span> instead.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isFallbackCatalog && (
+          <div className="mb-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-800 flex items-start gap-3">
+            <Search className="h-5 w-5 text-zinc-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                We couldn&apos;t find any products matching &ldquo;{originalQuery || initialQuery}&rdquo;.
+              </p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Browse our popular catalogue below or try adjusting your search terms:
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 mb-10 xl:gap-x-8 animate-in fade-in duration-300">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
@@ -685,14 +734,16 @@ export default function SearchHub({
       ? new Set(initialCategory.split(",").map(Number).filter((n) => !isNaN(n)))
       : new Set()
   );
+  const [prevInitialCategory, setPrevInitialCategory] = useState(initialCategory);
 
-  useEffect(() => {
+  if (prevInitialCategory !== initialCategory) {
+    setPrevInitialCategory(initialCategory);
     setSelectedCategories(
       initialCategory
         ? new Set(initialCategory.split(",").map(Number).filter((n) => !isNaN(n)))
         : new Set()
     );
-  }, [initialCategory]);
+  }
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
