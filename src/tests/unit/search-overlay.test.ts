@@ -14,15 +14,16 @@ describe("Search Overlay UI (src/components/SearchOverlay.tsx)", () => {
     expect(content).toContain('"use client"');
   });
 
-  it("implements responsive 2-column layout with results on left and categories/best-match on right", () => {
+  it("implements category cards in 1 row across the whole box along the top", () => {
     const content = fs.readFileSync(overlayPath, "utf-8");
 
-    // Right-hand column contains Best Match and Browse by Category
-    expect(content).toContain("bestMatch");
-    expect(content).toContain("Browse by Category");
+    // Top row contains all categories in 1 row
+    expect(content).toContain("Browse by Department");
+    expect(content).toContain("lg:grid-cols-5");
     expect(content).toContain("navigationCategories");
 
-    // Left-hand column handles categories, suggestions, and products stream
+    // Live search handling
+    expect(content).toContain("bestMatch");
     expect(content).toContain("displayCategories");
     expect(content).toContain("displaySuggestions");
     expect(content).toContain("searchResults.products");
@@ -34,7 +35,7 @@ describe("Search Overlay UI (src/components/SearchOverlay.tsx)", () => {
     expect(content).toMatch(/\/products\/\$\{.*?slug/);
   });
 
-  it("renders featured product cards in the initial blank space before typing", () => {
+  it("renders featured product cards in the space below category cards before typing", () => {
     const content = fs.readFileSync(overlayPath, "utf-8");
     expect(content).toContain("featuredProducts");
     expect(content).toContain("/api/products/featured");

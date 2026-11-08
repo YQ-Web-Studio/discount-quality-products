@@ -238,7 +238,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return instantCategories;
   }, [searchResults.categories, instantCategories]);
 
-  // 4. Calculate Best Match product for right-hand column
+  // 4. Calculate Best Match product
   const bestMatch = useMemo<InstantSearchProduct | null>(() => {
     if (!hasSearchQuery || searchResults.products.length === 0 || searchResults.isFallback) {
       return null;
@@ -356,107 +356,154 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               </div>
             </motion.div>
 
-            {/* Content Container (Classic 2-Column: Results on Left, Categories/Best-Match on Right) */}
+            {/* Content Container */}
             <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 py-6 md:px-6 2xl:px-8">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-                
-                {/* ─────────────────────────────────────────────────────────────
-                    LEFT COLUMN: SEARCH RESULTS & PRODUCTS STREAM (lg:col-span-9)
-                   ───────────────────────────────────────────────────────────── */}
-                <div className="lg:col-span-8 xl:col-span-9 flex flex-col">
-                  <AnimatePresence mode="wait">
-                    {!hasSearchQuery ? (
-                      /* Initial State (Before Typing): Product cards displayed in blank space */
-                      <motion.div
-                        key="initial-featured-state"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.15 }}
-                        className="space-y-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 text-amber-600">
-                              <Sparkles className="h-3.5 w-3.5 fill-current" />
-                            </div>
-                            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
-                              Featured Products
-                            </h3>
-                          </div>
-                          <button
-                            onClick={() => handleNavigate("/shop")}
-                            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                          >
-                            Browse all
-                            <ArrowRight className="h-3 w-3" />
-                          </button>
+              
+              {/* ─────────────────────────────────────────────────────────────
+                  ROW 1: CATEGORY CARDS ACROSS THE WHOLE BOX ALONG THE TOP (1 ROW)
+                 ───────────────────────────────────────────────────────────── */}
+              <div className="mb-6">
+                <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  Browse by Department
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {navigationCategories.map((category) => (
+                    <div
+                      key={category.slug}
+                      className="rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-3 hover:bg-white hover:border-zinc-300 hover:shadow-xs transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <button
+                          onClick={() => handleNavigate(`/categories/${category.slug}`)}
+                          className={cn(
+                            "text-xs sm:text-sm font-bold mb-2 transition-opacity hover:opacity-80 text-left w-full flex items-center justify-between group",
+                            category.accentColor
+                          )}
+                        >
+                          <span className="truncate">{category.label}</span>
+                          <ChevronRight className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                        </button>
+                        <div className="flex flex-col gap-1">
+                          {category.subcategories.map((sub) => (
+                            <button
+                              key={sub.slug}
+                              onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
+                              className="flex items-center justify-between text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left py-0.5 truncate group"
+                            >
+                              <span className="truncate">{sub.label}</span>
+                            </button>
+                          ))}
                         </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                        {featuredLoading && featuredProducts.length === 0 ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                            {[1, 2, 3, 4, 5, 6].map((i) => (
-                              <div
-                                key={i}
-                                className="h-24 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse p-3"
-                              />
-                            ))}
-                          </div>
-                        ) : featuredProducts.length > 0 ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                            {featuredProducts.map((prod) => (
-                              <button
-                                key={`featured-${prod.id}`}
-                                onClick={() => handleNavigate(`/products/${prod.slug}`)}
-                                className="group flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white p-3 text-left transition-all hover:border-zinc-300 hover:shadow-xs"
-                              >
-                                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100">
-                                  {prod.imageUrl ? (
-                                    <Image
-                                      src={prod.imageUrl}
-                                      alt={decodeHtmlEntities(prod.name)}
-                                      fill
-                                      sizes="56px"
-                                      className="object-cover transition-transform group-hover:scale-105"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-zinc-300">
-                                      <Box className="h-5 w-5" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  {prod.category && (
-                                    <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-400 truncate mb-0.5">
-                                      {prod.category}
-                                    </span>
-                                  )}
-                                  <h4 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
-                                    {decodeHtmlEntities(prod.name)}
-                                  </h4>
-                                  <p className="mt-1 text-xs font-bold text-primary">
-                                    {prod.price}
-                                  </p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="py-12 text-center text-xs text-zinc-400">
-                            Search across {productCountLabel} products or select a category.
-                          </div>
-                        )}
-                      </motion.div>
-                    ) : (
-                      /* Active Search Results Stream */
-                      <motion.div
-                        key="search-active-stream"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.12 }}
-                        className="space-y-5"
+              {/* ─────────────────────────────────────────────────────────────
+                  ROW 2: DYNAMIC CONTENT (FEATURED CARDS BEFORE TYPING, OR SEARCH STREAM)
+                 ───────────────────────────────────────────────────────────── */}
+              <AnimatePresence mode="wait">
+                {!hasSearchQuery ? (
+                  /* Initial State: Curated Featured Products filling the space below category cards */
+                  <motion.div
+                    key="initial-featured-state"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="space-y-4"
+                  >
+                    <div className="flex items-center justify-between border-t border-zinc-100 pt-5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+                          <Sparkles className="h-3.5 w-3.5 fill-current" />
+                        </div>
+                        <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
+                          Featured Products
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => handleNavigate("/shop")}
+                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
                       >
+                        Browse all
+                        <ArrowRight className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {featuredLoading && featuredProducts.length === 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                          <div
+                            key={i}
+                            className="h-44 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse p-3"
+                          />
+                        ))}
+                      </div>
+                    ) : featuredProducts.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        {featuredProducts.map((prod) => (
+                          <button
+                            key={`featured-${prod.id}`}
+                            onClick={() => handleNavigate(`/products/${prod.slug}`)}
+                            className="group flex flex-col rounded-xl border border-zinc-200/70 bg-white p-2.5 text-left transition-all hover:border-zinc-300 hover:shadow-xs"
+                          >
+                            <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100 mb-2">
+                              {prod.imageUrl ? (
+                                <Image
+                                  src={prod.imageUrl}
+                                  alt={decodeHtmlEntities(prod.name)}
+                                  fill
+                                  sizes="160px"
+                                  className="object-cover transition-transform group-hover:scale-105"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                  <Box className="h-6 w-6" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1 flex flex-col justify-between">
+                              <div>
+                                {prod.category && (
+                                  <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-400 truncate mb-0.5">
+                                    {prod.category}
+                                  </span>
+                                )}
+                                <h4 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                                  {decodeHtmlEntities(prod.name)}
+                                </h4>
+                              </div>
+                              <p className="mt-1 text-xs font-bold text-primary">
+                                {prod.price}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {/* Shortcut hint */}
+                    <div className="border-t border-zinc-100 pt-3 text-[10px] text-zinc-400 flex justify-between">
+                      <span>Select a department above or type to search products</span>
+                      <span>Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-zinc-500">Esc</kbd> to close</span>
+                    </div>
+                  </motion.div>
+                ) : (
+                  /* Active Search Stream with Best Match alongside */
+                  <motion.div
+                    key="search-active-stream"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                    className="border-t border-zinc-100 pt-5"
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+                      
+                      {/* Left Column: Search Results */}
+                      <div className={cn(bestMatch ? "lg:col-span-8 xl:col-span-9" : "lg:col-span-12", "flex flex-col space-y-5")}>
                         {/* Section A: Matching Departments */}
                         {displayCategories.length > 0 && (
                           <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-2.5 sm:p-3">
@@ -594,7 +641,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                           </div>
                         ) : null}
 
-                        {/* Section D: Clean Text Button (No Heavy Black Background) */}
+                        {/* Section D: Clean Text Button */}
                         <div className="pt-2 flex justify-center">
                           <button
                             onClick={() => handleNavigate(`/shop?q=${encodeURIComponent(inputValue.trim())}`)}
@@ -612,114 +659,68 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                               No results found for &ldquo;{inputValue.trim()}&rdquo;
                             </p>
                             <p className="mt-1 text-xs text-zinc-400">
-                              Check your spelling or browse by category on the right.
+                              Check your spelling or choose a department above.
                             </p>
                           </div>
                         )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                      </div>
 
-                {/* ─────────────────────────────────────────────────────────────
-                    RIGHT COLUMN: EXACT PRODUCTION CATEGORIES & BEST MATCH (lg:col-span-3)
-                   ───────────────────────────────────────────────────────────── */}
-                <div className="lg:col-span-4 xl:col-span-3">
-                  <AnimatePresence mode="wait">
-                    {bestMatch ? (
-                      /* Best Match Featured Product Card */
-                      <motion.div
-                        key={`best-match-${bestMatch.id}`}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                          Best Match
-                        </p>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                          <div className="absolute top-3 left-3 z-10 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1 border border-emerald-200">
-                            <Zap className="h-3 w-3 fill-current" />
-                            Best Match
-                          </div>
-                          <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-zinc-50 mb-4 mt-2">
-                            {bestMatch.imageUrl ? (
-                              <Image
-                                src={bestMatch.imageUrl}
-                                alt={decodeHtmlEntities(bestMatch.name)}
-                                fill
-                                sizes="(max-width: 768px) 100vw, 300px"
-                                className="object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-zinc-300">
-                                <Box className="h-10 w-10 text-zinc-300" />
-                              </div>
-                            )}
-                          </div>
-                          <h4 className="font-bold text-zinc-900 group-hover:text-primary transition-colors line-clamp-2 min-h-[2.5rem] text-sm leading-snug">
-                            {decodeHtmlEntities(bestMatch.name)}
-                          </h4>
-                          <div className="mt-2 flex items-center justify-between">
-                            <span className="text-sm font-extrabold text-primary">
-                              {bestMatch.price || "View Price"}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleNavigate(`/products/${bestMatch.slug}`)}
-                            className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-zinc-950 py-2.5 text-xs font-bold text-white transition-all hover:bg-zinc-800"
+                      {/* Right Column: Best Match Card (when active match found) */}
+                      {bestMatch && (
+                        <div className="lg:col-span-4 xl:col-span-3">
+                          <motion.div
+                            key={`best-match-${bestMatch.id}`}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
                           >
-                            View Details
-                            <ArrowRight className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    ) : (
-                      /* Classic Production Browse by Category List */
-                      <motion.div
-                        key="browse-categories"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                          Browse by Category
-                        </p>
-                        <div className="flex flex-col gap-3">
-                          {navigationCategories.map((category) => (
-                            <div key={category.slug} className="rounded-xl border border-zinc-100 p-4 bg-zinc-50/50">
-                              <button
-                                onClick={() => handleNavigate(`/categories/${category.slug}`)}
-                                className={cn("text-sm font-bold mb-3 transition-opacity hover:opacity-70 text-left w-full", category.accentColor)}
-                              >
-                                {category.label}
-                              </button>
-                              <div className="flex flex-col gap-2">
-                                {category.subcategories.map((sub) => (
-                                  <button
-                                    key={sub.slug}
-                                    onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
-                                    className="flex items-center justify-between text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left"
-                                  >
-                                    {sub.label}
-                                    <ArrowRight className="h-3 w-3 text-zinc-300" />
-                                  </button>
-                                ))}
+                            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                              Best Match
+                            </p>
+                            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                              <div className="absolute top-3 left-3 z-10 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1 border border-emerald-200">
+                                <Zap className="h-3 w-3 fill-current" />
+                                Best Match
                               </div>
+                              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-zinc-50 mb-4 mt-2">
+                                {bestMatch.imageUrl ? (
+                                  <Image
+                                    src={bestMatch.imageUrl}
+                                    alt={decodeHtmlEntities(bestMatch.name)}
+                                    fill
+                                    sizes="(max-width: 768px) 100vw, 300px"
+                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                    <Box className="h-10 w-10 text-zinc-300" />
+                                  </div>
+                                )}
+                              </div>
+                              <h4 className="font-bold text-zinc-900 group-hover:text-primary transition-colors line-clamp-2 min-h-[2.5rem] text-sm leading-snug">
+                                {decodeHtmlEntities(bestMatch.name)}
+                              </h4>
+                              <div className="mt-2 flex items-center justify-between">
+                                <span className="text-sm font-extrabold text-primary">
+                                  {bestMatch.price || "View Price"}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleNavigate(`/products/${bestMatch.slug}`)}
+                                className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-zinc-950 py-2.5 text-xs font-bold text-white transition-all hover:bg-zinc-800"
+                              >
+                                View Details
+                                <ArrowRight className="h-3.5 w-3.5" />
+                              </button>
                             </div>
-                          ))}
+                          </motion.div>
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Shortcut hint */}
-                  <p className="mt-8 text-[10px] text-zinc-400">
-                    Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono font-medium text-zinc-500">Esc</kbd> to close
-                  </p>
-                </div>
-              </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         </>
