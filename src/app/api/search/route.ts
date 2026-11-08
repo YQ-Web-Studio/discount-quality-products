@@ -141,6 +141,48 @@ export async function GET(request: NextRequest) {
             route: `/categories/${c.slug}`,
           }));
         }
+      } else {
+        // Fallback to standard WooCommerce REST API if snippet not yet uploaded to WP
+        const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;
+        const consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
+        if (consumerKey && consumerSecret) {
+          const authString = btoa(`${consumerKey}:${consumerSecret}`);
+          const wcRes = await fetch(
+            `${wpBase}/wp-json/wc/v3/products?search=${encodeURIComponent(q)}&per_page=6&status=publish`,
+            {
+              signal: AbortSignal.timeout(4000),
+              headers: {
+                Authorization: `Basic ${authString}`,
+                Accept: "application/json",
+              },
+            }
+          );
+          if (wcRes.ok) {
+            const wcData = await wcRes.json();
+            if (Array.isArray(wcData)) {
+              remoteProducts = wcData.map((p: Record<string, unknown>) => {
+                const rawPrice = p.price;
+                const formattedPrice =
+                  typeof rawPrice === "string" && rawPrice.startsWith("£")
+                    ? rawPrice
+                    : rawPrice
+                    ? `£${Number(rawPrice).toFixed(2)}`
+                    : "£0.00";
+                const images = p.images as Array<{ src?: string }> | undefined;
+                const categories = p.categories as Array<{ name?: string }> | undefined;
+
+                return {
+                  id: String(p.id ?? ""),
+                  name: String(p.name ?? ""),
+                  slug: String(p.slug ?? ""),
+                  price: formattedPrice,
+                  imageUrl: images?.[0]?.src || null,
+                  category: categories?.[0]?.name || null,
+                };
+              });
+            }
+          }
+        }
       }
     } catch (fetchError) {
       // Endpoint might be unavailable in local dev / tests without live WP; fail gracefully
