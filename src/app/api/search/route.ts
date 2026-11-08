@@ -122,22 +122,22 @@ export async function GET(request: NextRequest) {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data?.products)) {
-          remoteProducts = data.products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            slug: p.slug,
-            price: p.price || "£0.00",
-            imageUrl: p.imageUrl || null,
-            category: p.category || null,
+          remoteProducts = data.products.map((p: Record<string, unknown>) => ({
+            id: String(p.id ?? ""),
+            name: String(p.name ?? ""),
+            slug: String(p.slug ?? ""),
+            price: String(p.price || "£0.00"),
+            imageUrl: typeof p.imageUrl === "string" ? p.imageUrl : null,
+            category: typeof p.category === "string" ? p.category : null,
           }));
         }
 
         if (Array.isArray(data?.categories)) {
-          remoteCategories = data.categories.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            slug: c.slug,
-            parentName: c.parentName || null,
+          remoteCategories = data.categories.map((c: Record<string, unknown>) => ({
+            id: typeof c.id === "number" ? c.id : Number(c.id) || 0,
+            name: String(c.name ?? ""),
+            slug: String(c.slug ?? ""),
+            parentName: typeof c.parentName === "string" ? c.parentName : null,
             route: `/categories/${c.slug}`,
           }));
         }

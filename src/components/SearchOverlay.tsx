@@ -9,7 +9,7 @@ import Image from "next/image";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
 import { useSearchStore } from "@/lib/useSearchStore";
-import type { InstantSearchResponse, InstantSearchProduct, InstantSearchCategory } from "@/app/api/search/route";
+import type { InstantSearchResponse, InstantSearchProduct } from "@/app/api/search/route";
 
 const panelContainerVariants: Variants = {
   hidden: {},
@@ -69,13 +69,15 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
         .then((data) => {
           if (Array.isArray(data) && data.length > 0) {
             setFeaturedProducts(
-              data.slice(0, 6).map((item: any) => ({
-                id: item.id,
-                name: item.name,
-                slug: item.slug,
-                price: item.price || item.regularPrice || "£0.00",
-                imageUrl: item.image?.sourceUrl || item.featuredImage?.node?.sourceUrl || null,
-                category: item.productCategories?.nodes?.[0]?.name || null,
+              data.slice(0, 6).map((item: Record<string, unknown>) => ({
+                id: String(item.id ?? ""),
+                name: String(item.name ?? ""),
+                slug: String(item.slug ?? ""),
+                price: String(item.price || item.regularPrice || "£0.00"),
+                imageUrl: (item.image as { sourceUrl?: string } | undefined)?.sourceUrl ||
+                  (item.featuredImage as { node?: { sourceUrl?: string } } | undefined)?.node?.sourceUrl ||
+                  null,
+                category: (item.productCategories as { nodes?: Array<{ name?: string }> } | undefined)?.nodes?.[0]?.name || null,
               }))
             );
           }
@@ -149,8 +151,8 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
         searchCache.current[trimmed] = data;
         setSearchResults(data);
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") return;
         console.error("Live search fetch error:", err);
       } finally {
         setIsSearching(false);

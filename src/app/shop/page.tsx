@@ -89,11 +89,11 @@ async function getProductsData(
           if (cat.slug === part) {
             resolvedIds.push(cat.id);
             if (cat.subcategories) {
-              cat.subcategories.forEach((sub: any) => resolvedIds.push(sub.id));
+              cat.subcategories.forEach((sub: { id: number }) => resolvedIds.push(sub.id));
             }
             break;
           }
-          const sub = cat.subcategories?.find((s: any) => s.slug === part);
+          const sub = cat.subcategories?.find((s: { slug: string }) => s.slug === part);
           if (sub) {
             resolvedIds.push(sub.id);
             break;
