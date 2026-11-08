@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Search, X, ArrowRight, Tag, Box, ChevronRight, Loader2, Zap } from "lucide-react";
+import { Search, X, ArrowRight, Tag, Box, ChevronRight, Loader2, Zap, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { navigationCategories } from "@/lib/navigationConfig";
@@ -52,6 +52,8 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
   const [inputValue, setInputValue] = useState("");
   const [query, setQuery] = useState("");
+  const [featuredProducts, setFeaturedProducts] = useState<InstantSearchProduct[]>([]);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<InstantSearchResponse>({
     products: [],
     categories: [],
@@ -64,6 +66,37 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  /* Pre-fetch curated featured products for instant zero-input display in the blank space */
+  useEffect(() => {
+    if (!open) return;
+
+    if (featuredProducts.length === 0) {
+      setFeaturedLoading(true);
+      fetch("/api/products/featured")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setFeaturedProducts(
+              data.slice(0, 6).map((item: Record<string, unknown>) => ({
+                id: String(item.id ?? ""),
+                name: String(item.name ?? ""),
+                slug: String(item.slug ?? ""),
+                price: String(item.price || item.regularPrice || "£0.00"),
+                imageUrl:
+                  (item.image as { sourceUrl?: string } | undefined)?.sourceUrl ||
+                  (item.featuredImage as { node?: { sourceUrl?: string } } | undefined)?.node?.sourceUrl ||
+                  null,
+                category:
+                  (item.productCategories as { nodes?: Array<{ name?: string }> } | undefined)?.nodes?.[0]?.name || null,
+              }))
+            );
+          }
+        })
+        .catch(() => {})
+        .finally(() => setFeaturedLoading(false));
+    }
+  }, [open, featuredProducts.length]);
 
   /* Reset state and focus input when overlay opens/closes */
   useEffect(() => {
@@ -333,21 +366,86 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                 <div className="lg:col-span-8 xl:col-span-9 flex flex-col">
                   <AnimatePresence mode="wait">
                     {!hasSearchQuery ? (
-                      /* Initial State (Before Typing) */
+                      /* Initial State (Before Typing): Product cards displayed in blank space */
                       <motion.div
-                        key="initial-state"
-                        initial={{ opacity: 0, y: 8 }}
+                        key="initial-featured-state"
+                        initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        className="flex-1 flex flex-col items-center justify-center text-center py-16 pb-24"
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="space-y-4"
                       >
-                        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-300 mx-auto">
-                          <Search className="h-7 w-7" />
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+                              <Sparkles className="h-3.5 w-3.5 fill-current" />
+                            </div>
+                            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
+                              Featured Products
+                            </h3>
+                          </div>
+                          <button
+                            onClick={() => handleNavigate("/shop")}
+                            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                          >
+                            Browse all
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
                         </div>
-                        <h3 className="text-xl font-bold text-zinc-900">Search our catalogue</h3>
-                        <p className="mt-2 max-w-sm text-sm font-medium text-zinc-400 mx-auto">
-                          Find exactly what you need across our range of {productCountLabel} premium products and trade accessories.
-                        </p>
+
+                        {featuredLoading && featuredProducts.length === 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {[1, 2, 3, 4, 5, 6].map((i) => (
+                              <div
+                                key={i}
+                                className="h-24 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse p-3"
+                              />
+                            ))}
+                          </div>
+                        ) : featuredProducts.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {featuredProducts.map((prod) => (
+                              <button
+                                key={`featured-${prod.id}`}
+                                onClick={() => handleNavigate(`/products/${prod.slug}`)}
+                                className="group flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white p-3 text-left transition-all hover:border-zinc-300 hover:shadow-xs"
+                              >
+                                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100">
+                                  {prod.imageUrl ? (
+                                    <Image
+                                      src={prod.imageUrl}
+                                      alt={decodeHtmlEntities(prod.name)}
+                                      fill
+                                      sizes="56px"
+                                      className="object-cover transition-transform group-hover:scale-105"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                      <Box className="h-5 w-5" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  {prod.category && (
+                                    <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-400 truncate mb-0.5">
+                                      {prod.category}
+                                    </span>
+                                  )}
+                                  <h4 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                                    {decodeHtmlEntities(prod.name)}
+                                  </h4>
+                                  <p className="mt-1 text-xs font-bold text-primary">
+                                    {prod.price}
+                                  </p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-12 text-center text-xs text-zinc-400">
+                            Search across {productCountLabel} products or select a category.
+                          </div>
+                        )}
                       </motion.div>
                     ) : (
                       /* Active Search Results Stream */
@@ -555,7 +653,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                 className="object-cover transition-transform duration-300 group-hover:scale-105"
                               />
                             ) : (
-                              <div className="flex h-full w-full items-center justify-center">
+                              <div className="flex h-full w-full items-center justify-center text-zinc-300">
                                 <Box className="h-10 w-10 text-zinc-300" />
                               </div>
                             )}

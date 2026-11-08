@@ -34,9 +34,10 @@ describe("Search Overlay UI (src/components/SearchOverlay.tsx)", () => {
     expect(content).toMatch(/\/products\/\$\{.*?slug/);
   });
 
-  it("provides clean view all results text link at the bottom of the stream", () => {
+  it("renders featured product cards in the initial blank space before typing", () => {
     const content = fs.readFileSync(overlayPath, "utf-8");
-    expect(content).toMatch(/\/shop\?q=/);
-    expect(content).toMatch(/Search for.*in all products/i);
+    expect(content).toContain("featuredProducts");
+    expect(content).toContain("/api/products/featured");
+    expect(content).toContain("Featured Products");
   });
 });
