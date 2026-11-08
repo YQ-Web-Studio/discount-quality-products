@@ -187,11 +187,11 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   );
 
   const trimmedInput = inputValue.trim();
-  const hasSearchQuery = trimmedInput.length >= 2;
+  const hasSearchQuery = trimmedInput.length > 0;
 
-  // 1. Instant Synchronous Categories (0ms)
+  // 1. Instant Synchronous Categories (0ms) - only match on 2+ chars
   const instantCategories = useMemo(() => {
-    if (!hasSearchQuery) return [];
+    if (!hasSearchQuery || trimmedInput.length < 2) return [];
     const lower = trimmedInput.toLowerCase();
     const matches: InstantSearchCategory[] = [];
     for (const parent of navigationCategories) {
@@ -221,9 +221,9 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     return matches.slice(0, 3);
   }, [trimmedInput, hasSearchQuery]);
 
-  // 2. Suggestions are ALWAYS shown (0ms initial typed term, enriched when remote results arrive)
+  // 2. Suggestions (0ms initial typed term on 2+ chars, enriched when remote results arrive)
   const displaySuggestions = useMemo(() => {
-    if (!hasSearchQuery) return [];
+    if (!hasSearchQuery || trimmedInput.length < 2) return [];
     const typed = toTitleCase(trimmedInput);
     const fromResults = searchResults.suggestions || [];
     const list = [typed, ...fromResults];
@@ -358,147 +358,143 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
             {/* Content Container */}
             <div className="mx-auto max-w-[1440px] 2xl:max-w-[1750px] px-4 py-6 md:px-6 2xl:px-8">
-              
-              {/* ─────────────────────────────────────────────────────────────
-                  ROW 1: CATEGORY CARDS ACROSS THE WHOLE BOX ALONG THE TOP (1 ROW)
-                 ───────────────────────────────────────────────────────────── */}
-              <div className="mb-6">
-                <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                  Browse by Department
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {navigationCategories.map((category) => (
-                    <div
-                      key={category.slug}
-                      className="rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-3 hover:bg-white hover:border-zinc-300 hover:shadow-xs transition-all flex flex-col justify-between"
-                    >
-                      <div>
-                        <button
-                          onClick={() => handleNavigate(`/categories/${category.slug}`)}
-                          className={cn(
-                            "text-xs sm:text-sm font-bold mb-2 transition-opacity hover:opacity-80 text-left w-full flex items-center justify-between group",
-                            category.accentColor
-                          )}
-                        >
-                          <span className="truncate">{category.label}</span>
-                          <ChevronRight className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform shrink-0" />
-                        </button>
-                        <div className="flex flex-col gap-1">
-                          {category.subcategories.map((sub) => (
-                            <button
-                              key={sub.slug}
-                              onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
-                              className="flex items-center justify-between text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left py-0.5 truncate group"
-                            >
-                              <span className="truncate">{sub.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ─────────────────────────────────────────────────────────────
-                  ROW 2: DYNAMIC CONTENT (FEATURED CARDS BEFORE TYPING, OR SEARCH STREAM)
-                 ───────────────────────────────────────────────────────────── */}
               <AnimatePresence mode="wait">
                 {!hasSearchQuery ? (
-                  /* Initial State: Curated Featured Products filling the space below category cards */
+                  /* Initial State: Category Cards across top in 1 row + Featured Products below */
                   <motion.div
-                    key="initial-featured-state"
+                    key="initial-browse-state"
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.15 }}
-                    className="space-y-4"
+                    className="space-y-6"
                   >
-                    <div className="flex items-center justify-between border-t border-zinc-100 pt-5">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 text-amber-600">
-                          <Sparkles className="h-3.5 w-3.5 fill-current" />
-                        </div>
-                        <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
-                          Featured Products
-                        </h3>
+                    {/* Category Cards across the whole box along the top in 1 row */}
+                    <div>
+                      <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        Browse by Department
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        {navigationCategories.map((category) => (
+                          <div
+                            key={category.slug}
+                            className="rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-3 hover:bg-white hover:border-zinc-300 hover:shadow-xs transition-all flex flex-col justify-between"
+                          >
+                            <div>
+                              <button
+                                onClick={() => handleNavigate(`/categories/${category.slug}`)}
+                                className={cn(
+                                  "text-xs sm:text-sm font-bold mb-2 transition-opacity hover:opacity-80 text-left w-full flex items-center justify-between group",
+                                  category.accentColor
+                                )}
+                              >
+                                <span className="truncate">{category.label}</span>
+                                <ChevronRight className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                              </button>
+                              <div className="flex flex-col gap-1">
+                                {category.subcategories.map((sub) => (
+                                  <button
+                                    key={sub.slug}
+                                    onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
+                                    className="flex items-center justify-between text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left py-0.5 truncate group"
+                                  >
+                                    <span className="truncate">{sub.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <button
-                        onClick={() => handleNavigate("/shop")}
-                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                      >
-                        Browse all
-                        <ArrowRight className="h-3 w-3" />
-                      </button>
                     </div>
 
-                    {featuredLoading && featuredProducts.length === 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {[1, 2, 3, 4, 5, 6].map((i) => (
-                          <div
-                            key={i}
-                            className="h-44 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse p-3"
-                          />
-                        ))}
+                    {/* Featured Products filling the space below category cards */}
+                    <div className="border-t border-zinc-100 pt-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+                            <Sparkles className="h-3.5 w-3.5 fill-current" />
+                          </div>
+                          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
+                            Featured Products
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => handleNavigate("/shop")}
+                          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                        >
+                          Browse all
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
                       </div>
-                    ) : featuredProducts.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {featuredProducts.map((prod) => (
-                          <button
-                            key={`featured-${prod.id}`}
-                            onClick={() => handleNavigate(`/products/${prod.slug}`)}
-                            className="group flex flex-col rounded-xl border border-zinc-200/70 bg-white p-2.5 text-left transition-all hover:border-zinc-300 hover:shadow-xs"
-                          >
-                            <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100 mb-2">
-                              {prod.imageUrl ? (
-                                <Image
-                                  src={prod.imageUrl}
-                                  alt={decodeHtmlEntities(prod.name)}
-                                  fill
-                                  sizes="160px"
-                                  className="object-cover transition-transform group-hover:scale-105"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-zinc-300">
-                                  <Box className="h-6 w-6" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1 flex flex-col justify-between">
-                              <div>
-                                {prod.category && (
-                                  <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-400 truncate mb-0.5">
-                                    {prod.category}
-                                  </span>
-                                )}
-                                <h4 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
-                                  {decodeHtmlEntities(prod.name)}
-                                </h4>
-                              </div>
-                              <p className="mt-1 text-xs font-bold text-primary">
-                                {prod.price}
-                              </p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
 
-                    {/* Shortcut hint */}
-                    <div className="border-t border-zinc-100 pt-3 text-[10px] text-zinc-400 flex justify-between">
-                      <span>Select a department above or type to search products</span>
-                      <span>Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-zinc-500">Esc</kbd> to close</span>
+                      {featuredLoading && featuredProducts.length === 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div
+                              key={i}
+                              className="h-44 rounded-xl border border-zinc-100 bg-zinc-50/70 animate-pulse p-3"
+                            />
+                          ))}
+                        </div>
+                      ) : featuredProducts.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {featuredProducts.map((prod) => (
+                            <button
+                              key={`featured-${prod.id}`}
+                              onClick={() => handleNavigate(`/products/${prod.slug}`)}
+                              className="group flex flex-col rounded-xl border border-zinc-200/70 bg-white p-2.5 text-left transition-all hover:border-zinc-300 hover:shadow-xs"
+                            >
+                              <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100 mb-2">
+                                {prod.imageUrl ? (
+                                  <Image
+                                    src={prod.imageUrl}
+                                    alt={decodeHtmlEntities(prod.name)}
+                                    fill
+                                    sizes="160px"
+                                    className="object-cover transition-transform group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                                    <Box className="h-6 w-6" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1 flex flex-col justify-between">
+                                <div>
+                                  {prod.category && (
+                                    <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-400 truncate mb-0.5">
+                                      {prod.category}
+                                    </span>
+                                  )}
+                                  <h4 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                                    {decodeHtmlEntities(prod.name)}
+                                  </h4>
+                                </div>
+                                <p className="mt-1 text-xs font-bold text-primary">
+                                  {prod.price}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {/* Shortcut hint */}
+                      <div className="border-t border-zinc-100 pt-3 text-[10px] text-zinc-400 flex justify-between">
+                        <span>Select a department above or type to search products</span>
+                        <span>Press <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-zinc-500">Esc</kbd> to close</span>
+                      </div>
                     </div>
                   </motion.div>
                 ) : (
-                  /* Active Search Stream with Best Match alongside */
+                  /* Active Search Stream with Best Match alongside (Categories hidden while typing) */
                   <motion.div
                     key="search-active-stream"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.12 }}
-                    className="border-t border-zinc-100 pt-5"
                   >
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                       
@@ -653,13 +649,13 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         </div>
 
                         {/* Section E: Zero Results State (Only for True Gibberish) */}
-                        {!isSearching && searchResults.products.length === 0 && displayCategories.length === 0 && (
+                        {!isSearching && trimmedInput.length >= 2 && searchResults.products.length === 0 && displayCategories.length === 0 && (
                           <div className="py-12 text-center rounded-xl bg-zinc-50/50 border border-zinc-100">
                             <p className="text-sm font-semibold text-zinc-800">
                               No results found for &ldquo;{inputValue.trim()}&rdquo;
                             </p>
                             <p className="mt-1 text-xs text-zinc-400">
-                              Check your spelling or choose a department above.
+                              Check your spelling or clear search to browse departments.
                             </p>
                           </div>
                         )}

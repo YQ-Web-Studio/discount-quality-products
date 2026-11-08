@@ -35,10 +35,12 @@ describe("Search Overlay UI (src/components/SearchOverlay.tsx)", () => {
     expect(content).toMatch(/\/products\/\$\{.*?slug/);
   });
 
-  it("renders featured product cards in the space below category cards before typing", () => {
+  it("only shows top category cards before typing starts and hides them once typing begins", () => {
     const content = fs.readFileSync(overlayPath, "utf-8");
-    expect(content).toContain("featuredProducts");
-    expect(content).toContain("/api/products/featured");
-    expect(content).toContain("Featured Products");
+    expect(content).toContain("!hasSearchQuery ? (");
+    expect(content).toContain("Browse by Department");
+    expect(content).toContain("lg:grid-cols-5");
+    expect(content).toContain("hasSearchQuery = trimmedInput.length > 0");
   });
 });
+
