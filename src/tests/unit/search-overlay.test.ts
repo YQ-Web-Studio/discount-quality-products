@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-describe("Search Overlay UI Redesign (src/components/SearchOverlay.tsx)", () => {
+describe("Search Overlay UI (src/components/SearchOverlay.tsx)", () => {
   const overlayPath = path.resolve(
     process.cwd(),
     "src/components/SearchOverlay.tsx"
@@ -14,25 +14,18 @@ describe("Search Overlay UI Redesign (src/components/SearchOverlay.tsx)", () => 
     expect(content).toContain('"use client"');
   });
 
-  it("fetches and renders initial featured/trending products when search opens", () => {
-    const content = fs.readFileSync(overlayPath, "utf-8");
-    // Must feature an initial empty state that displays curated products instead of empty text
-    expect(content).toContain("/api/products/featured");
-    expect(content).toContain("featuredProducts");
-    expect(content).toMatch(/Featured|Trending|Popular/i);
-  });
-
-  it("implements unified single-column layout incorporating categories, suggestions, and products", () => {
+  it("implements responsive 2-column layout with results on left and categories/best-match on right", () => {
     const content = fs.readFileSync(overlayPath, "utf-8");
 
-    // Must NOT be divided into distinct side-by-side columns (col-span-9 and col-span-3) for search results
-    expect(content).not.toContain("lg:col-span-9");
-    expect(content).not.toContain("lg:col-span-3");
+    // Right-hand column contains Best Match and Browse by Category
+    expect(content).toContain("bestMatch");
+    expect(content).toContain("Browse by Category");
+    expect(content).toContain("navigationCategories");
 
-    // Must handle all 3 result types in the single unified stream
-    expect(content).toContain("categories");
-    expect(content).toContain("suggestions");
-    expect(content).toContain("products");
+    // Left-hand column handles categories, suggestions, and products stream
+    expect(content).toContain("displayCategories");
+    expect(content).toContain("displaySuggestions");
+    expect(content).toContain("searchResults.products");
   });
 
   it("links direct product results straight to the product detail page (PDP)", () => {
@@ -41,9 +34,9 @@ describe("Search Overlay UI Redesign (src/components/SearchOverlay.tsx)", () => 
     expect(content).toMatch(/\/products\/\$\{.*?slug/);
   });
 
-  it("provides view all results action at the bottom of the stream", () => {
+  it("provides clean view all results text link at the bottom of the stream", () => {
     const content = fs.readFileSync(overlayPath, "utf-8");
     expect(content).toMatch(/\/shop\?q=/);
-    expect(content).toMatch(/View all|Search for/i);
+    expect(content).toMatch(/Search for.*in all products/i);
   });
 });
