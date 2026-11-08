@@ -42,8 +42,6 @@ export async function POST(req: Request) {
       // @ts-expect-error Next.js 16 profile argument
       revalidateTag(`wc-product-${slug}`);
       revalidatePath(`/products/${slug}`);
-      revalidatePath("/shop");
-      revalidatePath("/");
     } catch (revalidateErr) {
       console.error("[woocommerce-product-webhook] Revalidation error:", revalidateErr);
     }

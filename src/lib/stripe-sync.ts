@@ -24,10 +24,7 @@ export function buildPaymentMeta(paymentIntentId: string, chargeId: string) {
 export async function sendConfirmationEmailForOrder(order: any, metadataForm?: any) {
   try {
     const recipientEmail = order.billing?.email || metadataForm?.em;
-    if (!recipientEmail) {
-      console.warn("[stripe-sync] No recipient email found. Skipping confirmation email.");
-      return;
-    }
+    const isFallbackEmail = !recipientEmail || recipientEmail === "no-email-provided@discountproducts.co.uk";
 
     const emailItems = order.line_items?.map((item: any) => ({
       id: item.id.toString(),
@@ -51,39 +48,45 @@ export async function sendConfirmationEmailForOrder(order: any, metadataForm?: a
 
     const shippingMethodTitle = order.shipping_lines?.[0]?.method_title || "Free Delivery";
 
-    // Send customer confirmation copy
-    await sendEmail({
-      to: recipientEmail,
-      subject: `Order Confirmation - #${order.id}`,
-      react: React.createElement(OrderConfirmationEmail, {
-        customerName: customerName,
-        orderNumber: order.id.toString(),
-        orderDate: new Date(order.date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-        items: emailItems,
-        subtotal: `£${subtotalVal.toFixed(2)}`,
-        discount: totalDiscount > 0 ? `£${totalDiscount.toFixed(2)}` : undefined,
-        shipping: `£${shippingCost.toFixed(2)}`,
-        vat: `£${vatVal.toFixed(2)}`,
-        total: `£${orderTotal.toFixed(2)}`,
-        shippingAddress: {
-          name: shippingName,
-          line1: order.shipping?.address_1 || metadataForm?.a1 || '',
-          line2: order.shipping?.address_2 || '',
-          city: order.shipping?.city || metadataForm?.ct || '',
-          postcode: order.shipping?.postcode || metadataForm?.pc || '',
-          country: order.shipping?.country || 'United Kingdom',
-        },
-        shippingMethod: shippingMethodTitle,
-      }),
-    });
-    console.log(`[stripe-sync] Confirmation email sent successfully to ${recipientEmail} for order #${order.id}`);
+    // Send customer confirmation copy only if valid customer email was provided
+    if (!isFallbackEmail && recipientEmail) {
+      await sendEmail({
+        to: recipientEmail,
+        subject: `Order Confirmation - #${order.id}`,
+        react: React.createElement(OrderConfirmationEmail, {
+          customerName: customerName,
+          orderNumber: order.id.toString(),
+          orderDate: new Date(order.date_created || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+          items: emailItems,
+          subtotal: `£${subtotalVal.toFixed(2)}`,
+          discount: totalDiscount > 0 ? `£${totalDiscount.toFixed(2)}` : undefined,
+          shipping: `£${shippingCost.toFixed(2)}`,
+          vat: `£${vatVal.toFixed(2)}`,
+          total: `£${orderTotal.toFixed(2)}`,
+          shippingAddress: {
+            name: shippingName,
+            line1: order.shipping?.address_1 || metadataForm?.a1 || '',
+            line2: order.shipping?.address_2 || '',
+            city: order.shipping?.city || metadataForm?.ct || '',
+            postcode: order.shipping?.postcode || metadataForm?.pc || '',
+            country: order.shipping?.country || 'United Kingdom',
+          },
+          shippingMethod: shippingMethodTitle,
+        }),
+      });
+      console.log(`[stripe-sync] Confirmation email sent successfully to ${recipientEmail} for order #${order.id}`);
+    } else {
+      console.log(`[stripe-sync] No direct customer email provided for order #${order.id}. Skipping customer email.`);
+    }
 
     // Also send admin notification copy
     try {
       console.log(`[stripe-sync] Sending order notification copy to admin for order #${order.id}...`);
       await sendEmail({
         to: 'sales@discountproducts.co.uk',
-        subject: `[New Order] Order Confirmation - #${order.id}`,
+        subject: isFallbackEmail
+          ? `[New Order - Offline/Manual Payment] Order Confirmation - #${order.id}`
+          : `[New Order] Order Confirmation - #${order.id}`,
         react: React.createElement(OrderConfirmationEmail, {
           customerName: customerName,
           orderNumber: order.id.toString(),
@@ -251,7 +254,6 @@ async function internalProcessOrderFromPaymentIntent(
 
     const description = paymentIntent.description || `Stripe Payment ${paymentIntent.id}`;
     const totalAmount = paymentIntent.amount ? (paymentIntent.amount / 100).toFixed(2) : "0.00";
-    const sparseNote = `Sparse Stripe Payment captured. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}. Description: ${description}. Total: £${totalAmount}. Please review and update line items or customer contact details if needed.`;
 
     let chargeData = (paymentIntent as any).charges?.data?.[0];
     const resolvedChargeId = chargeId || (paymentIntent as any).latest_charge;
@@ -264,11 +266,20 @@ async function internalProcessOrderFromPaymentIntent(
     }
     const billingDetails = chargeData?.billing_details;
     const shippingDetails = (paymentIntent as any).shipping || chargeData?.shipping;
-    const customerEmail = (paymentIntent as any).receipt_email || billingDetails?.email || "";
+    const rawEmail = (paymentIntent as any).receipt_email || billingDetails?.email || "";
+    const hasValidEmail = Boolean(rawEmail && rawEmail.trim() !== "");
+    const customerEmail = hasValidEmail ? rawEmail.trim() : "no-email-provided@discountproducts.co.uk";
+
+    const customerName = billingDetails?.name?.trim() || shippingDetails?.name?.trim() || (hasValidEmail ? "Customer" : "Customer (No Email On File)");
+    const nameParts = customerName.split(" ");
+    const firstName = nameParts[0] || (hasValidEmail ? "Customer" : "Customer (No Email On File)");
+    const lastName = nameParts.slice(1).join(" ");
+
+    const sparseNote = `Sparse Stripe Payment captured. PaymentIntent: ${paymentIntent.id}${chargeId ? ` | Charge: ${chargeId}` : ""}. Description: ${description}. Total: £${totalAmount}.${!hasValidEmail ? " [Offline/Manual Stripe Payment - No customer email provided at checkout/terminal]" : ""} Please review and update line items or customer contact details if needed.`;
 
     const sparseBilling = {
-      first_name: billingDetails?.name ? billingDetails.name.split(" ")[0] : "Customer",
-      last_name: billingDetails?.name ? billingDetails.name.split(" ").slice(1).join(" ") : "",
+      first_name: firstName,
+      last_name: lastName,
       address_1: billingDetails?.address?.line1 || shippingDetails?.address?.line1 || "Address Pending",
       address_2: billingDetails?.address?.line2 || shippingDetails?.address?.line2 || "",
       city: billingDetails?.address?.city || shippingDetails?.address?.city || "London",
@@ -326,16 +337,14 @@ async function internalProcessOrderFromPaymentIntent(
       } catch (stripeErr) {
         console.warn(`[stripe-sync] Could not update PaymentIntent ${paymentIntent.id} metadata:`, stripeErr);
       }
-      if (customerEmail) {
-        await sendConfirmationEmailForOrder(recoveredOrder, {
-          fn: sparseBilling.first_name,
-          ln: sparseBilling.last_name,
-          em: customerEmail,
-          a1: sparseBilling.address_1,
-          ct: sparseBilling.city,
-          pc: sparseBilling.postcode,
-        });
-      }
+      await sendConfirmationEmailForOrder(recoveredOrder, {
+        fn: sparseBilling.first_name,
+        ln: sparseBilling.last_name,
+        em: customerEmail,
+        a1: sparseBilling.address_1,
+        ct: sparseBilling.city,
+        pc: sparseBilling.postcode,
+      });
       return recoveredOrder;
     } catch (err) {
       console.error(`[stripe-sync] FATAL: Failed to create recovered order for sparse PaymentIntent ${paymentIntent.id}:`, err);

@@ -609,6 +609,11 @@ describe('Prevent duplicate orders and note lifecycle (DQP-14)', () => {
           set_paid: true,
           transaction_id: 'ch_3UUm394Tt6mIhQxV1GbRGRM2',
           customer_note: expect.stringContaining('ch_3UUm394Tt6mIhQxV1GbRGRM2'),
+          billing: expect.objectContaining({
+            email: 'no-email-provided@discountproducts.co.uk',
+            first_name: 'Customer',
+            last_name: '(No Email On File)',
+          }),
         })
       );
     });
