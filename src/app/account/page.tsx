@@ -38,7 +38,6 @@ export default async function AccountPage({
   let orders: WooCommerceOrderResponse[] = [];
   let customer: WooCommerceCustomer | null = null;
   let wishlistLoadError: string | null = null;
-  let ordersLoadError: string | null = null;
 
   // Fetch Wishlist, Orders, and Customer in parallel
   try {

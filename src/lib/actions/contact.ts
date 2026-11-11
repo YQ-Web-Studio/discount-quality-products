@@ -12,7 +12,7 @@ export async function submitContactForm(formData: FormData) {
   // 1. Rate Limiting Check
   const now = Date.now();
   const globalKey = "global_rate_limit";
-  let limitData = rateLimiter.get(globalKey);
+  const limitData = rateLimiter.get(globalKey);
 
   if (limitData && now < limitData.resetTime) {
     if (limitData.count >= 2) {

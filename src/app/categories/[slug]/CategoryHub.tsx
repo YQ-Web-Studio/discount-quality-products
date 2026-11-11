@@ -704,19 +704,21 @@ export default function CategoryHub({
     return resolvedIds.join(",");
   }, [activeSlug, initialCategories]);
 
+  const [prevInitialCategory, setPrevInitialCategory] = useState(initialCategory);
   const [selectedCategories, setSelectedCategories] = useState<Set<number>>(() =>
     initialCategory
       ? new Set(initialCategory.split(",").map(Number).filter((n) => !isNaN(n)))
       : new Set()
   );
 
-  useEffect(() => {
+  if (prevInitialCategory !== initialCategory) {
+    setPrevInitialCategory(initialCategory);
     setSelectedCategories(
       initialCategory
         ? new Set(initialCategory.split(",").map(Number).filter((n) => !isNaN(n)))
         : new Set()
     );
-  }, [initialCategory]);
+  }
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -789,7 +791,7 @@ export default function CategoryHub({
         router.push(buildCategoryUrl(baseSlug, params), { scroll: false });
       });
     },
-    [router, searchParams, initialCategories]
+    [router, searchParams, initialCategories, baseSlug]
   );
 
   const handleToggleCategory = useCallback((id: number) => {
@@ -883,7 +885,7 @@ export default function CategoryHub({
     startTransition(() => {
       router.push(buildCategoryUrl(baseSlug, params), { scroll: false });
     });
-  }, [router, searchParams]);
+  }, [router, searchParams, baseSlug]);
 
   const handleSortChange = useCallback((sort: string) => {
     setSelectedSort(sort);
@@ -897,7 +899,7 @@ export default function CategoryHub({
     startTransition(() => {
       router.push(buildCategoryUrl(baseSlug, params), { scroll: false });
     });
-  }, [router, searchParams]);
+  }, [router, searchParams, baseSlug]);
 
   const handlePriceChange = useCallback((range: string) => {
     setSelectedPrice(range);
@@ -911,7 +913,7 @@ export default function CategoryHub({
     startTransition(() => {
       router.push(buildCategoryUrl(baseSlug, params), { scroll: false });
     });
-  }, [router, searchParams]);
+  }, [router, searchParams, baseSlug]);
 
   const handlePageChange = useCallback((newPage: number) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });

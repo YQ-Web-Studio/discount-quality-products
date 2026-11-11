@@ -1,22 +1,28 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Cookie } from "lucide-react";
 
-export function AnalyticsProvider() {
-  const [mounted, setMounted] = useState(false);
-  const [showBanner, setShowBanner] = useState(false);
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    setMounted(true);
-    const consent = localStorage.getItem("dqp_cookie_consent");
-    if (!consent) {
-      setShowBanner(true);
-    } else if (consent === "granted") {
-      updateConsent(true);
-    }
-  }, []);
+export function AnalyticsProvider() {
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+  const consentStore = useSyncExternalStore(
+    (callback) => {
+      window.addEventListener("storage", callback);
+      return () => window.removeEventListener("storage", callback);
+    },
+    () => localStorage.getItem("dqp_cookie_consent") || "unprompted",
+    () => "loading"
+  );
+
+  const [dismissed, setDismissed] = useState(false);
+  const showBanner = mounted && consentStore === "unprompted" && !dismissed;
 
   const updateConsent = (granted: boolean) => {
     if (typeof window !== "undefined" && (window as any).gtag) {
@@ -29,19 +35,27 @@ export function AnalyticsProvider() {
     }
   };
 
+  useEffect(() => {
+    if (consentStore === "granted") {
+      updateConsent(true);
+    } else if (consentStore === "denied") {
+      updateConsent(false);
+    }
+  }, [consentStore]);
+
   const handleAccept = () => {
     localStorage.setItem("dqp_cookie_consent", "granted");
     updateConsent(true);
-    setShowBanner(false);
+    setDismissed(true);
   };
 
   const handleReject = () => {
     localStorage.setItem("dqp_cookie_consent", "denied");
     updateConsent(false);
-    setShowBanner(false);
+    setDismissed(true);
   };
 
-  if (!mounted || !showBanner) return null;
+  if (!showBanner) return null;
 
   return (
     <div className="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 md:max-w-md bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-6 z-[9999] animate-in slide-in-from-bottom-8 duration-300">

@@ -124,25 +124,44 @@ function AddCardForm({ clientSecret, onSuccess }: { clientSecret: string; onSucc
 
 export function AddCardModal({ open, onOpenChange, onSuccess }: AddCardModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(open);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setClientSecret(null);
       setError(null);
       setIsInitializing(true);
-      
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      let isSubscribed = true;
+
       createSetupIntent()
         .then((data) => {
-          setClientSecret(data.client_secret);
+          if (isSubscribed) {
+            setClientSecret(data.client_secret);
+          }
         })
         .catch((err) => {
-          setError(err.message || "Failed to initialize secure connection.");
+          if (isSubscribed) {
+            setError(err.message || "Failed to initialize secure connection.");
+          }
         })
         .finally(() => {
-          setIsInitializing(false);
+          if (isSubscribed) {
+            setIsInitializing(false);
+          }
         });
+
+      return () => {
+        isSubscribed = false;
+      };
     }
   }, [open]);
 

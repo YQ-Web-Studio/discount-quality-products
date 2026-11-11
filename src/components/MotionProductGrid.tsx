@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, Variants } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useIsMounted } from "@/hooks/useIsMounted";
 
 const gridVariants: Variants = {
   hidden: { opacity: 0 },
@@ -19,8 +19,7 @@ interface MotionProductGridProps {
 }
 
 export function MotionProductGrid({ children }: MotionProductGridProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsMounted();
 
   if (!mounted) {
     // Render a skeleton grid that matches the final height/layout to prevent hydration errors and CLS
