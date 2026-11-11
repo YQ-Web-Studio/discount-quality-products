@@ -124,7 +124,7 @@ function AddCardForm({ clientSecret, onSuccess }: { clientSecret: string; onSucc
 
 export function AddCardModal({ open, onOpenChange, onSuccess }: AddCardModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(open);
   const [error, setError] = useState<string | null>(null);
 
   const [prevOpen, setPrevOpen] = useState(open);

@@ -38,6 +38,8 @@ export function AnalyticsProvider() {
   useEffect(() => {
     if (consentStore === "granted") {
       updateConsent(true);
+    } else if (consentStore === "denied") {
+      updateConsent(false);
     }
   }, [consentStore]);
 
