@@ -341,7 +341,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                     </>
                   ) : (
                     <>
-                      DON'T HAVE AN ACCOUNT?{" "}
+                      DON&apos;T HAVE AN ACCOUNT?{" "}
                       <button
                         onClick={() => {
                           setCurrentMode("register");

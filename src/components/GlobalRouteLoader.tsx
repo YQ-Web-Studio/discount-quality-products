@@ -62,7 +62,10 @@ export function GlobalRouteLoader() {
 
   // Auto-dismiss the loader when the page pathname or search parameters change
   useEffect(() => {
-    stopLoading();
+    const timer = setTimeout(() => {
+      stopLoading();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [pathname, searchParams]);
 
   useEffect(() => {

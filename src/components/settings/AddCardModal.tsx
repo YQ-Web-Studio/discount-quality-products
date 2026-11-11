@@ -127,22 +127,41 @@ export function AddCardModal({ open, onOpenChange, onSuccess }: AddCardModalProp
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setClientSecret(null);
       setError(null);
       setIsInitializing(true);
-      
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      let isSubscribed = true;
+
       createSetupIntent()
         .then((data) => {
-          setClientSecret(data.client_secret);
+          if (isSubscribed) {
+            setClientSecret(data.client_secret);
+          }
         })
         .catch((err) => {
-          setError(err.message || "Failed to initialize secure connection.");
+          if (isSubscribed) {
+            setError(err.message || "Failed to initialize secure connection.");
+          }
         })
         .finally(() => {
-          setIsInitializing(false);
+          if (isSubscribed) {
+            setIsInitializing(false);
+          }
         });
+
+      return () => {
+        isSubscribed = false;
+      };
     }
   }, [open]);
 

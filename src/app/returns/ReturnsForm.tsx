@@ -295,7 +295,7 @@ export function ReturnsForm() {
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-zinc-900 mb-3">Return Requested</h2>
             <p className="text-zinc-500 mb-8 max-w-sm mx-auto leading-relaxed">
-              We've successfully received your return request. Our team will review the details and email you shortly with instructions for sending your items back to our catalogue facility.
+              We&apos;ve successfully received your return request. Our team will review the details and email you shortly with instructions for sending your items back to our catalogue facility.
             </p>
             <button
               onClick={() => window.location.href = "/"}

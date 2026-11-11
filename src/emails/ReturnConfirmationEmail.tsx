@@ -86,7 +86,7 @@ export const ReturnConfirmationEmail = ({
           {/* Hero */}
           <Section style={heroSection}>
             <Heading style={heading}>
-              We've received your return request.
+              We&apos;ve received your return request.
             </Heading>
             <Text style={text}>
               Thank you for submitting your return request for order <strong>#{orderNumber}</strong>. 
