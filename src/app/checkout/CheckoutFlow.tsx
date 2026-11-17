@@ -1691,6 +1691,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               throw new Error(data.error || "Failed to create PayPal order.");
                             }}
                             onApprove={async (data) => {
+                              const orphanedPi = activePaymentIntentIdRef.current;
                               setProcessing(true);
                               try {
                                 const capRes = await fetch("/api/checkout/paypal/capture-order", {
@@ -1744,9 +1745,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               } finally {
                                 // Best-effort cleanup: cancel any Stripe PaymentIntent that was
                                 // created when the card form loaded, since the user paid via PayPal.
-                                const orphanedPi = activePaymentIntentIdRef.current;
                                 if (orphanedPi) {
-                                  activePaymentIntentIdRef.current = "";
                                   try { sessionStorage.removeItem("dqp_active_pi"); } catch {}
                                   fetch("/api/checkout/stripe/cancel-intent", {
                                     method: "POST",

@@ -25,28 +25,10 @@ export const revalidate = 2592000; // 30 days — maximum ISR write conservation
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
-  // Pre-render the products shown on the homepage (featured + new arrivals).
-  // These are the PDPs users click first — pre-rendering them makes navigation instant.
-  // All other PDPs are generated on-demand (ISR) and cached after first visit.
-  try {
-    const [featuredProducts, newArrivals] = await Promise.allSettled([
-      getSmartFeaturedProducts(),
-      getLatestProducts(6),
-    ]);
-
-    const slugSet = new Set<string>();
-
-    if (featuredProducts.status === 'fulfilled') {
-      featuredProducts.value.forEach(p => slugSet.add(p.slug));
-    }
-    if (newArrivals.status === 'fulfilled') {
-      newArrivals.value.forEach(p => slugSet.add(p.slug));
-    }
-
-    return Array.from(slugSet).map(slug => ({ slug }));
-  } catch {
-    return [];
-  }
+  // All product pages are rendered on-demand (ISR) and cached for 30 days.
+  // Returning an empty array prevents build-time WordPress GraphQL connection timeouts
+  // on external CI/Vercel build servers when connecting to shared hosting.
+  return [];
 }
 
 // ─── Per-page metadata ─────────────────────────────────────────────────────────

@@ -147,6 +147,32 @@ describe('Enterprise Order Lifecycle Invariants (DQP-16)', () => {
       }));
       expect(result.status).toBe('processing');
     });
+
+    it('persists options (transactionId, setPaid, notes) even when order is already in the target status', async () => {
+      const updateSpy = vi.spyOn(woocommerce, 'updateWooCommerceOrder').mockResolvedValue({
+        id: 44506,
+        status: 'processing',
+      });
+      vi.spyOn(woocommerce, 'fetchWooCommerceOrder').mockResolvedValue({
+        id: 44506,
+        status: 'processing',
+        total: '30.00',
+      });
+
+      const result = await transitionOrderStatus(44506, 'processing', {
+        transactionId: 'ch_existing_capture_888',
+        setPaid: true,
+        customerNote: 'Confirmed payment receipt.',
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith(44506, expect.objectContaining({
+        set_paid: true,
+        transaction_id: 'ch_existing_capture_888',
+        customer_note: 'Confirmed payment receipt.',
+      }));
+      // Status itself doesn't need to be set if already matching
+      expect(result.status).toBe('processing');
+    });
   });
 
   describe('create-intent endpoint purity & regression invariants', () => {
@@ -308,6 +334,55 @@ describe('Enterprise Order Lifecycle Invariants (DQP-16)', () => {
       // But ZERO order updates happen
       expect(updateOrderSpy).not.toHaveBeenCalled();
     });
+
+    it('does NOT cancel previous payment intent if status is requires_action (preserves in-flight 3DS)', async () => {
+      vi.spyOn(checkoutLib, 'validateCartTotals').mockResolvedValue({
+        isValid: true,
+        subtotal: 10.00,
+        discountAmount: 0,
+        vat: 1.67,
+        shippingCost: 0,
+        finalTotal: 10.00,
+        shippingTitle: 'Free Delivery',
+      });
+      mockPaymentIntentsRetrieve.mockResolvedValueOnce({
+        id: 'pi_3ds_in_flight',
+        status: 'requires_action',
+        metadata: {},
+      });
+      mockPaymentIntentsCreate.mockResolvedValueOnce({
+        id: 'pi_new_3ds_test',
+        client_secret: 'pi_new_secret_3ds',
+        metadata: {},
+      });
+      mockPaymentIntentsCancel.mockClear();
+
+      const { POST } = await import('@/app/api/checkout/stripe/create-intent/route');
+      const req = new Request('http://localhost:3000/api/checkout/stripe/create-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [{ id: '101', name: 'Bulb', price: 9.99, quantity: 1 }],
+          shippingMethod: 'standard',
+          form: {
+            firstName: 'Alice',
+            lastName: 'Smith',
+            email: 'alice@example.com',
+            address1: '123 High St',
+            city: 'London',
+            postcode: 'E1 6AN',
+            country: 'GB',
+          },
+          previousPaymentIntentId: 'pi_3ds_in_flight',
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+
+      // Payment intent in requires_action MUST NOT be cancelled
+      expect(mockPaymentIntentsCancel).not.toHaveBeenCalled();
+    });
   });
 
   describe('WordPress Backend Domain Invariant Snippet (005-order-state-machine-guard.php)', () => {
@@ -328,16 +403,16 @@ describe('Enterprise Order Lifecycle Invariants (DQP-16)', () => {
       expect(content).toContain('if (!defined(\'ABSPATH\'))');
     });
 
-    it('hooks into woocommerce_order_status_changed and protects paid orders from cancellation via REST API', () => {
+    it('implements woocommerce_rest_pre_insert_shop_order_object filter and woocommerce_order_status_changed action', () => {
       const content = fs.readFileSync(snippetPath, 'utf-8');
 
+      expect(content).toContain("add_filter('woocommerce_rest_pre_insert_shop_order_object'");
       expect(content).toContain("add_action('woocommerce_order_status_changed'");
       expect(content).toContain("'processing'");
       expect(content).toContain("'completed'");
       expect(content).toContain("'cancelled'");
       expect(content).toContain("'failed'");
-      expect(content).toContain("defined('REST_REQUEST') && REST_REQUEST");
-      expect(content).toContain('WC_REST_Exception');
+      expect(content).toContain('rest_forbidden_status_transition');
       expect(content).toContain('403');
     });
   });

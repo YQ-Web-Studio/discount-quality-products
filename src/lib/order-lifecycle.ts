@@ -84,12 +84,18 @@ export async function transitionOrderStatus(
 
   const currentStatus = (existingOrder.status || 'pending').toLowerCase() as OrderStatus;
 
-  if (currentStatus === targetStatus) {
+  const hasAdditionalUpdates =
+    options.setPaid !== undefined ||
+    Boolean(options.transactionId) ||
+    Boolean(options.customerNote) ||
+    Boolean(options.metaData && options.metaData.length > 0);
+
+  if (currentStatus === targetStatus && !hasAdditionalUpdates) {
     console.log(`[order-lifecycle] Order #${orderId} is already in '${targetStatus}' status — skipping redundant transition.`);
     return existingOrder;
   }
 
-  if (!isAllowedStatusTransition(currentStatus, targetStatus)) {
+  if (currentStatus !== targetStatus && !isAllowedStatusTransition(currentStatus, targetStatus)) {
     throw new IllegalOrderStateTransitionError(
       orderId,
       currentStatus,
@@ -98,9 +104,10 @@ export async function transitionOrderStatus(
     );
   }
 
-  const updatePayload: Record<string, any> = {
-    status: targetStatus,
-  };
+  const updatePayload: Record<string, any> = {};
+  if (currentStatus !== targetStatus) {
+    updatePayload.status = targetStatus;
+  }
 
   if (options.setPaid !== undefined) {
     updatePayload.set_paid = options.setPaid;

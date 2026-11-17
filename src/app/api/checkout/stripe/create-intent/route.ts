@@ -50,9 +50,9 @@ export async function POST(req: Request) {
     if (previousPaymentIntentId && typeof previousPaymentIntentId === "string" && previousPaymentIntentId.startsWith("pi_")) {
       try {
         const oldPi = await stripe.paymentIntents.retrieve(previousPaymentIntentId);
-        if (oldPi.status === "requires_payment_method" || oldPi.status === "requires_confirmation" || oldPi.status === "requires_action") {
+        if (oldPi.status === "requires_payment_method") {
           await stripe.paymentIntents.cancel(previousPaymentIntentId);
-          console.log(`[stripe-intent] Cancelled previous uncompleted PI ${previousPaymentIntentId}`);
+          console.log(`[stripe-intent] Cancelled previous unstarted PI ${previousPaymentIntentId}`);
         } else {
           console.log(`[stripe-intent] Skipped cancelling old PI ${previousPaymentIntentId} because status is "${oldPi.status}"`);
         }
