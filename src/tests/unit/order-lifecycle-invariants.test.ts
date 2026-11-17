@@ -84,15 +84,27 @@ describe('Enterprise Order Lifecycle Invariants (DQP-16)', () => {
       expect(isAllowedStatusTransition('completed', 'processing')).toBe(false);
     });
 
-    it('transitionOrderStatus throws IllegalOrderStateTransitionError when trying to cancel a processing order', async () => {
-      const updateSpy = vi.spyOn(woocommerce, 'updateWooCommerceOrder').mockResolvedValue({});
-      vi.spyOn(woocommerce, 'fetchWooCommerceOrder').mockResolvedValue({
+    it('attempts REST cancellation of a paid processing order, asserts it is rejected and persisted status remains processing (with pending order control)', async () => {
+      let persistedPaidOrder = {
         id: 44503,
         status: 'processing',
         total: '5.98',
         transaction_id: 'ch_test_123',
+      };
+
+      const fetchSpy = vi.spyOn(woocommerce, 'fetchWooCommerceOrder').mockImplementation(async (id: number) => {
+        if (id === 44503) return { ...persistedPaidOrder };
+        return null;
       });
 
+      const updateSpy = vi.spyOn(woocommerce, 'updateWooCommerceOrder').mockImplementation(async (id: number, data: any) => {
+        if (id === 44503) {
+          persistedPaidOrder = { ...persistedPaidOrder, ...data };
+        }
+        return persistedPaidOrder;
+      });
+
+      // 1. Attempt REST cancellation of a paid processing order
       await expect(
         transitionOrderStatus(44503, 'cancelled', {
           reason: 'Checkout session replaced by new payment intent.',
@@ -100,6 +112,39 @@ describe('Enterprise Order Lifecycle Invariants (DQP-16)', () => {
       ).rejects.toThrow(IllegalOrderStateTransitionError);
 
       expect(updateSpy).not.toHaveBeenCalled();
+
+      // Fetch the order afterward and assert its persisted status remains 'processing'
+      const orderAfterAttempt = await woocommerce.fetchWooCommerceOrder(44503);
+      expect(orderAfterAttempt?.status).toBe('processing');
+
+      // 2. Control: allowed pending-order cancellation succeeds and updates status
+      let persistedPendingOrder = {
+        id: 44504,
+        status: 'pending',
+        total: '10.00',
+      };
+
+      fetchSpy.mockImplementation(async (id: number) => {
+        if (id === 44504) return { ...persistedPendingOrder };
+        if (id === 44503) return { ...persistedPaidOrder };
+        return null;
+      });
+
+      updateSpy.mockImplementation(async (id: number, data: any) => {
+        if (id === 44504) {
+          persistedPendingOrder = { ...persistedPendingOrder, ...data };
+          return persistedPendingOrder;
+        }
+        return persistedPaidOrder;
+      });
+
+      const controlResult = await transitionOrderStatus(44504, 'cancelled', {
+        customerNote: 'Customer abandoned checkout.',
+      });
+
+      expect(controlResult.status).toBe('cancelled');
+      const controlOrderAfter = await woocommerce.fetchWooCommerceOrder(44504);
+      expect(controlOrderAfter?.status).toBe('cancelled');
     });
 
     it('transitionOrderStatus allows transitioning a pending order to cancelled with audit note', async () => {
