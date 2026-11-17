@@ -874,6 +874,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   const activePaymentIntentIdRef = useRef<string>("");
   // Track pre-created WooCommerce order ID (DQP-5) for immediate success confirmation
   const activeOrderIdRef = useRef<number | null>(null);
+  // Terminal state flag: once payment is confirmed, freezes all effects and blocks re-initialisation
+  const isPaymentCompletedRef = useRef<boolean>(false);
 
   // Restore previous checkout session from sessionStorage (survives page refreshes)
   useEffect(() => {
@@ -1034,7 +1036,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   );
 
   useEffect(() => {
-    if (!clientSecret || processing || fetchingSecret) return;
+    if (isPaymentCompletedRef.current || !clientSecret || processing || fetchingSecret) return;
     if (preparedCheckoutSnapshotRef.current === checkoutSnapshot) return;
 
     // Any checkout detail change after card preparation invalidates the Stripe session.
@@ -1079,7 +1081,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }, [form, showBillingAddress]);
 
   const initialiseCardPayment = useCallback(async () => {
-    if (fetchingSecret || clientSecret) return;
+    if (isPaymentCompletedRef.current || fetchingSecret || clientSecret) return;
 
     if (!validateDetails()) {
       return;
@@ -1147,7 +1149,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }
 
   useEffect(() => {
-    if (currentStep !== "payment" || clientSecret || fetchingSecret || processing) return;
+    if (isPaymentCompletedRef.current || currentStep !== "payment" || clientSecret || fetchingSecret || processing) return;
     if (!validateDetails()) {
       setCurrentStep("details");
       return;
@@ -1157,6 +1159,8 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
   }, [currentStep, clientSecret, fetchingSecret, initialiseCardPayment, processing, validateDetails]);
 
   function handleSuccess({ paymentIntentId, orderId, orderNumber }: { paymentIntentId?: string; orderId?: number | null; orderNumber?: string | null } = {}) {
+    isPaymentCompletedRef.current = true;
+    setProcessing(true);
     const resolvedOrderId = orderNumber || (orderId ? String(orderId) : (activeOrderIdRef.current ? String(activeOrderIdRef.current) : undefined));
 
     // ── GA4: persist purchase payload to sessionStorage before basket is cleared ──
@@ -1181,6 +1185,9 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
     } catch {
       // sessionStorage may be blocked in some environments — silently ignore.
     }
+
+    activePaymentIntentIdRef.current = "";
+    activeOrderIdRef.current = null;
 
     if (!directCheckoutItem) {
       clearBasket();
@@ -1684,6 +1691,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               throw new Error(data.error || "Failed to create PayPal order.");
                             }}
                             onApprove={async (data) => {
+                              const orphanedPi = activePaymentIntentIdRef.current;
                               setProcessing(true);
                               try {
                                 const capRes = await fetch("/api/checkout/paypal/capture-order", {
@@ -1737,9 +1745,7 @@ function CheckoutFlow({ directCheckoutItem }: { directCheckoutItem?: CheckoutLin
                               } finally {
                                 // Best-effort cleanup: cancel any Stripe PaymentIntent that was
                                 // created when the card form loaded, since the user paid via PayPal.
-                                const orphanedPi = activePaymentIntentIdRef.current;
                                 if (orphanedPi) {
-                                  activePaymentIntentIdRef.current = "";
                                   try { sessionStorage.removeItem("dqp_active_pi"); } catch {}
                                   fetch("/api/checkout/stripe/cancel-intent", {
                                     method: "POST",
