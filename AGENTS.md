@@ -188,6 +188,17 @@ To prevent recurring CodeRabbit major findings and security vulnerabilities:
 3. **Fallback & Error-Recovery Test Parity**:
    - Every defensive `fallback`, degradation, or error-recovery branch must have a dedicated unit test verifying its behavior.
    - Boundary inputs (arguments with spaces, quotes, semicolons, empty values) must be explicitly tested.
+
+## 5. Checkout & Order Lifecycle Architectural Invariants (DQP-16)
+To permanently protect paid orders from false cancellations, race conditions, and duplicate creation:
+1. **Endpoint Purity (Zero Destructive Side-Effects)**:
+   - Checkout preparation endpoints (e.g. `/api/checkout/stripe/create-intent`) MUST NEVER mutate or cancel WooCommerce orders. Their single responsibility is generating payment gateway sessions.
+2. **Immutable Paid Order Invariant**:
+   - Once an order enters `processing` or `completed` with verified payment, it can NEVER be transitioned to `cancelled` or `failed` via any REST API route. Only manual WP-Admin administrator actions or verified refund webhooks (`refunded`) may alter paid orders.
+3. **Frontend Terminal Checkout State**:
+   - `CheckoutFlow.tsx` must model payment completion as an immutable terminal state (`COMPLETED`). Basket clearing or subsequent re-renders must NEVER re-invoke payment initialization.
+4. **Mandatory Invariant Test Coverage**:
+   - Any PR touching checkout, Stripe sync, PayPal capture, or order lifecycle MUST pass the invariant test suite (`src/tests/unit/order-lifecycle-invariants.test.ts`).
 <!-- END:engineering-workflow -->
 
 

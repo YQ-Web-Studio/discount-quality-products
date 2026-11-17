@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateCartTotals } from "@/lib/checkout";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
-import { updateWooCommerceOrder } from "@/lib/woocommerce";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY || "sk_test_dummy") as string, {
   apiVersion: "2023-10-16" as any,
@@ -39,36 +38,28 @@ export async function POST(req: Request) {
   try {
     const { items, shippingMethod, form, couponCode, previousPaymentIntentId } = await req.json();
 
-    // ── Cleanup: Cancel the previous Payment Intent and mark superseded pending order cancelled ──
-    if (previousPaymentIntentId) {
+    const validation = await validateCartTotals(items, shippingMethod, form ? { ...form, email: form.email } : undefined, couponCode);
+
+    if (!validation.isValid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    // ── Cleanup: Cancel the previous uncompleted Payment Intent if the customer is retrying ──
+    // Strictly cancels only uncompleted PIs on Stripe to keep the Stripe dashboard tidy.
+    // NEVER touches or mutates WooCommerce orders.
+    if (previousPaymentIntentId && typeof previousPaymentIntentId === "string" && previousPaymentIntentId.startsWith("pi_")) {
       try {
         const oldPi = await stripe.paymentIntents.retrieve(previousPaymentIntentId);
         if (oldPi.status === "requires_payment_method" || oldPi.status === "requires_confirmation" || oldPi.status === "requires_action") {
           await stripe.paymentIntents.cancel(previousPaymentIntentId);
-          console.log(`[stripe-intent] Cancelled previous PI ${previousPaymentIntentId}`);
-        }
-        const oldOrderId = oldPi.metadata?.orderId || oldPi.metadata?.wc_order_id;
-        if (oldOrderId) {
-          try {
-            await updateWooCommerceOrder(parseInt(oldOrderId, 10), {
-              status: "cancelled",
-              customer_note: `Checkout session replaced by new payment intent.`,
-            });
-            console.log(`[stripe-intent] Cancelled previous pending order #${oldOrderId}`);
-          } catch (cancelErr) {
-            console.warn(`[stripe-intent] Could not cancel previous order #${oldOrderId}:`, cancelErr);
-          }
+          console.log(`[stripe-intent] Cancelled previous uncompleted PI ${previousPaymentIntentId}`);
+        } else {
+          console.log(`[stripe-intent] Skipped cancelling old PI ${previousPaymentIntentId} because status is "${oldPi.status}"`);
         }
       } catch (err) {
         // Non-critical: the old PI may have already expired or been cancelled
         console.warn(`[stripe-intent] Could not cancel previous PI ${previousPaymentIntentId}:`, err);
       }
-    }
-
-    const validation = await validateCartTotals(items, shippingMethod, form ? { ...form, email: form.email } : undefined, couponCode);
-
-    if (!validation.isValid) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     // Convert to pence for Stripe
