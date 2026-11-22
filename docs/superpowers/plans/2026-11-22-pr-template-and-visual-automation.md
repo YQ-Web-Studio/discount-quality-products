@@ -68,17 +68,17 @@
 - Atlassian MCP: `editJiraIssue`
 - Atlassian MCP: `transitionJiraIssue`
 
-- [ ] **Step 1: Create Jira ticket `YQWS-2`**
+- [x] **Step 1: Create Jira ticket `YQWS-2`**
   Summary: `[YQWS] Standardize Ultra-Lean PR Template, Automated Playwright Visual Capture & Agent PR Creator`
   Project: `YQWS`
   IssueType: `Task`
   Priority: `High`
 
-- [ ] **Step 2: Assign Story Points (3) & Yusuf Qureshi**
+- [x] **Step 2: Assign Story Points (3) & Yusuf Qureshi**
   Set `customfield_10040: 3` via `editJiraIssue`.
   Assign to Yusuf Qureshi (`712020:98d9482e-abab-48e5-b320-a294cd61ea14`).
 
-- [ ] **Step 3: Transition `YQWS-2` to `In Progress`**
+- [x] **Step 3: Transition `YQWS-2` to `In Progress`**
   Transition ID: `31` (`In Progress`).
 
 ---
@@ -93,7 +93,7 @@
 - CLI Output: Markdown table with embedded image links or `N/A (backend-only)`.
 - File Output: Screenshots saved in `.github/pr-evidence/`.
 
-- [ ] **Step 1: Write `scripts/capture-pr-evidence.mjs` in DQP**
+- [x] **Step 1: Write `scripts/capture-pr-evidence.mjs` in DQP**
   The script:
   1. Inspects git diff (`git diff --name-only origin/main...HEAD` or working tree) to detect modified UI routes or components.
   2. If visual files (`.tsx`, `.jsx`, `.css`, `app/`, `components/`) are modified:
@@ -105,14 +105,14 @@
   3. If no visual files are touched:
      - Prints `N/A (Backend/logic change - no UI modifications)`.
 
-- [ ] **Step 2: Add `"pr:evidence"` script to DQP `package.json`**
+- [x] **Step 2: Add `"pr:evidence"` script to DQP `package.json`**
   ```json
   "scripts": {
     "pr:evidence": "node scripts/capture-pr-evidence.mjs"
   }
   ```
 
-- [ ] **Step 3: Test dry run of `capture-pr-evidence.mjs`**
+- [x] **Step 3: Test dry run of `capture-pr-evidence.mjs`**
   Run: `npm run pr:evidence`
   Verify expected output.
 
@@ -129,7 +129,7 @@
   5. `c:\Development\Faizan-e-Madina\faizan-e-madina-website\.github\pull_request_template.md`
   6. `c:\Development\yq-digital-portfolio-main\.github\pull_request_template.md`
 
-- [ ] **Step 1: Deploy Ultra-Lean PR template content**
+- [x] **Step 1: Deploy Ultra-Lean PR template content**
   ```markdown
   ## Summary
   <!-- Concise bullet points on what was changed and why -->
@@ -148,7 +148,7 @@
   - [x] Unit / Integration Tests: `passed`
   ```
 
-- [ ] **Step 2: Verify all 6 template files exist and match**
+- [x] **Step 2: Verify all 6 template files exist and match**
 
 ---
 
@@ -160,13 +160,13 @@
 - Create: `c:\Development\yq-digital-portfolio-main\AGENTS.md`
 - Modify: `c:\Development\yq-digital-portfolio-main\package.json`
 
-- [ ] **Step 1: Create `c:\Development\yq-digital-portfolio-main\.coderabbit.yaml`**
+- [x] **Step 1: Create `c:\Development\yq-digital-portfolio-main\.coderabbit.yaml`**
   Deploy baseline with `knowledge_base.jira` (`DQP`, `MA`, `FMMS`, `YQWS`), out-of-scope non-blocking rule, and Next.js / Tailwind review guidelines.
 
-- [ ] **Step 2: Deploy `scripts/capture-pr-evidence.mjs` and npm script**
+- [x] **Step 2: Deploy `scripts/capture-pr-evidence.mjs` and npm script**
   Copy visual capture script and add `"pr:evidence"` to `package.json`.
 
-- [ ] **Step 3: Create `AGENTS.md` in `yqwebstudio`**
+- [x] **Step 3: Create `AGENTS.md` in `yqwebstudio`**
   Document the Dual Approval Gate and the Mandatory PR Skill Rule.
 
 ---
@@ -179,7 +179,7 @@
 - Modify: `c:\Development\MosqueMap\AGENTS.md`
 - Modify: `c:\Development\muslim-atlas-website\AGENTS.md`
 
-- [ ] **Step 1: Write `C:\Users\yusuf\.gemini\config\skills\automated-pr-creator\SKILL.md`**
+- [x] **Step 1: Write `C:\Users\yusuf\.gemini\config\skills\automated-pr-creator\SKILL.md`**
   Define the complete autonomous PR creation procedure:
   - Trigger: MANDATORY on any PR creation.
   - Step 1: Detect branch & Jira issue.
@@ -189,7 +189,7 @@
   - Step 5: Present Gate 3 review to Yusuf Qureshi.
   - Step 6: Execute `gh pr create` with base `main`.
 
-- [ ] **Step 2: Update repository guides with the Mandatory Invariant**
+- [x] **Step 2: Update repository guides with the Mandatory Invariant**
   In `Coding.md` and `AGENTS.md`, add:
   *"MANDATORY: Whenever any PR is created, the agent MUST invoke the automated-pr-creator skill. Manual or blank PRs are strictly forbidden."*
 
@@ -202,6 +202,6 @@
 - Atlassian MCP: `addOrEditJiraIssueComment`
 - Atlassian MCP: `transitionJiraIssue`
 
-- [ ] **Step 1: Test `capture-pr-evidence.mjs` and dry-run output**
-- [ ] **Step 2: Update Confluence Page `9732097` with the new Ultra-Lean PR standard and `automated-pr-creator` skill invariant**
-- [ ] **Step 3: Post completion comment on `YQWS-2` and transition to `Done`**
+- [x] **Step 1: Test `capture-pr-evidence.mjs` and dry-run output**
+- [x] **Step 2: Update Confluence Page `9732097` with the new Ultra-Lean PR standard and `automated-pr-creator` skill invariant**
+- [x] **Step 3: Post completion comment on `YQWS-2` and transition to `Done`**
