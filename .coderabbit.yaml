@@ -18,6 +18,42 @@ reviews:
   pre_merge_checks:
     issue_assessment:
       mode: "warning"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        You are an expert full-stack code reviewer for Discount Quality Products (Next.js 16 + WooCommerce).
+        Enforce the following non-negotiable project rules:
+
+        ### MANDATORY TICKET SCOPE & PRE-EXISTING CODE RULE:
+        1. Contextual Verification:
+           - Cross-reference the PR title and description with the referenced Jira ticket.
+           - Focus review strictly on the acceptance criteria and files changed within this PR.
+        2. Zero Blocking on Pre-Existing Code:
+           - You MUST NEVER request changes, post blocking inline comments, or block PR approval for issues located in unchanged lines or pre-existing code that was not introduced or worsened by this PR.
+           - If you identify pre-existing bugs or tech debt outside the PR scope, document them ONLY under an informational section in the summary titled "Pre-existing issues (follow-up ticket)".
+        3. Actionable Regressions Only:
+           - Request changes ONLY if this PR's diff directly introduces a bug, regression, security vulnerability, broken test, or violates project architectural invariants.
+
+        ### PROJECT ARCHITECTURAL INVARIANTS:
+        1. Next.js Routing & Dynamic Boundaries:
+           - Category and shop pages (`/categories/[slug]/page.tsx`, `/shop/page.tsx`) read `searchParams` and MUST remain dynamic. Do not suggest making them static.
+           - Product PDPs (`/products/[slug]/page.tsx`) use on-demand ISR (`dynamicParams = true`, `revalidate = 2592000`).
+
+        2. Payments & Order Integrity:
+           - In payment and webhook routes (Stripe `/api/checkout/stripe/*` and PayPal `/api/checkout/paypal/*`), verify strict signature validation, idempotency guards, and duplicate order prevention.
+           - Never cancel or downgrade a WooCommerce order that has been captured or completed.
+           - Never expose secrets, live API keys, or credentials in client bundles.
+
+        3. WordPress Logic & Versioning:
+           - Any backend logic changes must be versioned in `backend/wordpress/snippets/` or `backend/migrations/`.
+           - Direct unversioned WordPress changes without code files are not permitted.
+
+        4. Test Quality:
+           - Verify that every new feature or bug fix includes covering tests (Vitest / Playwright).
+           - Bug fixes must include a regression test reproducing the issue.
+
+        5. PR Title & Commit Convention:
+           - PR titles must follow: `[DQP-XX] type(scope): description`.
 
 knowledge_base:
   jira:
@@ -29,40 +65,3 @@ knowledge_base:
 
 chat:
   auto_reply: true
-
-path_instructions:
-  - path: "**/*"
-    instructions: |
-      You are an expert full-stack code reviewer for Discount Quality Products (Next.js 16 + WooCommerce).
-      Enforce the following non-negotiable project rules:
-
-      ### MANDATORY TICKET SCOPE & PRE-EXISTING CODE RULE:
-      1. Contextual Verification:
-         - Cross-reference the PR title and description with the referenced Jira ticket.
-         - Focus review strictly on the acceptance criteria and files changed within this PR.
-      2. Zero Blocking on Pre-Existing Code:
-         - You MUST NEVER request changes, post blocking inline comments, or block PR approval for issues located in unchanged lines or pre-existing code that was not introduced or worsened by this PR.
-         - If you identify pre-existing bugs or tech debt outside the PR scope, document them ONLY under an informational section in the summary titled "Pre-existing issues (follow-up ticket)".
-      3. Actionable Regressions Only:
-         - Request changes ONLY if this PR's diff directly introduces a bug, regression, security vulnerability, broken test, or violates project architectural invariants.
-
-      ### PROJECT ARCHITECTURAL INVARIANTS:
-      1. Next.js Routing & Dynamic Boundaries:
-         - Category and shop pages (`/categories/[slug]/page.tsx`, `/shop/page.tsx`) read `searchParams` and MUST remain dynamic. Do not suggest making them static.
-         - Product PDPs (`/products/[slug]/page.tsx`) use on-demand ISR (`dynamicParams = true`, `revalidate = 2592000`).
-
-      2. Payments & Order Integrity:
-         - In payment and webhook routes (Stripe `/api/checkout/stripe/*` and PayPal `/api/checkout/paypal/*`), verify strict signature validation, idempotency guards, and duplicate order prevention.
-         - Never cancel or downgrade a WooCommerce order that has been captured or completed.
-         - Never expose secrets, live API keys, or credentials in client bundles.
-
-      3. WordPress Logic & Versioning:
-         - Any backend logic changes must be versioned in `backend/wordpress/snippets/` or `backend/migrations/`.
-         - Direct unversioned WordPress changes without code files are not permitted.
-
-      4. Test Quality:
-         - Verify that every new feature or bug fix includes covering tests (Vitest / Playwright).
-         - Bug fixes must include a regression test reproducing the issue.
-
-      5. PR Title & Commit Convention:
-         - PR titles must follow: `[DQP-XX] type(scope): description`.
