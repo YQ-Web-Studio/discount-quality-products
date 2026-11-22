@@ -195,8 +195,20 @@ A ticket follows this deterministic lifecycle and cannot jump states:
 
 ### Dual Approval Policy
 Every pull request requires two distinct approvals before merging:
-1. **Automated Review:** CodeRabbit (Independent AI code reviewer).
-2. **Human Lead Review:** Yusuf Qureshi (or designated lead engineer).
+1. **Gate 1 (Automated Review):** CodeRabbit (Independent AI code reviewer).
+   - CodeRabbit reads the referenced Jira ticket (`[DQP-XX]`, `[MA-XX]`, `[FMMS-XX]`, `[YQWS-XX]`) via Jira Knowledge Base integration.
+   - CodeRabbit assesses the PR diff strictly against ticket acceptance criteria.
+   - **Out-of-Scope Rule:** CodeRabbit is configured never to request changes or block approval on pre-existing code outside the PR diff. Pre-existing issues are categorized as informational summary notes under *"Pre-existing issues (follow-up ticket)"*.
+   - **Gate Requirement:** The PR MUST receive an automated approval from CodeRabbit before it can be moved to "Code Review".
+2. **Gate 2 (Human Lead Review):** Yusuf Qureshi (or designated lead engineer).
+   - The Lead conducts human review ONLY after CI scanners and CodeRabbit have passed green.
+
+### Local Pre-Push Verification (Developer CLI)
+Developers can run local AI code reviews prior to opening PRs:
+```bash
+# Run local CodeRabbit review against staged or unpushed commits
+npx @coderabbitai/cli review --agent
+```
 
 ### Zero Blind Acceptance Rule
 - AI-generated code review comments must **never be accepted blindly**.
