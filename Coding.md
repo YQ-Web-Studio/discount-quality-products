@@ -193,6 +193,14 @@ A ticket follows this deterministic lifecycle and cannot jump states:
 
 ## 7. Code Review & AI Agent Governance
 
+### Mandatory PR Creation Workflow (Hard-Gate)
+> **The `automated-pr-creator` skill MUST ALWAYS be used whenever creating or opening a Pull Request.**  
+> Manual or ad-hoc PR creation with empty templates is strictly forbidden. The skill guarantees:
+> 1. Complete Ultra-Lean template population (zero empty placeholders).
+> 2. Automated visual evidence (`npm run pr:evidence`) capturing Playwright screenshots of affected UI, or tagging `N/A (backend-only)`.
+> 3. Passing test suite metrics attached.
+> 4. Mandatory Gate 3 human confirmation before executing `gh pr create`.
+
 ### Dual Approval Policy
 Every pull request requires two distinct approvals before merging:
 1. **Gate 1 (Automated Review):** CodeRabbit (Independent AI code reviewer).

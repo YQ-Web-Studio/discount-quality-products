@@ -25,6 +25,7 @@
     "test:webhook": "tsx backend/tools/simulate-stripe-webhook.ts",
     "test:checkout-guard": "tsx backend/tools/verify-dqp14-test-env.ts",
     "reconcile:stripe": "tsx backend/tools/reconcile-stripe-orders.ts",
+    "pr:evidence": "node scripts/capture-pr-evidence.mjs",
     "prepare": "husky"
   },
   "lint-staged": {
