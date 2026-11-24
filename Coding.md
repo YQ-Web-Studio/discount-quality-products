@@ -203,19 +203,23 @@ A ticket follows this deterministic lifecycle and cannot jump states:
 
 ### Dual Approval Policy
 Every pull request requires two distinct approvals before merging:
-1. **Gate 1 (Automated Review):** CodeRabbit (Independent AI code reviewer).
-   - CodeRabbit reads the referenced Jira ticket (`[DQP-XX]`, `[MA-XX]`, `[FMMS-XX]`, `[YQWS-XX]`) via Jira Knowledge Base integration.
-   - CodeRabbit assesses the PR diff strictly against ticket acceptance criteria.
-   - **Out-of-Scope Rule:** CodeRabbit is configured never to request changes or block approval on pre-existing code outside the PR diff. Pre-existing issues are categorized as informational summary notes under *"Pre-existing issues (follow-up ticket)"*.
-   - **Gate Requirement:** The PR MUST receive an automated approval from CodeRabbit before it can be moved to "Code Review".
+1. **Gate 1 (Automated Review):** PR-Agent (Open-source AI code reviewer powered by Google Gemini 2.0 Flash).
+   - PR-Agent runs automatically on every pull request via GitHub Actions with zero hourly rate limits.
+   - Evaluates the PR diff strictly against ticket acceptance criteria (`[DQP-XX]`, `[MA-XX]`, `[FMMS-XX]`, `[YQWS-XX]`).
+   - **Out-of-Scope Rule:** PR-Agent is configured never to request changes or block approval on pre-existing code outside the PR diff. Pre-existing issues are categorized as informational summary notes under *"Pre-existing issues (follow-up ticket)"*.
+   - **Interactive PR Commands:** Developers can interact directly in PR comments:
+     - `/review` — Re-runs comprehensive code review.
+     - `/improve` — Suggests concrete, clickable diff recommendations.
+     - `/ask <question>` — Answers questions regarding specific files or architectural logic.
 2. **Gate 2 (Human Lead Review):** Yusuf Qureshi (or designated lead engineer).
-   - The Lead conducts human review ONLY after CI scanners and CodeRabbit have passed green.
+   - The Lead conducts human review ONLY after CI scanners and PR-Agent automated review have passed green.
 
-### Local Pre-Push Verification (Developer CLI)
-Developers can run local AI code reviews prior to opening PRs:
+### Local & CI Review Commands
+Developers can trigger or re-run reviews at any time:
 ```bash
-# Run local CodeRabbit review against staged or unpushed commits
-npx @coderabbitai/cli review --agent
+# In any Pull Request comment on GitHub:
+/review
+/improve
 ```
 
 ### Zero Blind Acceptance Rule
