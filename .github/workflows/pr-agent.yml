@@ -6,28 +6,16 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  pr_agent:
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
-      contents: read
-    steps:
-      - name: PR Agent Action
-        uses: Codium-ai/pr-agent@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          config.model: "gemini/gemini-2.0-flash"
-          config.fallback_models: '[]'
-          GOOGLE_GENAI_USE_VERTEXAI: "FALSE"
-          github_action_config.pr_actions: "['opened', 'synchronize', 'reopened']"
-          github_action_config.auto_review: "true"
-          github_action_config.auto_describe: "false"
-          github_action_config.auto_improve: "false"
+  review:
+    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@main
+    secrets: inherit
