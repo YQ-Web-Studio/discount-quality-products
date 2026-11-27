@@ -102,8 +102,16 @@ function ToolbarDropdown({ label, options, value, onChange }: {
   );
 }
 
+const prefetchedCategorySlugs = new Set<string>();
+
 /* ─── Product Card ─── */
 function ProductCard({ product }: { product: MappedProduct }) {
+  const router = useRouter();
+  const handleIntentPrefetch = () => {
+    if (!product.slug || prefetchedCategorySlugs.has(product.slug)) return;
+    prefetchedCategorySlugs.add(product.slug);
+    router.prefetch(`/products/${product.slug}`);
+  };
   const isOutOfStock = product.stockStatus === 'outofstock' || (product.manageStock && product.stockQuantity === 0);
   const isLowStock = !isOutOfStock && product.manageStock && product.stockQuantity != null && product.stockQuantity > 0 && product.stockQuantity < 5;
   const currentBasketQty = useBasket((s) => s.items.find((i) => i.id === String(product.databaseId))?.quantity || 0);
@@ -252,7 +260,14 @@ function ProductCard({ product }: { product: MappedProduct }) {
         </div>
       </div>
 
-      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${decodedTitle}`} />
+      <Link
+        href={`/products/${product.slug}`}
+        prefetch={false}
+        onMouseEnter={handleIntentPrefetch}
+        onTouchStart={handleIntentPrefetch}
+        className="absolute inset-0 z-0"
+        aria-label={`View ${decodedTitle}`}
+      />
 
       <div className="flex flex-col pt-5">
         <h2 className="text-sm font-medium text-zinc-900 line-clamp-2">{decodedTitle}</h2>

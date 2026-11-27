@@ -56,11 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const validatedUser = await fetchAccountSession();
       if (validatedUser) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem("dqp_session_anon");
+        }
         setUser(validatedUser);
         setSessionStatus("authenticated");
         return;
       }
 
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("dqp_session_anon", "1");
+      }
       setUser(null);
       setSessionStatus("unauthenticated");
     } catch (validationError) {
@@ -71,6 +77,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (typeof document !== "undefined" && typeof window !== "undefined") {
+      const hasHintCookie = document.cookie
+        .split("; ")
+        .some((c) => c.startsWith("dqp_logged_in=1"));
+      const isKnownAnon = window.sessionStorage.getItem("dqp_session_anon") === "1";
+
+      if (!hasHintCookie && isKnownAnon) {
+        setUser(null);
+        setSessionStatus("unauthenticated");
+        return;
+      }
+    }
+
     void refreshSession();
   }, [refreshSession]);
 
@@ -88,6 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const accountUser = await loginAccount(identifier, password);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("dqp_session_anon");
+      }
       setUser(accountUser);
       setSessionStatus("authenticated");
       return accountUser;
@@ -107,6 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const accountUser = await registerAccount(name, email, password);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("dqp_session_anon");
+      }
       setUser(accountUser);
       setSessionStatus("authenticated");
       return accountUser;
@@ -122,6 +147,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await logoutAccount().catch(() => undefined);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("dqp_session_anon", "1");
+    }
     setUser(null);
     setSessionStatus("unauthenticated");
     setError(null);

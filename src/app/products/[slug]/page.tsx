@@ -21,14 +21,30 @@ import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import { BackButton } from '@/components/ui/BackButton';
 import type { Metadata } from 'next';
-export const revalidate = 2592000; // 30 days — maximum ISR write conservation
+export const revalidate = false; // Cached indefinitely until targeted on-demand webhook invalidation
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
-  // All product pages are rendered on-demand (ISR) and cached for 30 days.
-  // Returning an empty array prevents build-time WordPress GraphQL connection timeouts
-  // on external CI/Vercel build servers when connecting to shared hosting.
-  return [];
+  try {
+    const [featuredProducts, newArrivals] = await Promise.allSettled([
+      getSmartFeaturedProducts(),
+      getLatestProducts(6),
+    ]);
+    const slugSet = new Set<string>();
+    if (featuredProducts.status === 'fulfilled') {
+      featuredProducts.value.forEach((p) => {
+        if (p.slug) slugSet.add(p.slug);
+      });
+    }
+    if (newArrivals.status === 'fulfilled') {
+      newArrivals.value.forEach((p) => {
+        if (p.slug) slugSet.add(p.slug);
+      });
+    }
+    return Array.from(slugSet).map((slug) => ({ slug }));
+  } catch {
+    return [];
+  }
 }
 
 // ─── Per-page metadata ─────────────────────────────────────────────────────────
@@ -153,7 +169,20 @@ export default async function ProductPage(props: ProductPageProps) {
         <BackButton />
       </div>
 
-      <RecentlyViewedTracker product={product} />
+      <RecentlyViewedTracker
+        product={{
+          databaseId: product.databaseId,
+          name: product.name,
+          slug: product.slug,
+          price: product.price ?? null,
+          regularPrice: product.regularPrice ?? null,
+          salePrice: product.salePrice ?? null,
+          stockStatus: product.stockStatus ?? null,
+          image: product.image
+            ? { sourceUrl: product.image.sourceUrl, altText: product.image.altText }
+            : null,
+        }}
+      />
       <ProductSchema product={product} />
       <ProductViewTracker
         productId={String(product.databaseId)}
@@ -304,8 +333,8 @@ export default async function ProductPage(props: ProductPageProps) {
           </div>
         </div>
 
-        {/* BOTTOM SECTION: Description and Specifications (Desktop) */}
-        <div className="hidden lg:grid lg:grid-cols-12 lg:gap-16 xl:gap-24 mt-12 pt-12 border-t border-zinc-100">
+        {/* BOTTOM SECTION: Description and Specifications (Single Responsive Render) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 xl:gap-24 mt-8 lg:mt-12 lg:pt-12 lg:border-t lg:border-zinc-100">
           <div className="lg:col-span-6">
             {descriptionHtml ? (
               <ProductDescription htmlContent={descriptionHtml} />
@@ -318,18 +347,6 @@ export default async function ProductPage(props: ProductPageProps) {
           <div className="lg:col-span-6">
             <ProductAttributes attributes={product.attributes?.nodes || []} sku={product.sku} />
           </div>
-        </div>
-
-        {/* MOBILE SECTION: Description and Specifications (Stacked) */}
-        <div className="flex flex-col gap-8 lg:hidden mt-8">
-          {descriptionHtml ? (
-            <ProductDescription htmlContent={descriptionHtml} />
-          ) : (
-            <p className="text-sm text-zinc-400 italic">
-              No description available for this product.
-            </p>
-          )}
-          <ProductAttributes attributes={product.attributes?.nodes || []} sku={product.sku} />
         </div>
       </main>
 

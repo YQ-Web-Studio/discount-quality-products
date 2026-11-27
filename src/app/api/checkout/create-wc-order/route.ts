@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { createWooCommerceOrder } from "@/lib/woocommerce";
 import { getCurrentWordPressSession } from "@/lib/wordpress-auth.server";
 import { sendEmail } from "@/lib/email";
@@ -34,6 +35,7 @@ interface CheckoutCustomerForm {
 interface CheckoutItem {
   id: string;
   quantity: number;
+  slug?: string;
 }
 
 interface CheckoutRequestBody {
@@ -307,6 +309,22 @@ export async function POST(req: Request) {
       }
     } catch (emailError) {
       console.error("[checkout] Failed to send order confirmation email:", emailError);
+    }
+
+    // Targeted per-product cache invalidation for purchased items
+    try {
+      const slugList = items
+        .map((item) => item.slug?.trim())
+        .filter((s): s is string => Boolean(s));
+      for (const slug of slugList) {
+        // @ts-expect-error - Next.js 16 types incorrectly require a second profile argument
+        revalidateTag(`product-${slug}`);
+        // @ts-expect-error - Next.js 16 types incorrectly require a second profile argument
+        revalidateTag(`wc-product-${slug}`);
+        revalidatePath(`/products/${slug}`);
+      }
+    } catch (revalidateErr) {
+      console.warn("[create-wc-order] Targeted cache invalidation skipped:", revalidateErr);
     }
 
     return NextResponse.json({ success: true, orderId: newOrder.id });

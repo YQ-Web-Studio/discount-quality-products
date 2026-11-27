@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { createWooCommerceOrder, updateWooCommerceOrder } from "@/lib/woocommerce";
 import { sendEmail } from "@/lib/email";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
@@ -85,6 +85,7 @@ export async function POST(req: Request) {
         revalidateTag(`product-${slug}`);
         // @ts-expect-error - Next.js 16 types incorrectly require a second argument
         revalidateTag(`wc-product-${slug}`);
+        revalidatePath(`/products/${slug}`);
       }
       console.log(`[webhook] ✓ Cache revalidated for ${slugList.length} product tags.`);
     } catch (err) {

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  AUTH_HINT_COOKIE,
   WORDPRESS_AUTH_COOKIE,
   getAuthCookieOptions,
+  getAuthHintCookieOptions,
   registerWordPressUser,
 } from "@/lib/wordpress-auth.server";
 
@@ -32,6 +34,11 @@ export async function POST(request: Request) {
       WORDPRESS_AUTH_COOKIE,
       session.token,
       getAuthCookieOptions(session.token)
+    );
+    response.cookies.set(
+      AUTH_HINT_COOKIE,
+      "1",
+      getAuthHintCookieOptions(session.token)
     );
 
     return response;

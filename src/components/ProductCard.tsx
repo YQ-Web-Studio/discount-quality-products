@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Product } from '@/lib/wordpress';
 import { Star, Box, Heart, Loader2, ShoppingCart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +15,20 @@ import { PRODUCT_SHIMMER } from '@/lib/shimmer';
 import { generateSeoAltText } from '@/lib/seo-utils';
 import { cn, decodeHtmlEntities } from "@/lib/utils";
 
+const prefetchedProductSlugs = new Set<string>();
+
 interface ProductCardProps {
   product: Product;
   priority?: boolean;
 }
 
 export default function ProductCard({ product, priority = false }: ProductCardProps) {
+  const router = useRouter();
+  const handleIntentPrefetch = () => {
+    if (!product.slug || prefetchedProductSlugs.has(product.slug)) return;
+    prefetchedProductSlugs.add(product.slug);
+    router.prefetch(`/products/${product.slug}`);
+  };
   const displayPrice = product.price || product.regularPrice || 'N/A';
   const isOutOfStock = product.stockStatus === 'OUT_OF_STOCK' || product.stockStatus === 'outofstock' || (product.manageStock && product.stockQuantity === 0);
   const isLowStock = !isOutOfStock && product.manageStock && product.stockQuantity != null && product.stockQuantity > 0 && product.stockQuantity < 5;
@@ -188,7 +197,14 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         </div>
       </div>
 
-      <Link href={`/products/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${decodedTitle}`} />
+      <Link
+        href={`/products/${product.slug}`}
+        prefetch={false}
+        onMouseEnter={handleIntentPrefetch}
+        onTouchStart={handleIntentPrefetch}
+        className="absolute inset-0 z-0"
+        aria-label={`View ${decodedTitle}`}
+      />
 
       <div className="flex flex-col pt-5">
         {fitting && (

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { validateCartTotals } from "@/lib/checkout";
 import { createWooCommerceOrder, updateWooCommerceOrder, fetchWooCommerceOrder, searchWooCommerceOrderByPaymentIntent } from "@/lib/woocommerce";
 import { buildPendingOrderPayload } from "@/lib/server-payment-verify";
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
   try {
     const { orderID, items, shippingMethod, form, couponCode } = (await req.json()) as {
       orderID?: string;
-      items?: Array<{ id: string; quantity: number }>;
+      items?: Array<{ id: string; quantity: number; slug?: string }>;
       shippingMethod?: string;
       form?: any;
       couponCode?: string;
@@ -260,6 +261,22 @@ export async function POST(req: Request) {
         } catch (createErr) {
           console.error(`[paypal/capture-order] Failed to create processing order for capture ${captureId}:`, createErr);
         }
+      }
+
+      // Targeted per-product cache invalidation for purchased items (matches Stripe webhook)
+      try {
+        const slugList = items
+          .map((item) => item.slug?.trim())
+          .filter((s): s is string => Boolean(s));
+        for (const slug of slugList) {
+          // @ts-expect-error - Next.js 16 types incorrectly require a second profile argument
+          revalidateTag(`product-${slug}`);
+          // @ts-expect-error - Next.js 16 types incorrectly require a second profile argument
+          revalidateTag(`wc-product-${slug}`);
+          revalidatePath(`/products/${slug}`);
+        }
+      } catch (revalidateErr) {
+        console.warn("[paypal/capture-order] Targeted cache invalidation skipped:", revalidateErr);
       }
 
       return NextResponse.json({

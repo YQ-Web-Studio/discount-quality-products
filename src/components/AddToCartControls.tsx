@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ShoppingCart, Minus, Plus, Check, Loader2, Zap, AlertTriangle } from 'lucide-react';
 import { useBasket, parsePriceString } from '@/lib/useBasket';
 import { useMiniCart } from '@/lib/useMiniCart';
@@ -36,29 +36,41 @@ export function AddToCartControls({
   const [currentStockQuantity, setCurrentStockQuantity] = useState(stockQuantity);
   const [currentBypassLowStock, setCurrentBypassLowStock] = useState(bypassLowStock ?? false);
 
+  const isMountedRef = useRef(true);
+  const stockFetchedRef = useRef(false);
+
   useEffect(() => {
-    let isMounted = true;
-    const fetchLiveStock = async () => {
-      try {
-        const query = productId ? `id=${encodeURIComponent(productId)}` : `slug=${encodeURIComponent(productSlug)}`;
-        const res = await fetch(`/api/products/stock?${query}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted && data) {
+    isMountedRef.current = true;
+    stockFetchedRef.current = false;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [productId, productSlug]);
+
+  const fetchLiveStockOnce = useCallback(() => {
+    if (stockFetchedRef.current) return;
+    if (
+      typeof navigator !== 'undefined' &&
+      (navigator.webdriver || /bot|crawl|spider|google|bing|slurp|duckduckbot|yandex/i.test(navigator.userAgent))
+    ) {
+      return;
+    }
+    stockFetchedRef.current = true;
+
+    const query = productId ? `id=${encodeURIComponent(productId)}` : `slug=${encodeURIComponent(productSlug)}`;
+    void fetch(`/api/products/stock?${query}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMountedRef.current && data) {
           if (data.stockStatus) setCurrentStockStatus(data.stockStatus);
           if (typeof data.manageStock === 'boolean') setCurrentManageStock(data.manageStock);
           if (typeof data.stockQuantity === 'number' || data.stockQuantity === null) setCurrentStockQuantity(data.stockQuantity);
           if (typeof data.bypassLowStock === 'boolean') setCurrentBypassLowStock(data.bypassLowStock);
         }
-      } catch {
+      })
+      .catch(() => {
         // Silently fall back to initial server-rendered props
-      }
-    };
-
-    fetchLiveStock();
-    return () => {
-      isMounted = false;
-    };
+      });
   }, [productId, productSlug]);
 
   const isOutOfStock = currentStockStatus === 'OUT_OF_STOCK' || currentStockStatus === 'outofstock' || (currentManageStock && currentStockQuantity === 0);
@@ -166,7 +178,12 @@ export function AddToCartControls({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className="flex flex-col gap-6"
+      onMouseEnter={fetchLiveStockOnce}
+      onFocus={fetchLiveStockOnce}
+      onTouchStart={fetchLiveStockOnce}
+    >
       {isLowStock ? (
         /* ─── Low Stock Banner ─── */
         <div className="flex flex-col gap-4">

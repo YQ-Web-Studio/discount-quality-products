@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { getAllProductSlugs, getAllPostSlugs } from "@/lib/wordpress";
 import { getCategories } from "@/lib/woocommerce";
 
+export const dynamic = "force-static";
 export const revalidate = 86400; // Revalidate sitemap once per day (in seconds)
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
