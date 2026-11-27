@@ -265,7 +265,7 @@ export async function POST(req: Request) {
 
       // Targeted per-product cache invalidation for purchased items (matches Stripe webhook)
       try {
-        const slugList = items
+        const slugList = (items ?? [])
           .map((item) => item.slug?.trim())
           .filter((s): s is string => Boolean(s));
         for (const slug of slugList) {

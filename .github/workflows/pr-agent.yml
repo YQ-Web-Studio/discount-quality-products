@@ -26,7 +26,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@8bcaa1c498e702175752875f768677bbeb723772 # main
+    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@5dc9719130c388d187b5ab239adb8ddaee8fbf74 # main
     secrets:
       PR_AGENT_GEMINI_API_KEY: ${{ secrets.PR_AGENT_GEMINI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
