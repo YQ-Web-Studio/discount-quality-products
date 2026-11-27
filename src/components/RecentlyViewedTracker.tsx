@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRecentlyViewed } from "@/lib/useRecentlyViewed";
+import { useRecentlyViewed, type RecentlyViewedItem } from "@/lib/useRecentlyViewed";
 import { useAuth } from "@/context/AuthContext";
-import type { Product } from "@/lib/wordpress";
+
+type RecentlyViewedProductInput = Omit<RecentlyViewedItem, "viewedAt">;
 
 interface Props {
-  product: Product;
+  product: RecentlyViewedProductInput;
 }
 
 export function RecentlyViewedTracker({ product }: Props) {

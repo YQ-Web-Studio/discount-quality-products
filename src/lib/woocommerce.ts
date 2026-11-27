@@ -240,6 +240,7 @@ async function fetchProductsInternal(
     page: 1,
     per_page: 24,
     status: "publish",
+    _fields: "id,name,slug,permalink,price,regular_price,sale_price,categories,images,attributes,stock_status,manage_stock,stock_quantity,tags,meta_data",
   };
 
   const queryParams = new URLSearchParams();
@@ -352,25 +353,38 @@ async function fetchProductsInternal(
 }
 
 /**
- * Public exported fetch wrapper, cached for 1 hour.
+ * Determines whether a product listing query should be written to Vercel's Data Cache.
+ * Only canonical base listing pages (page <= 3, no search, no price/attribute/sort filters)
+ * are cached so long-tail searches and deep pagination crawls do not burn ISR Writes.
+ */
+export function shouldCacheProductListing(params: Record<string, any> = {}): boolean {
+  const pageNum = Number(params.page) || 1;
+  if (pageNum > 3) return false;
+  if (params.search) return false;
+  if (params.min_price || params.max_price) return false;
+  if (params.orderby || params.order) return false;
+  if (params.include) return false;
+  if (Object.keys(params).some((k) => k.startsWith("pa_"))) return false;
+  return true;
+}
+
+/**
+ * Public exported fetch wrapper — caches canonical base listings for 24 hours,
+ * and bypasses Data Cache writes for long-tail searches/filters/deep pages.
  */
 export const fetchWooCommerceProducts = async (params: any = {}) => {
+  if (!shouldCacheProductListing(params)) {
+    return fetchProductsInternal(params);
+  }
+
   const categoryId = params.category  || "all";
   const page       = params.page      || 1;
   const perPage    = params.per_page  || 24;
-  const searchQ    = params.search    || "none";
-  const orderby    = params.orderby   || "default";
-  const order      = params.order     || "default";
-  const minPrice   = params.min_price || "0";
-  const maxPrice   = params.max_price || "any";
 
-  const paParamsKeys = Object.keys(params).filter(k => k.startsWith('pa_')).sort();
-  const paParamsString = paParamsKeys.map(k => `${k}=${params[k]}`).join('&');
-
-  // Use `unstable_cache` so we can cache based on params despite dynamic oauth headers.
+  // Use `unstable_cache` so we can cache canonical base pages despite dynamic auth headers.
   const cachedFn = unstable_cache(
     async (p) => fetchProductsInternal(p),
-    ["wc-products", String(categoryId), String(page), String(perPage), String(searchQ), String(orderby), String(order), String(minPrice), String(maxPrice), paParamsString],
+    ["wc-products", String(categoryId), String(page), String(perPage)],
     { revalidate: 86400, tags: ["wc-products"] }
   );
   return cachedFn(params);

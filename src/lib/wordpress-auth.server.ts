@@ -6,6 +6,7 @@ import type { AuthUser, WordPressAuthSession } from "@/lib/auth-types";
 const DEFAULT_WORDPRESS_URL = "https://admin.discountproducts.co.uk";
 
 export const WORDPRESS_AUTH_COOKIE = "discount_products_auth_token";
+export const AUTH_HINT_COOKIE = "dqp_logged_in";
 
 interface WordPressUserResponse {
   id?: number;
@@ -133,6 +134,27 @@ export function getAuthCookieOptions(token?: string) {
 export function clearAuthCookieOptions() {
   return {
     httpOnly: true,
+    sameSite: "strict" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  };
+}
+
+export function getAuthHintCookieOptions(token?: string) {
+  const { maxAge, sameSite, secure, path } = getAuthCookieOptions(token);
+  return {
+    httpOnly: false,
+    sameSite,
+    secure,
+    path,
+    maxAge,
+  };
+}
+
+export function clearAuthHintCookieOptions() {
+  return {
+    httpOnly: false,
     sameSite: "strict" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",

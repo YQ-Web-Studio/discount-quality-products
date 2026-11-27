@@ -101,8 +101,8 @@ export const getTotalProductCount = cache(async (): Promise<number> => {
   try {
     const cachedFn = unstable_cache(
       fetchTotal,
-      ['total-product-count', 'wc-products'],
-      { revalidate: 3600, tags: ["total-product-count", "wc-products"] }
+      ['total-product-count'],
+      { revalidate: 2592000, tags: ["total-product-count"] }
     );
     return await cachedFn();
   } catch (err: any) {
@@ -657,7 +657,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<Product | nu
   const cachedFn = unstable_cache(
     async (s: string) => getProductBySlugInternal(s),
     ['product-by-slug', slug],
-    { revalidate: 2592000, tags: ["wc-products", `product-${slug}`] }
+    { revalidate: 2592000, tags: [`product-${slug}`] }
   );
   return cachedFn(slug);
 });

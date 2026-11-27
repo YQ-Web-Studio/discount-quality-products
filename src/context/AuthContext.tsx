@@ -41,6 +41,47 @@ function getFriendlyErrorMessage(error: unknown) {
   return "Something went wrong while we tried to manage your account.";
 }
 
+const ANON_SESSION_KEY = "dqp_session_anon";
+
+function safeReadAnonMarker(): boolean {
+  try {
+    return typeof window !== "undefined" && window.sessionStorage.getItem(ANON_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function safeSetAnonMarker(): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(ANON_SESSION_KEY, "1");
+    }
+  } catch {
+    // Best-effort only: restricted browser storage must never block auth flows
+  }
+}
+
+function safeClearAnonMarker(): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(ANON_SESSION_KEY);
+    }
+  } catch {
+    // Best-effort only: restricted browser storage must never block auth flows
+  }
+}
+
+function hasLoggedInHintCookie(): boolean {
+  try {
+    return (
+      typeof document !== "undefined" &&
+      document.cookie.split("; ").some((c) => c.startsWith("dqp_logged_in=1"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("checking");
@@ -56,11 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const validatedUser = await fetchAccountSession();
       if (validatedUser) {
+        safeClearAnonMarker();
         setUser(validatedUser);
         setSessionStatus("authenticated");
         return;
       }
 
+      safeSetAnonMarker();
       setUser(null);
       setSessionStatus("unauthenticated");
     } catch (validationError) {
@@ -71,6 +114,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!hasLoggedInHintCookie() && safeReadAnonMarker()) {
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setUser(null);
+          setSessionStatus("unauthenticated");
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     void refreshSession();
   }, [refreshSession]);
 
@@ -88,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const accountUser = await loginAccount(identifier, password);
+      safeClearAnonMarker();
       setUser(accountUser);
       setSessionStatus("authenticated");
       return accountUser;
@@ -107,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const accountUser = await registerAccount(name, email, password);
+      safeClearAnonMarker();
       setUser(accountUser);
       setSessionStatus("authenticated");
       return accountUser;
@@ -122,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await logoutAccount().catch(() => undefined);
+    safeSetAnonMarker();
     setUser(null);
     setSessionStatus("unauthenticated");
     setError(null);

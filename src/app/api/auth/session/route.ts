@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import {
+  AUTH_HINT_COOKIE,
   clearAuthCookieOptions,
+  clearAuthHintCookieOptions,
   getAuthCookieOptions,
+  getAuthHintCookieOptions,
   getCurrentWordPressSession,
   WORDPRESS_AUTH_COOKIE,
 } from "@/lib/wordpress-auth.server";
@@ -17,6 +20,7 @@ export async function GET() {
       );
 
       response.cookies.set(WORDPRESS_AUTH_COOKIE, "", clearAuthCookieOptions());
+      response.cookies.set(AUTH_HINT_COOKIE, "", clearAuthHintCookieOptions());
       return response;
     }
 
@@ -29,6 +33,11 @@ export async function GET() {
       WORDPRESS_AUTH_COOKIE,
       session.token,
       getAuthCookieOptions(session.token)
+    );
+    response.cookies.set(
+      AUTH_HINT_COOKIE,
+      "1",
+      getAuthHintCookieOptions(session.token)
     );
 
     return response;
