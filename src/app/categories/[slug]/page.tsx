@@ -35,7 +35,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
 
   // Resolve name from static config first (instant) — no API call needed for known categories
-  let name = slug.replace(/-/g, " ");
+  let name = slug
+    .split("-")
+    .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : ""))
+    .join(" ");
   for (const cat of navigationCategories) {
     if (cat.slug === slug) { name = cat.label; break; }
     const sub = cat.subcategories?.find(s => s.slug === slug);

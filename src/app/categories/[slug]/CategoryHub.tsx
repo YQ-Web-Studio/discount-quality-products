@@ -762,48 +762,60 @@ export default function CategoryHub({
   const updateUrl = useCallback(
     (cats: Set<number>, pageFallback: number = 1) => {
       const params = new URLSearchParams(searchParams.toString());
-      
+      const activeParent = initialCategories.find(
+        (cat) => cat.slug === baseSlug || cat.subcategories?.some((sub) => sub.slug === baseSlug)
+      );
+
+      let targetSlug = activeParent?.slug || baseSlug;
       let categoryValue: string = "";
-      
+
       if (cats.size > 0) {
         // 1. Check if it exactly matches a parent category (parent + all its subcategories selected)
-        const matchedParent = initialCategories.find(cat => {
-          const parentAndSubs = [cat.id, ...(cat.subcategories?.map(s => s.id) || [])];
-          return parentAndSubs.length === cats.size && parentAndSubs.every(id => cats.has(id));
+        const matchedParent = initialCategories.find((cat) => {
+          const parentAndSubs = [cat.id, ...(cat.subcategories?.map((s) => s.id) || [])];
+          return parentAndSubs.length === cats.size && parentAndSubs.every((id) => cats.has(id));
         });
-        
+
         if (matchedParent) {
-          categoryValue = matchedParent.slug;
+          targetSlug = matchedParent.slug;
+          categoryValue = "";
         } else {
           // Mixed selection or subcategories, map IDs back to their slugs
           const selectedSlugs: string[] = [];
-          cats.forEach(id => {
+          cats.forEach((id) => {
             for (const cat of initialCategories) {
               if (cat.id === id) {
                 selectedSlugs.push(cat.slug);
                 break;
               }
-              const sub = cat.subcategories?.find(s => s.id === id);
+              const sub = cat.subcategories?.find((s) => s.id === id);
               if (sub) {
                 selectedSlugs.push(sub.slug);
                 break;
               }
             }
           });
-          categoryValue = selectedSlugs.filter(Boolean).join(",");
+          const cleanSlugs = selectedSlugs.filter(Boolean);
+          if (cleanSlugs.length === 1) {
+            // Clean canonical path for a single category or subcategory
+            targetSlug = cleanSlugs[0];
+            categoryValue = "";
+          } else {
+            categoryValue = cleanSlugs.join(",");
+          }
         }
       }
 
       if (categoryValue) params.set("category", categoryValue);
       else params.delete("category");
-      
+
       // Clean up deprecated subcategory param
       params.delete("subcategory");
-      
+
       setPageParam(params, pageFallback);
 
       startTransition(() => {
-        router.push(buildCategoryUrl(baseSlug, params), { scroll: false });
+        router.push(buildCategoryUrl(targetSlug, params), { scroll: false });
       });
     },
     [router, searchParams, initialCategories, baseSlug]

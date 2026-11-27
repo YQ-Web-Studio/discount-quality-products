@@ -2,6 +2,7 @@ import { getProductBySlug, getProducts, getSmartFeaturedProducts, getLatestProdu
 import type { Product } from '@/lib/wordpress';
 import { notFound } from 'next/navigation';
 import { decodeHtmlEntities } from '@/lib/utils';
+import { stripHtmlToExcerpt, formatSlugFallbackTitle } from '@/lib/seo-metadata';
 import {
   ShieldCheck,
   Truck,
@@ -53,20 +54,50 @@ type ProductPageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
+const DEFAULT_OG_IMAGE = "/images/og-image.png";
+
 export async function generateMetadata(
   props: ProductPageProps
 ): Promise<Metadata> {
   const { slug } = await props.params;
 
-  // Format slug to a readable title (e.g. "harry-potter-coin" -> "Harry Potter Coin")
-  const decodedName = slug
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  let product: Product | null | undefined = undefined;
+  try {
+    // React cache() deduplicates this call with ProductPage in the same render (0 extra API calls)
+    product = await getProductBySlug(slug);
+  } catch (error) {
+    console.warn(`[generateMetadata] Falling back to slug metadata for "${slug}":`, error);
+  }
 
-  const description = `Buy ${decodedName} from Discount Quality Products. Premium quality, competitive prices with free standard UK delivery on orders over £5.`;
+  // Confirmed 404 product: never emit a valid canonical or indexable metadata for missing SKUs
+  if (product === null) {
+    return {
+      title: "Product Not Found | Discount Quality Products",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const decodedName = product?.name
+    ? decodeHtmlEntities(product.name).trim()
+    : formatSlugFallbackTitle(slug);
+
+  const excerpt =
+    stripHtmlToExcerpt(product?.shortDescription) ||
+    stripHtmlToExcerpt(product?.description);
+
+  const description =
+    excerpt.length >= 25
+      ? excerpt
+      : `Buy ${decodedName} from Discount Quality Products. Premium quality, competitive prices with free standard UK delivery on orders over £5.`;
+
   const absoluteUrl = `https://www.discountproducts.co.uk/products/${slug}`;
-  const imageUrl = "/images/og-image.png"; // Fallback to main OG image for instant resolution
+  const imageUrl =
+    product?.image?.sourceUrl ||
+    product?.featuredImage?.node?.sourceUrl ||
+    DEFAULT_OG_IMAGE;
 
   return {
     title: `${decodedName} | Discount Quality Products`,
@@ -80,7 +111,7 @@ export async function generateMetadata(
       url: absoluteUrl,
       type: "website",
       siteName: "Discount Quality Products",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: decodedName }],
+      images: [{ url: imageUrl, alt: decodedName }],
     },
     twitter: {
       card: "summary_large_image",

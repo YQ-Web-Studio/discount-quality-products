@@ -730,6 +730,123 @@ export async function getAllProductSlugs(limit: number = 10000): Promise<{ slug:
   return results;
 }
 
+export const SITEMAP_PRODUCTS_PER_CHUNK = 5000;
+
+export interface SitemapProductChunk {
+  items: { slug: string; date: string }[];
+  total: number;
+  totalPages: number;
+  source: "rest" | "graphql";
+}
+
+interface SitemapRestResponse {
+  total?: number;
+  totalPages?: number;
+  page?: number;
+  perPage?: number;
+  items?: Array<{ slug?: string; modified?: string; date?: string }>;
+}
+
+async function fetchSitemapProductsRest(
+  page: number,
+  perPage: number
+): Promise<SitemapRestResponse | null> {
+  const endpoint = `${getWordPressBaseUrl()}/wp-json/dqp/v1/sitemap-products?page=${encodeURIComponent(
+    String(page)
+  )}&per_page=${encodeURIComponent(String(perPage))}`;
+
+  try {
+    const res = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as SitemapRestResponse;
+    if (!data || !Array.isArray(data.items)) return null;
+    return data;
+  } catch (error) {
+    console.warn("[sitemap] Lean sitemap REST endpoint unavailable; falling back to GraphQL:", error);
+    return null;
+  }
+}
+
+/**
+ * Determines how many product sitemap chunks are needed for the full published catalogue.
+ * Uses Snippet 006 (`/wp-json/dqp/v1/sitemap-products`) when available, falling back to
+ * 1 chunk (capped GraphQL pagination) if the snippet is not yet deployed.
+ */
+export async function getSitemapProductPageCount(
+  perPage: number = SITEMAP_PRODUCTS_PER_CHUNK
+): Promise<number> {
+  const safePerPage = Math.max(1, Math.min(perPage, SITEMAP_PRODUCTS_PER_CHUNK));
+  const probe = await fetchSitemapProductsRest(1, 1);
+
+  if (probe && typeof probe.total === "number" && probe.total >= 0) {
+    return Math.max(1, Math.ceil(probe.total / safePerPage));
+  }
+
+  return 1;
+}
+
+/**
+ * Fetches one deterministic chunk of published, visible product slugs for sitemap generation.
+ * Primary: Snippet 006 (`/wp-json/dqp/v1/sitemap-products`) returning up to 5,000 slugs in <150ms.
+ * Fallback: Existing GraphQL pagination (capped at 1,000 on chunk 1) so builds never time out.
+ */
+export async function getSitemapProductChunk(
+  page: number,
+  perPage: number = SITEMAP_PRODUCTS_PER_CHUNK
+): Promise<SitemapProductChunk> {
+  const safePage = Math.max(1, Math.floor(page));
+  const safePerPage = Math.max(1, Math.min(perPage, SITEMAP_PRODUCTS_PER_CHUNK));
+
+  const restData = await fetchSitemapProductsRest(safePage, safePerPage);
+  if (restData && Array.isArray(restData.items)) {
+    const items = restData.items
+      .map((item) => ({
+        slug: typeof item.slug === "string" ? item.slug.trim() : "",
+        date:
+          typeof item.modified === "string" && item.modified
+            ? item.modified
+            : typeof item.date === "string" && item.date
+              ? item.date
+              : new Date().toISOString(),
+      }))
+      .filter((item) => item.slug.length > 0);
+
+    const total = typeof restData.total === "number" ? restData.total : items.length;
+    const totalPages =
+      typeof restData.totalPages === "number"
+        ? restData.totalPages
+        : Math.max(1, Math.ceil(total / safePerPage));
+
+    return {
+      items,
+      total,
+      totalPages,
+      source: "rest",
+    };
+  }
+
+  if (safePage > 1) {
+    return { items: [], total: 0, totalPages: 1, source: "graphql" };
+  }
+
+  const fallbackItems = await getAllProductSlugs(1000);
+  return {
+    items: fallbackItems,
+    total: fallbackItems.length,
+    totalPages: 1,
+    source: "graphql",
+  };
+}
+
 // ─── WordPress Posts (Trade Hub / Guides) ────────────────────────────────────
 
 export interface WpPost {

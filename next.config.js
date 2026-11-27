@@ -75,6 +75,14 @@ const nextConfig = {
     // Unblocks builds from compile-time type errors
     ignoreBuildErrors: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/sitemap.xml',
+        destination: '/sitemap-index.xml',
+      },
+    ];
+  },
   async headers() {
     return [
       {
