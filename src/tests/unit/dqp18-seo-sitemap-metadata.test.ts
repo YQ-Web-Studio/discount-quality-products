@@ -57,6 +57,13 @@ describe('DQP-18: Full-Catalogue Sitemap, Subcategory Canonicals & Product Metad
       expect(php).toContain("t.name = 'exclude-from-catalog'");
       expect(php).toContain('ORDER BY p.ID ASC');
       expect(php).toContain('LIMIT %d OFFSET %d');
+      // Regression guard: both get_var() and get_results() check $wpdb->last_error + null
+      // and return non-cacheable HTTP 500 rather than caching an empty HTTP 200 payload.
+      expect(php).toContain('sitemap_count_query_failed');
+      expect(php).toContain('sitemap_rows_query_failed');
+      expect(php).toContain("if ($raw_total === null || $wpdb->last_error !== '')");
+      expect(php).toContain("if ($rows === null || $wpdb->last_error !== '')");
+      expect(php).toContain("'Cache-Control', 'no-store, no-cache, must-revalidate'");
     });
 
     it('generateSitemaps creates chunk 0 plus N product chunks (15,156 SKUs -> 4 product chunks)', async () => {
@@ -171,6 +178,33 @@ describe('DQP-18: Full-Catalogue Sitemap, Subcategory Canonicals & Product Metad
       fetchSpy.mockResolvedValueOnce(new Response('Not Found', { status: 404 }));
       const fallbackPages = await actualWordpress.getSitemapProductPageCount(5000);
       expect(fallbackPages).toBe(1);
+
+      // Regression guard: transient HTTP 503 after healthy output MUST throw so ISR
+      // retains previously generated sitemap instead of caching empty/truncated XML.
+      fetchSpy.mockResolvedValueOnce(new Response('Service Unavailable', { status: 503 }));
+      await expect(actualWordpress.getSitemapProductChunk(2, 5000)).rejects.toThrow('HTTP 503');
+
+      fetchSpy.mockResolvedValueOnce(new Response('Service Unavailable', { status: 503 }));
+      await expect(actualWordpress.getSitemapProductPageCount(5000)).rejects.toThrow('HTTP 503');
+    });
+
+    it('sitemap and generateSitemaps propagate transient 503 failures so Next.js ISR retains prior valid output', async () => {
+      // Healthy run succeeds
+      getSitemapProductChunkMock.mockResolvedValueOnce({
+        items: [{ slug: 'healthy-sku', date: '2026-11-20T12:00:00Z' }],
+        total: 10000,
+        totalPages: 2,
+        source: 'rest',
+      });
+      const healthyEntries = await sitemap({ id: Promise.resolve('2') });
+      expect(healthyEntries).toHaveLength(1);
+
+      // Subsequent transient 503 must reject rather than returning []
+      getSitemapProductChunkMock.mockRejectedValueOnce(new Error('Sitemap REST endpoint failed with HTTP 503'));
+      await expect(sitemap({ id: Promise.resolve('2') })).rejects.toThrow('HTTP 503');
+
+      getSitemapProductPageCountMock.mockRejectedValueOnce(new Error('Sitemap REST endpoint failed with HTTP 503'));
+      await expect(generateSitemaps()).rejects.toThrow('HTTP 503');
     });
   });
 
@@ -225,6 +259,52 @@ describe('DQP-18: Full-Catalogue Sitemap, Subcategory Canonicals & Product Metad
       expect(excerpt).toContain('28W GU10 Halogen Bulbs & Fittings');
       expect(excerpt.length).toBeLessThanOrEqual(120);
       expect(excerpt.endsWith('…')).toBe(true);
+    });
+
+    it('decodes named, numeric, hex, and double-escaped HTML entities in all three product descriptions', async () => {
+      getProductBySlugMock.mockResolvedValue({
+        id: 'prod-entities',
+        databaseId: 103,
+        slug: 'replacement-uk-lamp',
+        name: 'Manufacturer&#8217;s&nbsp;Replacement Lamp',
+        shortDescription:
+          '<p>Manufacturer&#8217;s&nbsp;replacement lamp &amp;#8217;certified&amp;#8217; for UK fittings at &pound;4.99&#x2014;free delivery.</p>',
+        image: {
+          sourceUrl: 'https://admin.discountproducts.co.uk/wp-content/uploads/lamp.jpg',
+        },
+      });
+
+      const meta = await generateProductMetadata({
+        params: Promise.resolve({ slug: 'replacement-uk-lamp' }),
+        searchParams: Promise.resolve({}),
+      });
+
+      const expected = 'Manufacturer’s replacement lamp ’certified’ for UK fittings at £4.99—free delivery.';
+      expect(meta.title).toBe('Manufacturer’s Replacement Lamp | Discount Quality Products');
+      expect(meta.description).toBe(expected);
+      expect(meta.openGraph?.description).toBe(expected);
+      expect(meta.twitter?.description).toBe(expected);
+      expect(meta.description).not.toContain('&#8217;');
+      expect(meta.description).not.toContain('&nbsp;');
+    });
+
+    it('uses full description when shortDescription is non-empty but under 25 characters', async () => {
+      getProductBySlugMock.mockResolvedValue({
+        id: 'prod-short-fallback',
+        databaseId: 104,
+        slug: 'gu10-spotlight-pack',
+        name: 'GU10 Spotlight Pack',
+        shortDescription: '<p>New</p>',
+        description:
+          '<p>Complete pack of four high-efficiency warm white GU10 LED spotlight bulbs designed for domestic and commercial fittings.</p>',
+      });
+
+      const meta = await generateProductMetadata({
+        params: Promise.resolve({ slug: 'gu10-spotlight-pack' }),
+        searchParams: Promise.resolve({}),
+      });
+
+      expect(meta.description).toContain('Complete pack of four high-efficiency warm white GU10 LED spotlight bulbs');
     });
 
     it('generateMetadata uses real product title, excerpt, and product image when product exists', async () => {

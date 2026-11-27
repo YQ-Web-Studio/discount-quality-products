@@ -84,14 +84,15 @@ export async function generateMetadata(
     ? decodeHtmlEntities(product.name).trim()
     : formatSlugFallbackTitle(slug);
 
-  const excerpt =
-    stripHtmlToExcerpt(product?.shortDescription) ||
-    stripHtmlToExcerpt(product?.description);
+  const shortExcerpt = stripHtmlToExcerpt(product?.shortDescription);
+  const fullExcerpt = stripHtmlToExcerpt(product?.description);
 
   const description =
-    excerpt.length >= 25
-      ? excerpt
-      : `Buy ${decodedName} from Discount Quality Products. Premium quality, competitive prices with free standard UK delivery on orders over £5.`;
+    shortExcerpt.length >= 25
+      ? shortExcerpt
+      : fullExcerpt.length >= 25
+        ? fullExcerpt
+        : `Buy ${decodedName} from Discount Quality Products. Premium quality, competitive prices with free standard UK delivery on orders over £5.`;
 
   const absoluteUrl = `https://www.discountproducts.co.uk/products/${slug}`;
   const imageUrl =

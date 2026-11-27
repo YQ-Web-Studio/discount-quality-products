@@ -31,12 +31,9 @@ const STATIC_PAGES = [
  * - id = 1..N: Deterministic 5,000-SKU product chunks covering the full 15,000+ catalogue
  */
 export async function generateSitemaps(): Promise<Array<{ id: number }>> {
-  let productChunks = 1;
-  try {
-    productChunks = await getSitemapProductPageCount(SITEMAP_PRODUCTS_PER_CHUNK);
-  } catch (error) {
-    console.error("Error resolving product sitemap chunk count:", error);
-  }
+  // Let transient 5xx/timeout errors propagate so Next.js ISR retains the previous valid
+  // sitemap index instead of collapsing it to a single chunk. (404 returns 1 cleanly.)
+  const productChunks = await getSitemapProductPageCount(SITEMAP_PRODUCTS_PER_CHUNK);
 
   const safeChunks = Math.max(1, productChunks);
   const sitemaps: Array<{ id: number }> = [{ id: 0 }];
@@ -119,18 +116,15 @@ export default async function sitemap(props?: {
     return buildCoreSitemapEntries();
   }
 
-  try {
-    const chunk = await getSitemapProductChunk(chunkId, SITEMAP_PRODUCTS_PER_CHUNK);
-    const fallbackNow = new Date();
+  // Let transient REST errors propagate so Next.js ISR preserves the last valid cached
+  // sitemap chunk instead of overwriting 5,000 indexed URLs with an empty XML document.
+  const chunk = await getSitemapProductChunk(chunkId, SITEMAP_PRODUCTS_PER_CHUNK);
+  const fallbackNow = new Date();
 
-    return chunk.items.map((prod) => ({
-      url: `${BASE_URL}/products/${prod.slug}`,
-      lastModified: prod.date ? new Date(prod.date) : fallbackNow,
-      changeFrequency: "daily",
-      priority: 0.8,
-    }));
-  } catch (error) {
-    console.error(`Error generating product sitemap chunk ${chunkId}:`, error);
-    return [];
-  }
+  return chunk.items.map((prod) => ({
+    url: `${BASE_URL}/products/${prod.slug}`,
+    lastModified: prod.date ? new Date(prod.date) : fallbackNow,
+    changeFrequency: "daily",
+    priority: 0.8,
+  }));
 }

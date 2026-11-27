@@ -68,7 +68,8 @@ function dqp_rest_sitemap_products_handler(WP_REST_Request $request) {
         )
     ";
 
-    $total = (int) $wpdb->get_var("
+    $wpdb->last_error = '';
+    $raw_total = $wpdb->get_var("
         SELECT COUNT(*)
         FROM {$wpdb->posts} p
         WHERE p.post_type = 'product'
@@ -77,10 +78,21 @@ function dqp_rest_sitemap_products_handler(WP_REST_Request $request) {
           {$visibility_exclusion_sql}
     ");
 
+    if ($raw_total === null || $wpdb->last_error !== '') {
+        $error_response = new WP_REST_Response([
+            'error' => 'sitemap_count_query_failed',
+            'message' => 'Failed to count published products for sitemap.',
+        ], 500);
+        $error_response->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+        return $error_response;
+    }
+
+    $total = (int) $raw_total;
     $total_pages = $total > 0 ? (int) ceil($total / $per_page) : 0;
 
     $rows = [];
     if ($total > 0 && $offset < $total) {
+        $wpdb->last_error = '';
         $sql = $wpdb->prepare("
             SELECT
                 p.post_name AS slug,
@@ -96,6 +108,14 @@ function dqp_rest_sitemap_products_handler(WP_REST_Request $request) {
         ", $per_page, $offset);
 
         $rows = $wpdb->get_results($sql);
+        if ($rows === null || $wpdb->last_error !== '') {
+            $error_response = new WP_REST_Response([
+                'error' => 'sitemap_rows_query_failed',
+                'message' => 'Failed to fetch product slugs for sitemap.',
+            ], 500);
+            $error_response->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+            return $error_response;
+        }
     }
 
     $items = [];

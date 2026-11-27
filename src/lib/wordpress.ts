@@ -755,25 +755,33 @@ async function fetchSitemapProductsRest(
     String(page)
   )}&per_page=${encodeURIComponent(String(perPage))}`;
 
-  try {
-    const res = await fetch(endpoint, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
+  const res = await fetch(endpoint, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (DiscountProducts Storefront)",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
 
-    if (!res.ok) return null;
-    const data = (await res.json()) as SitemapRestResponse;
-    if (!data || !Array.isArray(data.items)) return null;
-    return data;
-  } catch (error) {
-    console.warn("[sitemap] Lean sitemap REST endpoint unavailable; falling back to GraphQL:", error);
+  // 404 / 405 indicates Snippet 006 is not deployed yet — signal caller to use GraphQL fallback.
+  if (res.status === 404 || res.status === 405) {
     return null;
   }
+
+  // Transient server/gateway errors (5xx, 429, etc.) MUST throw so Next.js ISR retains the
+  // last known good sitemap instead of caching an empty or truncated sitemap for 24h.
+  if (!res.ok) {
+    throw new Error(`Sitemap REST endpoint failed with HTTP ${res.status}`);
+  }
+
+  const data = (await res.json()) as SitemapRestResponse;
+  if (!data || !Array.isArray(data.items)) {
+    throw new Error("Sitemap REST endpoint returned malformed payload");
+  }
+
+  return data;
 }
 
 /**
