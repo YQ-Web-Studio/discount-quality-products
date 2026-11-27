@@ -26,7 +26,14 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@5dc9719130c388d187b5ab239adb8ddaee8fbf74 # main
+    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@7c6ea95e86c99e722d4d999d78410073700c495f # main
+    with:
+      extra_instructions: |
+        DQP Architectural Invariants (Next.js 16 + WooCommerce):
+        - Category/shop pages read searchParams and must remain dynamic; product PDPs use ISR (dynamicParams = true, revalidate = 2592000).
+        - Payment/webhook routes must preserve strict signature verification, idempotency guards, and never cancel/downgrade captured orders.
+        - WordPress PHP backend changes must be versioned in backend/wordpress/snippets/ and check $wpdb->last_error before returning cacheable HTTP 200 responses.
+        - Never cache transient 5xx/timeout upstream errors as empty ISR/sitemap responses.
     secrets:
       PR_AGENT_GEMINI_API_KEY: ${{ secrets.PR_AGENT_GEMINI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

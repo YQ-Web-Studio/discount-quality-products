@@ -68,7 +68,7 @@ function matchLocalCategories(query: string): InstantSearchCategory[] {
           name: sub.label,
           slug: sub.slug,
           parentName: parent.label,
-          route: `/categories/${parent.slug}?category=${sub.slug}`,
+          route: `/categories/${sub.slug}`,
           accentColor: parent.accentColor,
         });
       }

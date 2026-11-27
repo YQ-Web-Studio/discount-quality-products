@@ -135,7 +135,7 @@ export function Header() {
                               {category.subcategories.map((sub) => (
                                 <li key={sub.slug}>
                                   <Link
-                                    href={`/categories/${category.slug}?category=${sub.slug}`}
+                                    href={`/categories/${sub.slug}`}
                                     className="block text-xs text-zinc-800 hover:text-zinc-900 transition-colors leading-snug"
                                   >
                                     {sub.label}
@@ -272,7 +272,7 @@ export function Header() {
                         {category.subcategories.map((sub) => (
                           <li key={sub.slug}>
                             <Link
-                              href={`/categories/${category.slug}?category=${sub.slug}`}
+                              href={`/categories/${sub.slug}`}
                               className="block rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
                               onClick={() => setMobileOpen(false)}
                             >

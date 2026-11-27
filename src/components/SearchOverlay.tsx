@@ -215,7 +215,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             name: sub.label,
             slug: sub.slug,
             parentName: parent.label,
-            route: `/categories/${parent.slug}?category=${sub.slug}`,
+            route: `/categories/${sub.slug}`,
             accentColor: parent.accentColor,
           });
         }
@@ -395,7 +395,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                                 {category.subcategories.map((sub) => (
                                   <button
                                     key={sub.slug}
-                                    onClick={() => handleNavigate(`/categories/${category.slug}?category=${sub.slug}`)}
+                                    onClick={() => handleNavigate(`/categories/${sub.slug}`)}
                                     className="flex items-center justify-between text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-900 text-left py-1 sm:py-0.5 truncate group touch-manipulation"
                                   >
                                     <span className="truncate">{sub.label}</span>

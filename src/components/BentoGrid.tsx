@@ -139,7 +139,7 @@ export function BentoGrid() {
                         {category.subcategories.map((sub) => (
                           <Link
                             key={sub.slug}
-                            href={`/categories/${category.slug}?category=${sub.slug}`}
+                            href={`/categories/${sub.slug}`}
                             className="rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1.5 text-xs text-white font-medium hover:bg-white hover:text-zinc-900 transition-all duration-200 whitespace-normal text-left"
                           >
                             {sub.label}
