@@ -3,19 +3,30 @@ name: PR-Agent
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] -- gated to OWNER/MEMBER/COLLABORATOR /review commands only
     types: [created]
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-pr-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   review:
-    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@main
-    secrets: inherit
+    if: >-
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '/review') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: YQ-Web-Studio/.github/.github/workflows/pr-review.yml@8bcaa1c498e702175752875f768677bbeb723772 # main
+    secrets:
+      PR_AGENT_GEMINI_API_KEY: ${{ secrets.PR_AGENT_GEMINI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
