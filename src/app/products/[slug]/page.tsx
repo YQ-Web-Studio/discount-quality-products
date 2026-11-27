@@ -21,7 +21,7 @@ import { ProductSchema } from '@/components/seo/ProductSchema';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
 import { BackButton } from '@/components/ui/BackButton';
 import type { Metadata } from 'next';
-export const revalidate = false; // Cached indefinitely until targeted on-demand webhook invalidation
+export const revalidate = 2592000; // 30 days — matches .coderabbit.yaml invariant with targeted webhook invalidation
 export const dynamicParams = true;
 
 export async function generateStaticParams() {

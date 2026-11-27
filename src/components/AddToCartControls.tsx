@@ -180,6 +180,8 @@ export function AddToCartControls({
   return (
     <div
       className="flex flex-col gap-6"
+      tabIndex={isOutOfStock ? 0 : undefined}
+      aria-label={isOutOfStock ? 'Check live stock availability' : undefined}
       onMouseEnter={fetchLiveStockOnce}
       onFocus={fetchLiveStockOnce}
       onTouchStart={fetchLiveStockOnce}

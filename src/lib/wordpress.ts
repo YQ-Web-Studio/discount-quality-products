@@ -293,8 +293,7 @@ export interface ProductsResponse {
 
 async function wpFetch<T>(
   query: string,
-  variables: Record<string, any> = {},
-  options: { allowStaticRender?: boolean } = {}
+  variables: Record<string, any> = {}
 ): Promise<T> {
   // Build-time and ISR first-renders can tolerate longer waits since the user only
   // sees the delay once — the result is cached by Vercel CDN afterward.
@@ -304,7 +303,7 @@ async function wpFetch<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const fetchInit: RequestInit = {
+    const response = await fetch(WP_GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -316,10 +315,8 @@ async function wpFetch<T>(
         variables,
       }),
       signal: controller.signal,
-      ...(options.allowStaticRender ? {} : { cache: "no-store" }),
-    };
-
-    const response = await fetch(WP_GRAPHQL_URL, fetchInit);
+      cache: "no-store",
+    });
 
     const responseText = await response.text();
     const contentType = response.headers.get("content-type") || "";
@@ -587,7 +584,7 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
 
   // 1. Try to fetch by exact slug first
   try {
-    const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug }, { allowStaticRender: true });
+    const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug });
     if (data.product) {
       const product = {
         ...data.product,
@@ -619,7 +616,7 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
     `;
 
     try {
-      const searchData = await wpFetch<{ products: { nodes: { slug: string }[] } }>(fallbackQuery, { search: searchTerm }, { allowStaticRender: true });
+      const searchData = await wpFetch<{ products: { nodes: { slug: string }[] } }>(fallbackQuery, { search: searchTerm });
       const candidates = searchData.products?.nodes || [];
 
       const sanitize = (s: string) => {
@@ -636,7 +633,7 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
       const matchingCandidate = candidates.find(c => sanitize(c.slug) === targetSanitized);
 
       if (matchingCandidate) {
-        const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug: matchingCandidate.slug }, { allowStaticRender: true });
+        const data = await wpFetch<{ product: Product & { allGalleryImages?: { nodes: { sourceUrl: string; altText?: string }[] } } }>(query, { slug: matchingCandidate.slug });
         if (data.product) {
           const product = {
             ...data.product,
@@ -657,7 +654,12 @@ async function getProductBySlugInternal(slug: string): Promise<Product | null> {
 }
 
 export const getProductBySlug = cache(async (slug: string): Promise<Product | null> => {
-  return getProductBySlugInternal(slug);
+  const cachedFn = unstable_cache(
+    async (s: string) => getProductBySlugInternal(s),
+    ['product-by-slug', slug],
+    { revalidate: 2592000, tags: [`product-${slug}`] }
+  );
+  return cachedFn(slug);
 });
 
 export async function getProductSlugs(first: number = 50): Promise<string[]> {
